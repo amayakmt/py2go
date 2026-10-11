@@ -7,3 +7,4 @@
 - 2026-10-11: Decoder records HasParams and HasKeywords so codegen can reject what it can't translate, instead of silently dropping it.
 - 2026-10-11: Python functions named main are rejected until name mangling exists, since the generated main() would collide.
 - 2026-10-11: dump_ast.py is embedded in the binary and fed to python via stdin. Interpreter is resolved through uv with an explicit 3.13 pin.
+- 2026-10-11: Phase 1 exit criterion met. Differential harness compares go run stdout to committed CPython stdout.
