@@ -1,0 +1,84 @@
+{
+  "_type": "Module",
+  "body": [
+    {
+      "_type": "FunctionDef",
+      "name": "greet",
+      "args": {
+        "_type": "arguments",
+        "posonlyargs": [],
+        "args": [],
+        "vararg": null,
+        "kwonlyargs": [],
+        "kw_defaults": [],
+        "kwarg": null,
+        "defaults": []
+      },
+      "body": [
+        {
+          "_type": "Expr",
+          "value": {
+            "_type": "Call",
+            "func": {
+              "_type": "Name",
+              "id": "print",
+              "ctx": {
+                "_type": "Load"
+              },
+              "lineno": 2,
+              "col_offset": 4
+            },
+            "args": [
+              {
+                "_type": "Constant",
+                "value": "hello",
+                "kind": null,
+                "lineno": 2,
+                "col_offset": 10
+              }
+            ],
+            "keywords": [],
+            "lineno": 2,
+            "col_offset": 4
+          },
+          "lineno": 2,
+          "col_offset": 4
+        }
+      ],
+      "decorator_list": [],
+      "returns": {
+        "_type": "Constant",
+        "value": null,
+        "kind": null,
+        "lineno": 1,
+        "col_offset": 15
+      },
+      "type_comment": null,
+      "type_params": [],
+      "lineno": 1,
+      "col_offset": 0
+    },
+    {
+      "_type": "Expr",
+      "value": {
+        "_type": "Call",
+        "func": {
+          "_type": "Name",
+          "id": "greet",
+          "ctx": {
+            "_type": "Load"
+          },
+          "lineno": 5,
+          "col_offset": 0
+        },
+        "args": [],
+        "keywords": [],
+        "lineno": 5,
+        "col_offset": 0
+      },
+      "lineno": 5,
+      "col_offset": 0
+    }
+  ],
+  "type_ignores": []
+}
