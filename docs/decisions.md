@@ -1,0 +1,6 @@
+- 2026-10-11: Source language pinned to Python 3.13. AST shapes shift between minor versions, so the transpiler targets exactly one.
+- 2026-10-11: Python toolchain managed by uv, version pinned via .python-version.
+- 2026-10-11: Code without type hints is rejected, not inferred. Inference is a separate project.
+- 2026-10-11: runtime/ is public (not internal/) because generated code imports it.
+- 2026-10-11: Module-level statements go into main(). Function definitions go to package level.
+- 2026-10-11: Out of scope for v1: generators, async, decorators, metaclasses, eval/exec, dynamic attributes, match, PEP 695 generics, walrus.
