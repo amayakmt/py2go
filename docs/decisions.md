@@ -4,3 +4,5 @@
 - 2026-10-11: runtime/ is public (not internal/) because generated code imports it.
 - 2026-10-11: Module-level statements go into main(). Function definitions go to package level.
 - 2026-10-11: Out of scope for v1: generators, async, decorators, metaclasses, eval/exec, dynamic attributes, match, PEP 695 generics, walrus.
+- 2026-10-11: Decoder records HasParams and HasKeywords so codegen can reject what it can't translate, instead of silently dropping it.
+- 2026-10-11: Python functions named main are rejected until name mangling exists, since the generated main() would collide.

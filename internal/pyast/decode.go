@@ -36,7 +36,14 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 
 	case "FunctionDef":
 		var aux struct {
-			Name    string            `json:"name"`
+			Name string `json:"name"`
+			Args struct {
+				Posonlyargs []json.RawMessage `json:"posonlyargs"`
+				Args        []json.RawMessage `json:"args"`
+				Vararg      json.RawMessage   `json:"vararg"`
+				Kwonlyargs  []json.RawMessage `json:"kwonlyargs"`
+				Kwarg       json.RawMessage   `json:"kwarg"`
+			} `json:"args"`
 			Body    []json.RawMessage `json:"body"`
 			Returns json.RawMessage   `json:"returns"`
 		}
@@ -51,7 +58,13 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &FunctionDef{Name: aux.Name, Body: body, Returns: returns, Lineno: head.Lineno}, nil
+		a := aux.Args
+		hasParams := len(a.Posonlyargs)+len(a.Args)+len(a.Kwonlyargs) > 0 ||
+			present(a.Vararg) || present(a.Kwarg)
+		return &FunctionDef{
+			Name: aux.Name, Body: body, Returns: returns,
+			HasParams: hasParams, Lineno: head.Lineno,
+		}, nil
 
 	case "Expr":
 		var aux struct {
@@ -68,8 +81,9 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 
 	case "Call":
 		var aux struct {
-			Func json.RawMessage   `json:"func"`
-			Args []json.RawMessage `json:"args"`
+			Func     json.RawMessage   `json:"func"`
+			Args     []json.RawMessage `json:"args"`
+			Keywords []json.RawMessage `json:"keywords"`
 		}
 		if err := json.Unmarshal(raw, &aux); err != nil {
 			return nil, err
@@ -82,7 +96,10 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Call{Func: fn, Args: args, Lineno: head.Lineno}, nil
+		return &Call{
+			Func: fn, Args: args,
+			HasKeywords: len(aux.Keywords) > 0, Lineno: head.Lineno,
+		}, nil
 
 	case "Name":
 		var aux struct {
@@ -125,4 +142,8 @@ func decodeOptional(raw json.RawMessage) (Node, error) {
 		return nil, nil
 	}
 	return decodeNode(raw)
+}
+
+func present(raw json.RawMessage) bool {
+	return len(raw) > 0 && string(raw) != "null"
 }

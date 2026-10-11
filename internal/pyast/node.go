@@ -10,10 +10,11 @@ type Module struct {
 }
 
 type FunctionDef struct {
-	Name    string
-	Body    []Node
-	Returns Node
-	Lineno  int
+	Name      string
+	Body      []Node
+	Returns   Node
+	HasParams bool
+	Lineno    int
 }
 
 type Expr struct {
@@ -22,9 +23,10 @@ type Expr struct {
 }
 
 type Call struct {
-	Func   Node
-	Args   []Node
-	Lineno int
+	Func        Node
+	Args        []Node
+	HasKeywords bool
+	Lineno      int
 }
 type Name struct {
 	ID     string
