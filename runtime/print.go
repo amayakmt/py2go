@@ -9,37 +9,19 @@ import (
 )
 
 // Print is Python's print(*args) with the default sep and end.
-func Print(args ...any) {
+func Print(args ...any) { PrintOpts(" ", "\n", args...) }
+
+// PrintOpts is print(*args, sep=sep, end=end).
+func PrintOpts(sep, end string, args ...any) {
 	var b strings.Builder
 	for i, a := range args {
 		if i > 0 {
-			b.WriteByte(' ')
+			b.WriteString(sep)
 		}
 		b.WriteString(Str(a))
 	}
-	b.WriteByte('\n')
+	b.WriteString(end)
 	os.Stdout.WriteString(b.String())
-}
-
-// Str is Python's str() for the types the transpiler supports.
-func Str(v any) string {
-	switch v := v.(type) {
-	case bool:
-		if v {
-			return "True"
-		}
-		return "False"
-	case int64:
-		return strconv.FormatInt(v, 10)
-	case int:
-		return strconv.Itoa(v)
-	case float64:
-		return FloatRepr(v)
-	case string:
-		return v
-	default:
-		panic(fmt.Sprintf("runtime.Str: unsupported type %T", v))
-	}
 }
 
 // FloatRepr formats a float the way Python's repr() does: the shortest
