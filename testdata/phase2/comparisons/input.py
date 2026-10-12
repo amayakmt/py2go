@@ -1,0 +1,16 @@
+print(1 == 1)
+print(1 != 1)
+print(1 < 2)
+print(2 <= 2)
+print(3 > 2)
+print(2 >= 3)
+print(1 == 1.0)
+print(1 < 1.5)
+print(2.5 > 2)
+print(1.0 == 1)
+print(True == True)
+print(True != False)
+a: int = 3
+b: float = 3.0
+print(a == b)
+print(a < b)

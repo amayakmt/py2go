@@ -1,0 +1,30 @@
+yes a
+yes b
+True
+no a
+False
+yes a
+True
+no a
+no b
+False
+yes 1
+yes 2
+no 3
+False
+no 1
+no 2
+yes 3
+True
+yes x
+no y
+yes z
+True
+yes x
+True
+yes p
+no r
+False
+yes n
+no m
+True

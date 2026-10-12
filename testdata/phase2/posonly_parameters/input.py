@@ -1,0 +1,5 @@
+def f(a: int, b: int, /) -> int:
+    return a - b
+
+
+print(f(5, 3))

@@ -1,0 +1,10 @@
+zero falsy
+one truthy
+empty falsy
+word truthy
+0.0 falsy
+True
+False
+True
+False
+looped once

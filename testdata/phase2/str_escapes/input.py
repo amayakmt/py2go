@@ -1,0 +1,6 @@
+print("tab\there")
+print("quote \" and \\ backslash")
+print("héllo wörld ✓")
+print("line1\nline2")
+print('single')
+print("null:\x00:end")

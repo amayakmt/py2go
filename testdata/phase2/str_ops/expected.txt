@@ -1,0 +1,9 @@
+foobar
+foo bar
+False
+True
+False
+True
+True
+True
+xfoo

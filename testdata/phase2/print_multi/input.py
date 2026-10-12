@@ -1,0 +1,5 @@
+print(1, 2.0, True, "x")
+print()
+print("a", "b")
+print("")
+print(-1, -2.5)

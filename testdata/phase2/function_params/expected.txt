@@ -1,0 +1,5 @@
+5
+10
+3.0
+Hello, Ada!
+Hello, Bob
