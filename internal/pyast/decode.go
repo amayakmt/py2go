@@ -75,6 +75,51 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			Lineno:        head.Lineno,
 		}, nil
 
+	case "ClassDef":
+		var aux struct {
+			Name          string            `json:"name"`
+			Bases         []json.RawMessage `json:"bases"`
+			Keywords      []json.RawMessage `json:"keywords"`
+			Body          []json.RawMessage `json:"body"`
+			DecoratorList []json.RawMessage `json:"decorator_list"`
+			TypeParams    []json.RawMessage `json:"type_params"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		bases, err := decodeList(aux.Bases)
+		if err != nil {
+			return nil, err
+		}
+		body, err := decodeList(aux.Body)
+		if err != nil {
+			return nil, err
+		}
+		decorators, err := decodeList(aux.DecoratorList)
+		if err != nil {
+			return nil, err
+		}
+		var keywords []*Keyword
+		for _, r := range aux.Keywords {
+			var kw struct {
+				Arg    string          `json:"arg"`
+				Value  json.RawMessage `json:"value"`
+				Lineno int             `json:"lineno"`
+			}
+			if err := json.Unmarshal(r, &kw); err != nil {
+				return nil, err
+			}
+			value, err := decodeNode(kw.Value)
+			if err != nil {
+				return nil, err
+			}
+			keywords = append(keywords, &Keyword{Arg: kw.Arg, Value: value, Lineno: kw.Lineno})
+		}
+		return &ClassDef{
+			Name: aux.Name, Bases: bases, Keywords: keywords, Body: body,
+			Decorators: decorators, HasTypeParams: len(aux.TypeParams) > 0, Lineno: head.Lineno,
+		}, nil
+
 	case "Expr":
 		var aux struct {
 			Value json.RawMessage `json:"value"`

@@ -356,3 +356,22 @@ func TestDecodeFunctions(t *testing.T) {
 		t.Errorf("keywords: a '**mapping' has an empty name, got %+v", call.Keywords)
 	}
 }
+
+func TestDecodeClasses(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/classes.py")
+
+	p := as[*ClassDef](t, mod.Body[1])
+	if p.Name != "P" || len(p.Bases) != 1 || len(p.Decorators) != 1 || len(p.Body) != 2 {
+		t.Fatalf("class P: %+v", p)
+	}
+	if as[*Name](t, p.Decorators[0]).ID != "dataclass" {
+		t.Errorf("decorator: %+v", p.Decorators[0])
+	}
+	as[*AnnAssign](t, p.Body[0])
+	as[*FunctionDef](t, p.Body[1])
+
+	q := as[*ClassDef](t, mod.Body[2])
+	if len(q.Bases) != 1 || len(q.Keywords) != 1 || q.Keywords[0].Arg != "metaclass" {
+		t.Errorf("class Q: bases %d keywords %+v", len(q.Bases), q.Keywords)
+	}
+}

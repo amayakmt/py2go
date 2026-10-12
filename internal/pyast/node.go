@@ -21,6 +21,18 @@ type FunctionDef struct {
 	Lineno        int
 }
 
+// ClassDef is a class statement. Keywords holds metaclass=... and friends,
+// which codegen rejects.
+type ClassDef struct {
+	Name          string
+	Bases         []Node
+	Keywords      []*Keyword
+	Body          []Node
+	Decorators    []Node
+	HasTypeParams bool
+	Lineno        int
+}
+
 // Arguments is a function signature. Codegen accepts only plain positional
 // parameters, but the rest is kept so it can reject with a line number.
 type Arguments struct {
@@ -350,6 +362,7 @@ type Unsupported struct {
 
 func (n *Module) Line() int         { return 0 }
 func (n *FunctionDef) Line() int    { return n.Lineno }
+func (n *ClassDef) Line() int       { return n.Lineno }
 func (n *Expr) Line() int           { return n.Lineno }
 func (n *Call) Line() int           { return n.Lineno }
 func (n *Name) Line() int           { return n.Lineno }
