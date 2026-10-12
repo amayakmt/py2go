@@ -1,0 +1,1 @@
+unsupported: name 'x' is assigned to before global declaration at line 6

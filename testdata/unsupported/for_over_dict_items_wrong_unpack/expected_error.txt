@@ -1,0 +1,1 @@
+unsupported: unpacking tuple[str, int] into 3 targets at line 2

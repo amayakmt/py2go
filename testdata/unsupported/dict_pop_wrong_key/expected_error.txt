@@ -1,0 +1,1 @@
+unsupported: argument 1 of pop() expects str, got int at line 2

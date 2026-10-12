@@ -1,0 +1,1 @@
+unsupported: setdefault() with one argument, which stores None at line 2

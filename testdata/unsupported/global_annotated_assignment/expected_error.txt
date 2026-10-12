@@ -1,0 +1,1 @@
+unsupported: annotated name 'x' can't be global at line 6

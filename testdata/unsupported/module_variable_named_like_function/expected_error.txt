@@ -1,0 +1,1 @@
+unsupported: 'f' is both a function and a module-level variable at line 5

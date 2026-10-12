@@ -1,0 +1,1 @@
+unsupported: dict[...] with 1 type arguments at line 1

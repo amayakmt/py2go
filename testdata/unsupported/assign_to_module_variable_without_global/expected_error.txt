@@ -1,0 +1,1 @@
+unsupported: augmented assignment to undeclared name 'counter' at line 5

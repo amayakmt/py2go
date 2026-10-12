@@ -1,0 +1,1 @@
+unsupported: global 'zz', which has no type annotation at module level at line 2

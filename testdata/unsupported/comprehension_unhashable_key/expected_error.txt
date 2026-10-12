@@ -1,0 +1,1 @@
+unsupported: dict key of type list[int] (not hashable) at line 1

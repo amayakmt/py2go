@@ -1,0 +1,1 @@
+unsupported: variable 'xs' expects list[int], got dict[int, int] at line 6
