@@ -1,0 +1,1 @@
+unsupported: lambda with default, keyword-only, *args or **kwargs parameters at line 3

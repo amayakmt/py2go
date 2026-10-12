@@ -1,1 +1,0 @@
-unsupported: function definition inside a block at line 2

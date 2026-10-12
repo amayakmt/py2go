@@ -1,1 +1,0 @@
-unsupported: decorators at line 2

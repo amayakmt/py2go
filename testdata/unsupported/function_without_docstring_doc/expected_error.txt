@@ -1,0 +1,1 @@
+unsupported: __doc__ of 'f', which has no docstring (it would be None) at line 5

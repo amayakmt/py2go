@@ -1,1 +1,0 @@
-unsupported: tuple() of a sequence, which has no fixed length (variable-length tuples arrive in phase 6) at line 1

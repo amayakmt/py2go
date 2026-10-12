@@ -1,1 +1,1 @@
-unsupported: call to 'f' with 2 arguments, expected 1 at line 5
+unsupported: f() takes 1 positional argument but 2 were given at line 5

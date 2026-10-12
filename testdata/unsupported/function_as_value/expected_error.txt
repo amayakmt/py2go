@@ -1,1 +1,1 @@
-unsupported: function 'f' used as a value at line 5
+unsupported: variable 'x' expects int, got func[None] at line 5

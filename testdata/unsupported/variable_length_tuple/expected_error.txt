@@ -1,1 +1,0 @@
-unsupported: variable-length tuple annotation at line 1

@@ -1,0 +1,1 @@
+unsupported: no binding for nonlocal 'x' found at line 2

@@ -1,0 +1,1 @@
+unsupported: *iterable or **mapping argument in a call of a Callable value (the TypeError text needs the function's own name) at line 5

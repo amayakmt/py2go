@@ -1,0 +1,1 @@
+unsupported: decorator expects func[str, str], got func[int, int] at line 8
