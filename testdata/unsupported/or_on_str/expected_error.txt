@@ -1,1 +1,0 @@
-unsupported: 'or' on str operand (only bool is supported) at line 3

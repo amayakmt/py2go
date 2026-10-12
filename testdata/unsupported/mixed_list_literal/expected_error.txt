@@ -1,1 +1,0 @@
-unsupported: list with mixed element types (int and str) at line 1

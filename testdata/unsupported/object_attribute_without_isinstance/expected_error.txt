@@ -1,1 +1,0 @@
-unsupported: attribute 'value' of a value of type object (test it with isinstance first) at line 2

@@ -1,1 +1,0 @@
-unsupported: comparison of bool with int at line 1

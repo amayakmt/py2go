@@ -1,1 +1,0 @@
-unsupported: sequence pattern on a value of type object at line 3

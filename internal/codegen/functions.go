@@ -172,7 +172,8 @@ func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool
 		}
 		seen[arg.Name] = true
 		if arg.Annotation == nil {
-			return param{}, unsupported(fmt.Sprintf("%sparameter '%s' without type annotation", what, arg.Name), arg.Line())
+			// Without a type hint the parameter takes anything.
+			return param{name: arg.Name, typ: tObject, line: arg.Line()}, nil
 		}
 		t, err := g.annotationType(arg.Annotation, false)
 		if err != nil {
@@ -223,12 +224,28 @@ func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool
 		sig.kwarg = &p
 	}
 
+	var ret pyType
 	if fn.Returns == nil {
-		return nil, unsupported("function without return annotation", fn.Line())
-	}
-	ret, err := g.annotationType(fn.Returns, true)
-	if err != nil {
-		return nil, err
+		// Without a hint, a function that never returns a value returns
+		// None, a generator yields anything, and any other returns anything.
+		switch {
+		case isGeneratorBody(fn.Body):
+			ret = genOf(tObject, tObject, tObject)
+		case g.buildingMethod && protocolReturns[fn.Name] != "":
+			ret = protocolReturns[fn.Name]
+		case returnsValue(fn.Body):
+			ret = tObject
+		case g.buildingMethod && g.valueMethods[fn.Name] && !isDunder(fn.Name) && !g.buildingProperty:
+			ret = tObject
+		default:
+			ret = tNone
+		}
+	} else {
+		var err error
+		ret, err = g.annotationType(fn.Returns, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	sig.ret = ret
 	if isGeneratorBody(fn.Body) {
@@ -345,15 +362,26 @@ func (g *generator) decoratedType(sig *funcSig) (pyType, error) {
 	}
 	for i := len(sig.decorators) - 1; i >= 0; i-- {
 		d, err := g.typeOfDecorator(sig.decorators[i])
-		if err != nil {
-			return "", err
-		}
-		if !d.isFunc() || len(d.funcParams()) != 1 || d.funcParams()[0] != cur {
-			return "", unsupported(fmt.Sprintf("decorator of type %s applied to %s", d, cur), sig.decorators[i].Line())
+		if err != nil || !g.decoratorFits(d, cur) {
+			if err == nil && !mentionsObject(d) && !mentionsObject(cur) {
+				return "", unsupported(fmt.Sprintf("decorator of type %s applied to %s", d, cur), sig.decorators[i].Line())
+			}
+			cur = tObject
+			continue
 		}
 		cur = d.funcRet()
 	}
 	return cur, nil
+}
+
+// decoratorFits reports whether a decorator of type d can be applied to a
+// value of type cur with the types as they are.
+func (g *generator) decoratorFits(d, cur pyType) bool {
+	if !d.isFunc() || len(d.funcParams()) != 1 {
+		return false
+	}
+	p := d.funcParams()[0]
+	return p == cur || g.isSubtype(cur, p)
 }
 
 func (s *funcSig) positionalTypes() []pyType {
@@ -419,6 +447,17 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 	saved := g.saveFunctionState()
 	defer g.restoreFunctionState(saved)
 
+	key := g.joinScope + "/" + fn.Name
+	if mc != nil {
+		key = mc.cls.name + "/" + mc.definer.name + "." + fn.Name
+	}
+	return g.withJoins(key, hasPlainBindings(fn.Body), func() (string, error) {
+		return g.funcBodyOnce(fn, sig, header, parent, top, mc)
+	})
+}
+
+// funcBodyOnce compiles the body once.
+func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header string, parent *scope, top bool, mc *methodCtx) (string, error) {
 	env := newScope(parent)
 	env.boundary = true
 	g.env = env
@@ -478,6 +517,8 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 			}
 		case sig.ret.isOptional():
 			fmt.Fprintf(&body, "return %s[%s]()\n", g.rt("NoneOf"), g.goType(sig.ret.optElem()))
+		case sig.ret == tObject:
+			body.WriteString("return " + g.rt("NoneV") + "\n")
 		case sig.ret != tNone:
 			fmt.Fprintf(&body, "panic(%s(%q))\n", g.rt("MissingReturn"), fn.Name)
 		}
@@ -554,6 +595,9 @@ func (g *generator) funcDef(funcs, main *strings.Builder, fn *pyast.FunctionDef)
 	funcs.WriteString(text + "\n\n")
 
 	if len(sig.decorators) == 0 {
+		g.register(main, "func:"+sig.goName, func() string {
+			return fmt.Sprintf("%s(%s, %s)\n", g.rt("RegisterFunc"), sig.goName, g.funcInfoLit(sig.name, sig))
+		})
 		return nil
 	}
 	cur, err := g.functionValue(sig)
@@ -599,6 +643,7 @@ type defaultVar struct {
 
 // functionValue is a function used as a value: its name, typed as a Callable.
 func (g *generator) functionValue(sig *funcSig) (value, error) {
+	g.markValue("func:" + sig.goName)
 	if !sig.plain() {
 		// Usable only where a Callable is expected, through an adapter.
 		return value{code: sig.goName, typ: sig.goFuncType(), prec: precAtom, fsig: sig}, nil
@@ -616,13 +661,18 @@ func (g *generator) applyDecorators(sig *funcSig, cur value) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
-		if !d.typ.isFunc() || len(d.typ.funcParams()) != 1 {
-			return value{}, unsupported(fmt.Sprintf("decorator of type %s", d.typ), sig.decorators[i].Line())
+		if !g.decoratorFits(d.typ, cur.typ) {
+			if !mentionsObject(d.typ) && !mentionsObject(cur.typ) {
+				if d.typ.isFunc() && len(d.typ.funcParams()) == 1 {
+					return value{}, unsupported(fmt.Sprintf("decorator expects %s, got %s", d.typ.funcParams()[0], cur.typ), sig.decorators[i].Line())
+				}
+				return value{}, unsupported(fmt.Sprintf("decorator of type %s", d.typ), sig.decorators[i].Line())
+			}
+			// Not a decorator the types follow: call it when the program runs.
+			cur = g.dynValue(g.rt("DynCall")+"("+g.boxed(d)+", "+g.boxed(cur)+")", tObject)
+			continue
 		}
-		if d.typ.funcParams()[0] != cur.typ {
-			return value{}, unsupported(fmt.Sprintf("decorator expects %s, got %s", d.typ.funcParams()[0], cur.typ), sig.decorators[i].Line())
-		}
-		cur = value{code: d.at(precAtom) + "(" + cur.code + ")", typ: d.typ.funcRet(), prec: precAtom}
+		cur = value{code: d.at(precAtom) + "(" + g.relabel(cur, d.typ.funcParams()[0]).code + ")", typ: d.typ.funcRet(), prec: precAtom}
 	}
 	return cur, nil
 }
@@ -674,8 +724,12 @@ func (g *generator) nestedDecoratedType(sig *funcSig) (pyType, error) {
 		if err != nil {
 			return "", err
 		}
-		if !d.typ.isFunc() || len(d.typ.funcParams()) != 1 || d.typ.funcParams()[0] != cur {
-			return "", unsupported(fmt.Sprintf("decorator of type %s applied to %s", d.typ, cur), sig.decorators[i].Line())
+		if !g.decoratorFits(d.typ, cur) {
+			if !mentionsObject(d.typ) && !mentionsObject(cur) {
+				return "", unsupported(fmt.Sprintf("decorator of type %s applied to %s", d.typ, cur), sig.decorators[i].Line())
+			}
+			cur = tObject
+			continue
 		}
 		cur = d.typ.funcRet()
 	}
@@ -800,7 +854,13 @@ func (g *generator) coerce(v value, want pyType, dest string, line int) (value, 
 		return v, nil
 	}
 	if g.isSubtype(v.typ, want) {
+		if want == tObject {
+			v = g.escape(v)
+		}
 		return g.relabel(v, want), nil
+	}
+	if v.typ == tObject && want != tNone && !want.isClassRef() && want != tExc {
+		return value{code: g.rt("Cast") + "[" + g.goType(want) + "](" + v.code + ")", typ: want, prec: precAtom}, nil
 	}
 	if v.typ.isOptional() && g.isSubtype(v.typ.optElem(), want) && !want.isOptional() {
 		// A variable that might be None goes where a value is needed, as in
@@ -811,6 +871,8 @@ func (g *generator) coerce(v value, want pyType, dest string, line int) (value, 
 	if want.isIterable() {
 		if code, elem, ok := g.iterableOf(v); ok && elem == want.elem() {
 			return value{code: code, typ: want, prec: precAtom}, nil
+		} else if ok && elem == tObject {
+			return value{code: g.rt("CastIterable") + "[" + g.goType(want.elem()) + "](" + code + ")", typ: want, prec: precAtom}, nil
 		}
 	}
 	if want.isFunc() && v.fsig != nil {
@@ -925,3 +987,52 @@ func (g *generator) functionAttribute(sig *funcSig, attr string, line int) (valu
 	}
 	return value{}, unsupported("attribute access '."+attr+"' on a function", line)
 }
+
+// protocolReturns are the results the special methods must have, which an
+// unannotated method gets.
+var protocolReturns = map[string]pyType{
+	"__str__": tStr, "__repr__": tStr, "__format__": tStr,
+	"__eq__": tBool, "__ne__": tBool, "__lt__": tBool, "__le__": tBool, "__gt__": tBool, "__ge__": tBool,
+	"__bool__": tBool, "__contains__": tBool,
+	"__len__": tInt, "__hash__": tInt, "__int__": tInt, "__index__": tInt, "__float__": tFloat,
+}
+
+// returnsValue reports whether a function body has a "return value" other than
+// None, not counting the functions nested in it.
+func returnsValue(body []pyast.Node) bool {
+	found := false
+	for _, st := range body {
+		walkPrune(st, func(n pyast.Node) bool {
+			switch r := n.(type) {
+			case *pyast.Return:
+				if r.Value != nil {
+					if c, ok := r.Value.(*pyast.Constant); !ok || c.PyType != "none" {
+						found = true
+					}
+				}
+			case *pyast.FunctionDef, *pyast.Lambda, *pyast.ClassDef:
+				return false
+			}
+			return !found
+		})
+	}
+	return found
+}
+
+// hasPropertyDecorator reports whether a method is a property or its setter.
+func hasPropertyDecorator(fn *pyast.FunctionDef) bool {
+	for _, d := range fn.Decorators {
+		switch d := d.(type) {
+		case *pyast.Name:
+			if d.ID == "property" {
+				return true
+			}
+		case *pyast.Attribute:
+			return true
+		}
+	}
+	return false
+}
+
+// mentionsObject reports whether a type has an object in it.
+func mentionsObject(t pyType) bool { return strings.Contains(string(t), "object") }

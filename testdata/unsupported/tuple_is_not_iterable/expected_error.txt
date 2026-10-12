@@ -1,1 +1,0 @@
-unsupported: for loop over tuple[int, str] at line 2

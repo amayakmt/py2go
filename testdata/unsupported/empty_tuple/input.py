@@ -1,1 +1,0 @@
-x: tuple[int, int] = ()

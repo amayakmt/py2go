@@ -77,6 +77,14 @@ func (g *generator) prescan(mod *pyast.Module) {
 	}
 	walk(mod, func(n pyast.Node) {
 		switch n := n.(type) {
+		case *pyast.ClassDef:
+			// A method that returns something decides the result type of
+			// the methods of that name in the other classes.
+			for _, st := range n.Body {
+				if fn, ok := st.(*pyast.FunctionDef); ok && fn.Returns == nil && !isGeneratorBody(fn.Body) && returnsValue(fn.Body) {
+					g.valueMethods[fn.Name] = true
+				}
+			}
 		case *pyast.ImportFrom:
 			if n.Module == "dataclasses" {
 				g.dataclassImported = true

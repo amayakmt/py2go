@@ -1,0 +1,1 @@
+unsupported: assignment to attribute 'calls' of func[object] at line 4

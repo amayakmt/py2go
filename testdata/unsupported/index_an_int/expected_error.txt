@@ -1,1 +1,0 @@
-unsupported: subscript of int at line 2

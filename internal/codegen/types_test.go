@@ -95,7 +95,7 @@ func TestGoType(t *testing.T) {
 	for _, c := range []struct {
 		t  pyType
 		ok bool
-	}{{tInt, true}, {tStr, true}, {tFloat, false}, {listOf(tInt), false}, {dictOf(tInt, tInt), false},
+	}{{tInt, true}, {tStr, true}, {tFloat, true}, {listOf(tInt), false}, {dictOf(tInt, tInt), false},
 		{tupleOf([]pyType{tInt, tStr}), true}, {tupleOf([]pyType{tInt, listOf(tInt)}), false}} {
 		if c.t.hashable() != c.ok {
 			t.Errorf("hashable(%s) = %v", c.t, !c.ok)

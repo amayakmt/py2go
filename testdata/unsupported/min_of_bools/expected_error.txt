@@ -1,1 +1,0 @@
-unsupported: min() of bool and bool (arguments must share one of int, float, str) at line 1

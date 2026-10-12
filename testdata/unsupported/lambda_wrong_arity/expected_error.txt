@@ -1,1 +1,0 @@
-unsupported: lambda with 0 parameters where 1 are expected at line 1

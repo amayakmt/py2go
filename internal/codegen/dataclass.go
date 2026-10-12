@@ -43,7 +43,7 @@ func (g *generator) dataclassOptions(c *classInfo) (*dcInfo, error) {
 		}
 		name, ok := node.(*pyast.Name)
 		if !ok || name.ID != "dataclass" || dc != nil {
-			return nil, unsupported("class decorator (class decorators other than @dataclass arrive in phase 8)", d.Line())
+			return nil, unsupported("class decorator (class decorators other than @dataclass are not supported)", d.Line())
 		}
 		if !g.dataclassImported {
 			return nil, unsupported("@dataclass without 'from dataclasses import dataclass'", d.Line())
@@ -115,7 +115,7 @@ func (g *generator) dataclassField(c *classInfo, name string, t pyType, n *pyast
 			return k.Value.(bool), nil
 		}
 		var err error
-		switch kw.Arg {
+		switch pyName(kw.Arg) {
 		case "default":
 			f.def = kw.Value
 		case "default_factory":

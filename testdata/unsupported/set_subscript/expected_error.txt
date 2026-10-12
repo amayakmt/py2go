@@ -1,1 +1,0 @@
-unsupported: subscript of set[int] at line 2

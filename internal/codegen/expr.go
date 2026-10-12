@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"github.com/amayakmt/py2go/runtime"
 	"math"
 	"strconv"
 	"strings"
@@ -50,6 +51,12 @@ type value struct {
 	classRef   *classInfo
 	exactRef   bool
 	dynamicRef bool
+
+	// fresh marks a container that was just built by a display or a
+	// comprehension, which nothing else refers to yet. varName is the
+	// variable a value was read from.
+	fresh   bool
+	varName string
 }
 
 // at returns the code, parenthesized if it binds looser than min.
@@ -121,7 +128,7 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 	case *pyast.GeneratorExp:
 		return g.genExp(n)
 	case *pyast.Lambda:
-		return value{}, unsupported("lambda without a Callable type from its context (annotate the variable, or pass it where a Callable is expected)", n.Line())
+		return g.dynLambda(n)
 	case *pyast.IfExp:
 		return g.ifExp(n, "")
 	case *pyast.Yield:
@@ -181,7 +188,7 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 		}
 	case *pyast.Lambda:
 		if !want.isFunc() {
-			return value{}, unsupported("lambda without a Callable type from its context (annotate the variable, or pass it where a Callable is expected)", n.Line())
+			return g.dynLambda(n)
 		}
 		v, err = g.lambda(n, want.funcParams(), want.funcRet())
 	case *pyast.IfExp:
@@ -209,11 +216,24 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 			v = g.classObject(v)
 		}
 	}
+	switch n.(type) {
+	case *pyast.List, *pyast.Dict, *pyast.Set, *pyast.ListComp, *pyast.SetComp, *pyast.DictComp:
+		v.fresh = true
+	}
+	if target == tObject {
+		v = g.escape(v)
+	}
 	if target != "" {
 		v = g.relabel(v, target)
 	}
+	if v.fsig != nil && v.typ.isFunc() && !target.isFunc() && (v.fsig.hasDefaults() || !v.fsig.plain()) {
+		// A function with defaults or keywords, kept in a variable, is
+		// called with whatever the call gives; its parameters travel with it.
+		v = g.relabel(v, tObject)
+	}
 	if v.typ == tNone {
-		return v, unsupported("use of a None value", n.Line())
+		// A call that returns nothing, used as a value, is None once it ran.
+		v = value{code: "func() " + g.rt("NoneT") + " {\n" + v.code + "\nreturn " + g.rt("NoneV") + "\n}()", typ: tNoneType, prec: precAtom}
 	}
 	return v, nil
 }
@@ -274,9 +294,10 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 		if sig != nil && len(sig.decorators) > 0 {
 			sig = nil
 		}
-		return value{code: n.ID, typ: t, prec: precAtom, fsig: sig}, nil
+		return value{code: n.ID, typ: t, prec: precAtom, fsig: sig, varName: n.ID}, nil
 	}
 	if v, ok := g.readGlobal(n.ID); ok {
+		v.varName = n.ID
 		return v, nil
 	}
 	if v, ok := g.classNameValue(n.ID); ok {
@@ -287,6 +308,16 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 	}
 	if n.ID == "__name__" {
 		return value{code: `"__main__"`, typ: tStr, prec: precAtom}, nil
+	}
+	if dynBuiltinValues[n.ID] {
+		return value{code: g.rt("BuiltinFunc") + "(" + strconv.Quote(n.ID) + ")", typ: tObject, prec: precAtom}, nil
+	}
+	if dynBuiltinTypes[n.ID] || runtime.IsExceptionClass(n.ID) {
+		return value{code: g.rt("BuiltinClassOf") + "(" + strconv.Quote(n.ID) + ")", typ: tObject, prec: precAtom}, nil
+	}
+	if !g.infer && !pythonBuiltins[n.ID] {
+		// A name nothing defines is a NameError when the program gets there.
+		return value{code: g.rt("UndefinedName") + "(" + strconv.Quote(n.ID) + ")", typ: tObject, prec: precAtom}, nil
 	}
 	return value{}, unsupported(fmt.Sprintf("undefined name '%s'", n.ID), n.Line())
 }
@@ -350,6 +381,10 @@ func (g *generator) call(n *pyast.Call) (value, error) {
 			return value{}, unsupported("call of the class of a value that is not exactly known (type(x)(...) works on self only)", n.Line())
 		}
 		return g.constructCall(n, fv.classRef)
+	case fv.typ == tObject:
+		return g.dynCall(n, fv)
+	case !fv.typ.isFunc() && g.boxable(fv):
+		return g.dynCall(n, fv)
 	case !fv.typ.isFunc():
 		return value{}, unsupported(fmt.Sprintf("call of a value of type %s", fv.typ), n.Line())
 	}
@@ -360,8 +395,8 @@ func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) 
 	name := callee.ID
 	// Variables and nested functions hide module-level functions and builtins.
 	if sig, found := g.env.lookupSig(name); found {
-		if sig != nil {
-			return g.userCall(n, sig)
+		if sig != nil && len(sig.decorators) == 0 {
+			return g.userCallOrDynamic(n, sig)
 		}
 		t, _ := g.env.lookup(name)
 		if t.isFunc() {
@@ -373,6 +408,9 @@ func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) 
 		if t.isClassRef() {
 			return g.constructCall(n, g.classes[t.classRefName()])
 		}
+		if g.boxable(value{typ: t}) {
+			return g.dynCall(n, value{code: name, typ: t, prec: precAtom})
+		}
 		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
 	}
 	if g.fnName != "" {
@@ -381,8 +419,11 @@ func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) 
 			if t.isClass() {
 				return g.callInstance(n, v)
 			}
+			if t == tObject {
+				return g.dynCall(n, v)
+			}
 			if !t.isFunc() {
-				return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
+				return value{}, unsupported(fmt.Sprintf("call of variable '%s' of type %s", name, t), n.Line())
 			}
 			return g.callValue(n, v)
 		}
@@ -401,7 +442,7 @@ func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) 
 		return value{}, err
 	}
 	if sig, ok := g.sigs[name]; ok && len(sig.decorators) == 0 {
-		return g.userCall(n, sig)
+		return g.userCallOrDynamic(n, sig)
 	}
 	if g.isExceptionClass(name) && g.classes[name] == nil {
 		// ValueError("x") as a value, to store, pass or raise later.
@@ -426,6 +467,16 @@ var opSymbols = map[string]string{
 
 func (g *generator) binOp(n *pyast.BinOp) (value, error) {
 	l, r, err := g.operandPair(n.Left, n.Right)
+	switch n.Op {
+	case "BitAnd", "BitOr", "BitXor", "LShift", "RShift":
+		// An int literal next to a float stays an int: the operator is
+		// refused with the types the program has.
+		if err == nil && l.typ == tFloat && r.typ == tFloat {
+			if rv, rerr := g.typedExpr(n.Right); rerr == nil {
+				r = rv
+			}
+		}
+	}
 	if err != nil {
 		return value{}, err
 	}
@@ -437,7 +488,15 @@ func (g *generator) binOp(n *pyast.BinOp) (value, error) {
 // operators whose Python and Go meanings differ through the runtime.
 func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	bad := func() (value, error) {
+		if l.typ != tNone && r.typ != tNone && l.typ != "" && r.typ != "" && !l.typ.isClassRef() && !r.typ.isClassRef() && l.typ != tExc && r.typ != tExc {
+			// The operands' types are known to be unsuitable; Python
+			// raises the TypeError when the expression runs.
+			return g.dynBinary(op, l, r), nil
+		}
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s and %s", opSymbols[op], l.typ, r.typ), line)
+	}
+	if involvesObject(l, r) {
+		return g.dynBinary(op, l, r), nil
 	}
 	if l.typ.isOptional() || r.typ.isOptional() {
 		l, r = g.unwrapOperands(func(a, b string) string {
@@ -469,7 +528,11 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 
 	switch op {
 	case "Pow":
-		return g.power(l, r, line)
+		v, err := g.power(l, r, line)
+		if err != nil && g.boxable(l) && g.boxable(r) {
+			return g.dynBinary(op, l, r), nil
+		}
+		return v, err
 
 	case "Add", "Sub", "Mult":
 		goOp, prec := map[string]string{"Add": "+", "Sub": "-", "Mult": "*"}[op], precAdd
@@ -604,6 +667,9 @@ func (g *generator) unaryOp(n *pyast.UnaryOp) (value, error) {
 	}
 	bad := func() (value, error) {
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s", opSymbols[n.Op], v.typ), n.Line())
+	}
+	if v.typ == tObject && n.Op != "Not" {
+		return g.dynUnary(n.Op, v), nil
 	}
 	if v.typ.isClass() && n.Op != "Not" {
 		return g.classUnary(n.Op, v, n.Line())
@@ -769,10 +835,12 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 	switch {
 	case isNumeric(l.typ) && isNumeric(r.typ) && l.typ != r.typ:
 		l, r = toFloat(l), toFloat(r)
+	case l.typ != r.typ && g.boxable(l) && g.boxable(r):
+		return g.dynCompare(op, l, r), nil
 	case l.typ != r.typ:
 		return value{}, unsupported(fmt.Sprintf("comparison of %s with %s", l.typ, r.typ), n.Line())
 	case l.typ == tBool && op != "Eq" && op != "NotEq":
-		return value{}, unsupported("ordering comparison of bool values", n.Line())
+		return g.dynCompare(op, l, r), nil
 	case l.typ.isDict() || l.typ == tRange || l.typ.isView() || l.typ.isIter():
 		// These compare for equality only.
 		if op != "Eq" && op != "NotEq" {
@@ -844,11 +912,14 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 		// The item is boxed as an interface, so give a constant its Go type.
 		code = g.rt("SeqContains") + "(" + r.code + ", " + l.typ.goType() + "(" + l.code + "))"
 	default:
-		op := "in"
-		if negate {
-			op = "not in"
+		if r.typ.isOptional() || r.typ == tNone || r.typ == tNoneType || l.typ == tNone {
+			op := "in"
+			if negate {
+				op = "not in"
+			}
+			return value{}, unsupported(fmt.Sprintf("operator '%s' on %s and %s", op, l.typ, r.typ), n.Line())
 		}
-		return value{}, unsupported(fmt.Sprintf("operator '%s' on %s and %s", op, l.typ, r.typ), n.Line())
+		code = g.rt("DynContains") + "(" + g.boxed(r) + ", " + g.boxed(l) + ")"
 	}
 	if negate {
 		return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
@@ -878,6 +949,7 @@ func (g *generator) boolOperands(op string, values []pyast.Node) (value, error) 
 		goOp, prec = "||", precOr
 	}
 	word := strings.ToLower(op)
+	_ = word
 
 	parts := make([]string, 0, len(values))
 	konst := true
@@ -889,7 +961,10 @@ func (g *generator) boolOperands(op string, values []pyast.Node) (value, error) 
 		// Python's and/or return one of their operands, Go's return a bool.
 		// The two agree only when every operand is a bool.
 		if v.typ != tBool {
-			return value{}, unsupported(fmt.Sprintf("'%s' on %s operand (only bool is supported)", word, v.typ), e.Line())
+			if !g.boxable(v) {
+				return value{}, unsupported(fmt.Sprintf("'%s' on %s operand", word, v.typ), e.Line())
+			}
+			return g.valueBoolOp(op, values)
 		}
 		konst = konst && v.konst
 		// Same-operator children can share the parent's precedence.

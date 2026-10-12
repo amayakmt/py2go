@@ -77,11 +77,24 @@ type generator struct {
 	phase          int // 0 reading classes, 1 classes read, 2 generating
 	callWant       pyType
 	tempGenerators bool
-	elseFlags      []string         // per enclosing loop: the flag a break sets, if it has an else
-	gen            *genInfo         // the generator function being compiled
-	genNone        bool             // ... and it returns None
-	hoist          *strings.Builder // declarations an expression needs before its statement
-	buildingMethod bool             // method names are not Go identifiers, so any name will do
+
+	// Variables without annotations, see joins.go.
+	joins              map[string]map[string]pyType
+	regLines           map[string]string // registrations of functions and classes for dynamic calls
+	regUsed            map[string]bool   // ... that are used as values
+	buildingProperty   bool
+	moduleJoinsVersion int
+	valueMethods       map[string]bool // methods that some class defines with a return value
+	annotatedNames     map[string]map[string]bool
+	joinScope          string
+	recordJoins        bool
+	joinsChanged       bool
+	annotatedDecl      bool
+	elseFlags          []string         // per enclosing loop: the flag a break sets, if it has an else
+	gen                *genInfo         // the generator function being compiled
+	genNone            bool             // ... and it returns None
+	hoist              *strings.Builder // declarations an expression needs before its statement
+	buildingMethod     bool             // method names are not Go identifiers, so any name will do
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -91,6 +104,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("codegen: root must be Module, got %T", root)
 	}
 
+	renameReserved(mod)
 	g := &generator{
 		sigs:    map[string]*funcSig{},
 		sigErrs: map[string]error{},
@@ -118,6 +132,11 @@ func Generate(root pyast.Node) ([]byte, error) {
 		usedNames:      map[string]bool{},
 		lateInit:       map[string]*strings.Builder{},
 		tempGenerators: true,
+		joins:          map[string]map[string]pyType{},
+		regLines:       map[string]string{},
+		valueMethods:   map[string]bool{},
+		regUsed:        map[string]bool{},
+		annotatedNames: map[string]map[string]bool{},
 	}
 	g.scanTypeVars(mod)
 	if err := g.registerClassNames(mod); err != nil {
@@ -139,6 +158,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 	if err := g.inferClasses(); err != nil {
 		return nil, err
 	}
+	g.inferModuleVars(mod)
 
 	// Function definitions go to package level.
 	// Everything else goes into main(), in source order.
@@ -170,6 +190,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 	}
 	funcText := g.placeRecursionGuards(funcs.String())
 	funcText, bodyText := g.placeGlobalFlags(funcText), g.placeGlobalFlags(bodyStr)
+	bodyText = g.placeRegistrations(bodyText)
 	globals := g.globalDeclarations()
 
 	var out strings.Builder
@@ -237,7 +258,7 @@ var goReserved = func() map[string]bool {
 // checkName rejects identifiers that would break or hijack the Go output.
 // Renaming them is future work, so for now they fail loudly.
 func checkName(name string, line int) error {
-	if goReserved[name] {
+	if goReserved[name] && !strings.HasSuffix(name, renameSuffix) {
 		return unsupported(fmt.Sprintf("identifier '%s' (reserved in Go output)", name), line)
 	}
 	if strings.HasPrefix(name, "_py") {

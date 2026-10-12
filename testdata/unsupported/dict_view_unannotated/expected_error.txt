@@ -1,1 +1,0 @@
-unsupported: assignment to undeclared name 'k' (needs a type annotation) at line 2

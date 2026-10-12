@@ -38,6 +38,9 @@ func (g *generator) attribute(n *pyast.Attribute) (value, error) {
 			return value{}, unsupported(fmt.Sprintf("type() of %s", v.typ), n.Line())
 		}
 	}
+	if recv, err := g.recvExpr(n.Value, n.Attr); err == nil && g.boxable(recv) && recv.code != "" {
+		return g.dynValue(g.rt("DynGetAttr")+"("+g.boxed(recv)+", "+strconv.Quote(n.Attr)+")", tObject), nil
+	}
 	return value{}, unsupported("attribute access '."+n.Attr+"'", n.Line())
 }
 
@@ -156,13 +159,15 @@ func (g *generator) excValue(n pyast.Node) (string, error) {
 	}
 	// Any other expression whose value is an exception.
 	switch n.(type) {
-	case *pyast.Subscript, *pyast.Attribute, *pyast.Call:
+	case *pyast.Subscript, *pyast.Attribute, *pyast.Call, *pyast.Name:
 		if v, err := g.typedExpr(n); err == nil {
 			switch {
 			case v.typ == tExc:
 				return v.code, nil
 			case v.typ.isClass() && g.classOf(v.typ).exc:
 				return v.at(precAtom) + ".PyExc()", nil
+			case v.typ == tObject:
+				return g.rt("AsException") + "(" + v.code + ")", nil
 			}
 		}
 	}
@@ -356,6 +361,23 @@ func (g *generator) emitReturn(b *strings.Builder, value string) {
 // The closure would otherwise hide them.
 func (g *generator) hoistDecls(b *strings.Builder, body []pyast.Node) {
 	for _, stmt := range body {
+		if as, isAssign := stmt.(*pyast.Assign); isAssign {
+			// Without an annotation the type is the one the earlier
+			// rounds of compiling the function found.
+			for _, tg := range as.Targets {
+				name, ok := tg.(*pyast.Name)
+				if !ok || name.ID == "_" || checkName(name.ID, as.Line()) != nil {
+					continue
+				}
+				if _, declared := g.env.lookup(name.ID); declared {
+					continue
+				}
+				if t, ok := g.joins[g.joinScope][name.ID]; ok && t != "" && !g.annotatedNames[g.joinScope][name.ID] {
+					g.declare(b, name.ID, t, "")
+				}
+			}
+			continue
+		}
 		a, ok := stmt.(*pyast.AnnAssign)
 		if !ok || a.Value == nil || !a.Simple {
 			continue

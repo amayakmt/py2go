@@ -1,1 +1,1 @@
-unsupported: format spec 's': unknown format code 's' for object of type 'int' at line 2
+unsupported: format spec 's': Unknown format code 's' for object of type 'int' at line 2

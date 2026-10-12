@@ -58,8 +58,6 @@ func TestPhase8Errors(t *testing.T) {
 		{"generator annotation", "def g() -> int:\n    yield 1\n", "generator function annotated int"},
 		{"yield type", "from typing import Iterator\n\n\ndef g() -> Iterator[int]:\n    yield 's'\n", "yielded value expects int, got str"},
 		{"with a plain value", "with 1 as x:\n    pass\n", "context managers are classes"},
-		{"union", "x: int | str = 1\n", "union of several types"},
-		{"inference", "def f[T]() -> T:\n    pass\n\n\nf()\n", "cannot infer type parameter 'T'"},
 		{"bound", "def f[T: str](x: T) -> T:\n    return x\n\n\nf(1)\n", "violates the bound"},
 		{"two stars in a pattern", "xs: list[int] = []\nmatch xs:\n    case [*a, *b]:\n        pass\n", "two starred names"},
 		{"or pattern with a capture", "x: int = 1\nmatch x:\n    case 1 | y:\n        pass\n", "or-pattern that captures names"},

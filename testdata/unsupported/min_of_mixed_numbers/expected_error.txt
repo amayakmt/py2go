@@ -1,1 +1,0 @@
-unsupported: min() of int and float (arguments must share one of int, float, str) at line 1

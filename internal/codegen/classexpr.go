@@ -44,10 +44,24 @@ func (g *generator) relabel(v value, want pyType) value {
 	if want.isOptional() {
 		goElem := g.goType(want.optElem())
 		if v.typ == tNoneType {
-			return value{code: g.rt("NoneOf") + "[" + goElem + "]()", typ: want, prec: precAtom}
+			none := g.rt("NoneOf") + "[" + goElem + "]()"
+			if v.code != "" && v.code != g.rt("NoneV") {
+				// The None came out of a call that had to run.
+				none = "func() " + g.goType(want) + " {\n_ = " + v.code + "\nreturn " + none + "\n}()"
+			}
+			return value{code: none, typ: want, prec: precAtom}
 		}
 		inner := g.relabel(v, want.optElem())
 		return value{code: g.rt("Some") + "[" + goElem + "](" + inner.typed().code + ")", typ: want, prec: precAtom}
+	}
+	if want == tObject && v.fsig != nil && v.typ.isFunc() && v.fsig.plain() && !v.fsig.hasDefaults() && v.fsig.name != "" {
+		// A plain function keeps its name, for __name__.
+		return value{code: g.rt("WithInfo") + "(" + v.code + ", " + g.funcInfoLit(v.fsig.name, v.fsig) + ")", typ: tObject, prec: precAtom}
+	}
+	if want == tObject && v.fsig != nil && v.typ.isFunc() && (len(v.fsig.kwonly) > 0 || v.fsig.vararg != nil || v.fsig.kwarg != nil || v.fsig.hasDefaults()) {
+		// The function is called later with keywords or defaults: keep
+		// its parameters with it.
+		return value{code: "&" + g.rt("Callable") + "{Fn: " + v.code + ", Info: " + g.funcInfoSnapshot(v.fsig.name, v.fsig) + "}", typ: tObject, prec: precAtom}
 	}
 	if want == tObject {
 		v = v.typed()
@@ -194,7 +208,7 @@ func (g *generator) instanceAttr(recv value, c *classInfo, attr string, line int
 		if hook := c.lookup("__getattr__"); hook != nil && hook.kind == mMethod && len(hook.sig.pos) == 1 && hook.sig.pos[0].typ == tStr {
 			return value{code: recv.at(precAtom) + ".M___getattr__(" + strconv.Quote(attr) + ")", typ: hook.sig.ret, prec: precAtom}, nil
 		}
-		return value{}, unsupported(fmt.Sprintf("attribute '%s' of class '%s' (assign it in __init__ or annotate it in the class body)", attr, c.name), line)
+		return g.dynValue(g.rt("DynGetAttr")+"("+recv.code+", "+strconv.Quote(attr)+")", tObject), nil
 	case m.isAttr():
 		return value{code: recv.at(precAtom) + ".Get_" + name + "()", typ: m.typ, prec: precAtom}, nil
 	case m.isCallable():
@@ -258,7 +272,33 @@ func (g *generator) classAttrRead(c *classInfo, attr string, exactRef bool, line
 	case mProperty:
 		return value{}, unsupported(fmt.Sprintf("'%s.%s' is a property, read it on an instance", c.name, attr), line)
 	}
+	if m.kind == mMethod && m.sig != nil && !m.special {
+		return g.unboundMethod(c, m), nil
+	}
 	return value{}, unsupported(fmt.Sprintf("unbound method '%s.%s' used as a value", c.name, attr), line)
+}
+
+// unboundMethod is C.method used as a value: a function of the instance and
+// the method's own parameters.
+func (g *generator) unboundMethod(c *classInfo, m *member) value {
+	params, result := g.goSignature(m.sig)
+	self := "self " + c.name
+	if params != "" {
+		self += ", " + params
+	}
+	var args []string
+	for _, p := range m.sig.goParams() {
+		args = append(args, p.name)
+	}
+	call := fmt.Sprintf("self.M_%s(%s)", m.name, strings.Join(args, ", "))
+	if m.sig.ret != tNone {
+		call = "return " + call
+	}
+	fn := fmt.Sprintf("func(%s)%s { %s }", self, result, call)
+	withSelf := *m.sig
+	withSelf.pos = append([]param{{name: "self", typ: c.typ()}}, m.sig.pos...)
+	info := g.funcInfoSnapshot(c.pyName()+"."+m.name, &withSelf)
+	return value{code: g.rt("WithInfo") + "(" + fn + ", " + info + ")", typ: tObject, prec: precAtom}
 }
 
 // classAttribute handles n.Attr for a receiver that is a class or an
@@ -323,7 +363,7 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 		v, err := g.excAttr(recv, n.Attr, n.Line())
 		return v, true, err
 	case recv.typ == tObject:
-		return value{}, true, unsupported(fmt.Sprintf("attribute '%s' of a value of type object (test it with isinstance first)", n.Attr), n.Line())
+		return g.dynValue(g.rt("DynGetAttr")+"("+recv.code+", "+strconv.Quote(n.Attr)+")", tObject), true, nil
 	}
 	return value{}, false, nil
 }
@@ -535,6 +575,12 @@ func (g *generator) instanceCall(n *pyast.Call, m *pyast.Attribute, recv value) 
 		if err != nil {
 			return value{}, err
 		}
+		if fv.typ.isClassRef() && fv.classRef != nil {
+			return g.dynCall(n, g.classObject(fv))
+		}
+		if !fv.typ.isFunc() && g.boxable(fv) {
+			return g.dynCall(n, fv)
+		}
 		if !fv.typ.isFunc() {
 			return value{}, unsupported(fmt.Sprintf("call of attribute '%s' of type %s", m.Attr, fv.typ), n.Line())
 		}
@@ -553,6 +599,12 @@ func (g *generator) instanceCall(n *pyast.Call, m *pyast.Attribute, recv value) 
 	fv, err := g.instanceAttr(recv, c, m.Attr, n.Line())
 	if err != nil {
 		return value{}, err
+	}
+	if fv.typ.isClassRef() && fv.classRef != nil {
+		return g.dynCall(n, g.classObject(fv))
+	}
+	if !fv.typ.isFunc() && g.boxable(fv) {
+		return g.dynCall(n, fv)
 	}
 	if !fv.typ.isFunc() {
 		return value{}, unsupported(fmt.Sprintf("call of attribute '%s' of type %s", m.Attr, fv.typ), n.Line())
@@ -582,6 +634,12 @@ func (g *generator) classLevelCall(n *pyast.Call, m *pyast.Attribute, recv value
 	fv, err := g.classAttrRead(c, m.Attr, recv.exactRef, n.Line())
 	if err != nil {
 		return value{}, err
+	}
+	if fv.typ.isClassRef() && fv.classRef != nil {
+		return g.dynCall(n, g.classObject(fv))
+	}
+	if !fv.typ.isFunc() && g.boxable(fv) {
+		return g.dynCall(n, fv)
 	}
 	if !fv.typ.isFunc() {
 		return value{}, unsupported(fmt.Sprintf("call of attribute '%s' of type %s", m.Attr, fv.typ), n.Line())
@@ -642,7 +700,18 @@ func (g *generator) resolveStore(b *strings.Builder, target *pyast.Attribute) (*
 		return g.classStore(recv.classRef, target.Attr, line)
 	case recv.typ.isClass():
 	case recv.typ == tObject:
-		return nil, unsupported("assignment to an attribute of a value of type object", line)
+		recvCode := recv.at(precAtom)
+		if !simpleOperand.MatchString(recvCode) {
+			tmp := g.tmp("o")
+			g.temp(b, tmp, recv.typ, recv.code)
+			recvCode = tmp
+		}
+		attr := strconv.Quote(target.Attr)
+		return &attrStore{
+			typ:  tObject,
+			set:  func(src string) string { return g.rt("DynSetAttr") + "(" + recvCode + ", " + attr + ", " + src + ")" },
+			read: func() string { return g.rt("DynGetAttr") + "(" + recvCode + ", " + attr + ")" },
+		}, nil
 	default:
 		return nil, unsupported(fmt.Sprintf("assignment to attribute '%s' of %s", target.Attr, recv.typ), line)
 	}
@@ -665,7 +734,14 @@ func (g *generator) resolveStore(b *strings.Builder, target *pyast.Attribute) (*
 		}
 	}
 	if m == nil {
-		return nil, unsupported(fmt.Sprintf("assignment to unknown attribute '%s' of class '%s' (assign it in __init__ or annotate it in the class body)", target.Attr, c.name), line)
+		// An attribute the class does not declare lives in the instance's
+		// dictionary.
+		attr := strconv.Quote(target.Attr)
+		return &attrStore{
+			typ:  tObject,
+			set:  func(src string) string { return g.rt("DynSetAttr") + "(" + recvCode + ", " + attr + ", " + src + ")" },
+			read: func() string { return g.rt("DynGetAttr") + "(" + recvCode + ", " + attr + ")" },
+		}, nil
 	}
 	switch m.kind {
 	case mField, mClassAttr:
@@ -863,6 +939,9 @@ func (g *generator) augmented(op string, cur, right value, line int) (value, err
 			return v, err
 		}
 	}
+	if involvesObject(cur, right) {
+		return g.dynValue(g.rt("DynInplace")+`("`+op+`", `+g.boxed(cur)+", "+g.boxed(right)+")", tObject), nil
+	}
 	return g.binary(op, cur, right, line)
 }
 
@@ -897,6 +976,15 @@ func (g *generator) commonClass(a, b pyType) (pyType, bool) {
 
 // classObject is a class used as a value, as a runtime.ClassRef.
 func (g *generator) classObject(v value) value {
+	if v.classRef != nil {
+		g.markValue("class:" + v.classRef.name)
+	}
+	if v.dynamicRef {
+		// Any class of the program may be the one behind the value.
+		for name := range g.classes {
+			g.markValue("class:" + name)
+		}
+	}
 	code := g.rt("ClassOf") + "(" + strconv.Quote(v.classRef.pyName()) + ")"
 	if v.dynamicRef {
 		code = g.rt("ClassOf") + "(" + v.at(precAtom) + ".PyClassName())"

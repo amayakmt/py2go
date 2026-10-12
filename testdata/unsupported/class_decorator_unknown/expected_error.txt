@@ -1,1 +1,1 @@
-unsupported: class decorator (class decorators other than @dataclass arrive in phase 8) at line 5
+unsupported: class decorator (class decorators other than @dataclass are not supported) at line 5

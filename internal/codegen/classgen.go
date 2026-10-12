@@ -138,6 +138,19 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 			}
 		}
 		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClass"), strconv.Quote(c.name), strings.Join(names, ", "))
+	} else if c.generic == nil {
+		// A class held in a variable can be called through the runtime.
+		g.register(main, "class:"+c.name, func() string {
+			var mro []string
+			for _, k := range c.mro {
+				if !k.builtin {
+					mro = append(mro, strconv.Quote(k.name))
+				}
+			}
+			return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), c.goNew(),
+				g.rt("RegisterCtorInfo"), strconv.Quote(c.pyName()), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)),
+				g.rt("RegisterClass"), strconv.Quote(c.name), strings.Join(mro, ", "))
+		})
 	}
 
 	if err := g.checkOverrides(c); err != nil {
@@ -200,7 +213,7 @@ func (g *generator) emitClassTypes(out *strings.Builder, c *classInfo) error {
 	// The struct.
 	// The byte keeps the struct from being zero-sized, since Go may give
 	// all pointers to zero-sized values one address, and instances must differ.
-	fields := []string{"_pyid byte"}
+	fields := []string{"_pyid byte", "_pyd map[string]any"}
 	if c.exc {
 		fields = append(fields, g.rt("ExcBase"))
 	}
@@ -490,6 +503,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 		fmt.Fprintf(out, "func %s PyHash() int64 { return %s(self) }\n", recv, g.rt("IdentityHash"))
 	}
 	out.WriteString("\n")
+	g.emitDynHooks(out, c)
 }
 
 // assertParam converts the any argument o to the Go type of a method

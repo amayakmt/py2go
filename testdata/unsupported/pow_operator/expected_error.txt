@@ -1,1 +1,0 @@
-unsupported: operator ** with a variable exponent on int operands at line 3

@@ -1,1 +1,0 @@
-unsupported: slice assignment at line 2

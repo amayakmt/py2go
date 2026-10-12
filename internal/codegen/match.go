@@ -165,12 +165,16 @@ func (g *generator) patternNarrow(pc *patternCtx, p pyast.Node, v value) (value,
 			case v.typ.isOptional():
 				pc.require("!" + v.at(precAtom) + ".IsSome()")
 			case v.typ == tNoneType:
+			case v.typ == tObject:
+				pc.require(g.rt("IsNone") + "(" + v.code + ")")
 			default:
 				pc.body.WriteString("return false\n")
 			}
 		default:
 			v = g.stripOptional(pc, v)
-			if v.typ != tBool {
+			if v.typ == tObject {
+				pc.require(g.rt("Unbox") + "(" + v.code + ") == any(" + strings.ToLower(p.Value) + ")")
+			} else if v.typ != tBool {
 				pc.body.WriteString("return false\n")
 			} else if p.Value == "True" {
 				pc.require(v.code)
@@ -261,6 +265,10 @@ func (g *generator) sequencePattern(pc *patternCtx, p *pyast.MatchSequence, v va
 	if star >= 0 {
 		fixed--
 	}
+	if v.typ == tObject {
+		pc.require(g.rt("IsSequence") + "(" + v.code + ")")
+		v = value{code: g.rt("DynList") + "(" + v.code + ")", typ: listOf(tObject), prec: precAtom}
+	}
 	v = g.bindSub(pc, v)
 	switch {
 	case v.typ.isTuple():
@@ -330,6 +338,10 @@ func (g *generator) sequencePattern(pc *patternCtx, p *pyast.MatchSequence, v va
 
 func (g *generator) mappingPattern(pc *patternCtx, p *pyast.MatchMapping, v value) error {
 	v = g.stripOptional(pc, v)
+	if v.typ == tObject {
+		pc.require(g.rt("IsMapping") + "(" + v.code + ")")
+		v = value{code: g.rt("DynDict") + "(" + v.code + ")", typ: dictOf(tObject, tObject), prec: precAtom}
+	}
 	v = g.bindSub(pc, v)
 	if !v.typ.isDict() {
 		pc.body.WriteString("return false\n")
@@ -340,6 +352,9 @@ func (g *generator) mappingPattern(pc *patternCtx, p *pyast.MatchMapping, v valu
 		k, err := g.exprAs(kn, v.typ.keyType())
 		if err != nil {
 			return err
+		}
+		if v.typ.keyType() == tObject {
+			k = g.relabel(k, tObject)
 		}
 		if k.typ != v.typ.keyType() {
 			pc.body.WriteString("return false\n")
@@ -353,7 +368,7 @@ func (g *generator) mappingPattern(pc *patternCtx, p *pyast.MatchMapping, v valu
 		}
 	}
 	if p.Rest != "" {
-		rest := value{code: fmt.Sprintf("%s(%s, %s)", g.rt("DictWithout"), v.code, strings.Join(keyCodes, ", ")), typ: v.typ, prec: precAtom}
+		rest := value{code: fmt.Sprintf("%s(%s, %s)", g.rt("DictWithout")+"["+g.dictGoArgs(v.typ)+"]", v.code, strings.Join(keyCodes, ", ")), typ: v.typ, prec: precAtom}
 		return g.captureName(pc, p.Rest, rest, p.Line())
 	}
 	return nil

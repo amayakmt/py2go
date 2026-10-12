@@ -118,17 +118,19 @@ func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
 			return nil
 		}
 	}
-	if _, ok := n.Value.(*pyast.Call); !ok {
-		return unsupported("expression statement that is not a call", n.Line())
-	}
 	v, err := g.expr(n.Value)
 	if err != nil {
 		return err
 	}
+	if v.code == "" {
+		return nil // a class name on its own
+	}
 	// Go only accepts a call as a statement, and some builtins are
 	// conversions in the generated code, so keep the value and drop it.
+	// Any other expression is evaluated for what it may raise.
 	if v.typ != tNone {
 		b.WriteString("_ = ")
+		v = v.typed()
 	}
 	b.WriteString(v.code + "\n")
 	return nil
@@ -141,6 +143,13 @@ func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
 // "_ = x" keeps Go from rejecting a variable that is only ever assigned,
 // which Python allows.
 func (g *generator) declare(b *strings.Builder, name string, t pyType, init string) {
+	if !g.annotatedDecl && g.compRoot == nil {
+		g.noteBinding(name, t)
+		if j := g.declType(name, t); j != t {
+			init = g.convertInit(init, t, j)
+			t = j
+		}
+	}
 	if g.atModuleLevel() {
 		g.declareGlobal(b, name, t, init)
 		return
@@ -184,11 +193,18 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 	if err != nil {
 		return err
 	}
-	v, err = g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line())
-	if err != nil {
-		return err
+	if cv, cerr := g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line()); cerr != nil {
+		// Python does not check annotations: a value that is not what the
+		// hint says, because it is built at run time, keeps its own type.
+		if !strings.Contains(string(v.typ), "object") || !g.boxable(v) {
+			return cerr
+		}
+		t = v.typ
+	} else {
+		v = cv
 	}
 
+	g.markAnnotated(target.ID)
 	// Python has one variable per name per function. A second annotation
 	// of the same name assigns to it, even inside a nested block.
 	if g.fnGlobals[target.ID] {
@@ -201,7 +217,9 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 		fmt.Fprintf(b, "%s = %s\n", target.ID, v.code)
 		return nil
 	}
+	g.annotatedDecl = true
 	g.declare(b, target.ID, t, v.code)
+	g.annotatedDecl = false
 	return nil
 }
 
@@ -215,17 +233,48 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 		}
 	}
 	if len(n.Targets) != 1 {
-		return unsupported("chained assignment", n.Line())
+		// a = b = value: the value is computed once and stored left to right.
+		v, err := g.typedExpr(n.Value)
+		if err != nil {
+			return err
+		}
+		tmp := g.tmp("t")
+		g.temp(b, tmp, v.typ, v.typed().code)
+		for _, target := range n.Targets {
+			if err := g.assignTarget(b, target, tmp, v.typ, n.Line()); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	switch target := n.Targets[0].(type) {
 	case *pyast.Name:
 		t, declared, global := g.lookupBinding(target.ID)
 		if !declared {
-			return unsupported(fmt.Sprintf("assignment to undeclared name '%s' (needs a type annotation)", target.ID), n.Line())
+			// The first assignment declares the variable, with the type of
+			// the value, or of all the values it is ever given.
+			v, err := g.typedExpr(n.Value)
+			if err != nil {
+				return err
+			}
+			if v.typ == tNone {
+				v = value{code: g.rt("NoneV"), typ: tNoneType, prec: precAtom}
+			}
+			if err := checkName(target.ID, n.Line()); err != nil {
+				return err
+			}
+			if v.typ == tExc && g.joinScope != "" && false {
+				return nil
+			}
+			g.declare(b, target.ID, v.typ, v.typed().code)
+			return nil
 		}
 		v, err := g.exprAs(n.Value, t)
 		if err != nil {
 			return err
+		}
+		if v.typ != t && !g.isSubtype(v.typ, t) && !(v.typ.isOptional() && g.isSubtype(v.typ.optElem(), t)) && g.mismatchOK(target.ID, v.typ) {
+			return nil
 		}
 		v, err = g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line())
 		if err != nil {
@@ -250,8 +299,29 @@ func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valu
 	if base, err := g.typedExpr(target.Value); err == nil && base.typ.isClass() {
 		return g.classSetItem(b, target, base, valueNode, "", "", line)
 	}
+	_, isSliceTarget := target.Index.(*pyast.Slice)
+	if base, err := g.typedExpr(target.Value); err == nil && (base.typ == tObject || isSliceTarget || g.indexIsObject(target.Index)) {
+		idx, err := g.dynIndexCode(target.Index)
+		if err != nil {
+			return err
+		}
+		v, err := g.typedExpr(valueNode)
+		if err != nil {
+			return err
+		}
+		if isSliceTarget && base.typ.isList() {
+			if _, elem, ok := g.iterableOf(v); !ok || elem != base.typ.elem() {
+				g.widenVar(target.Value)
+			}
+		}
+		fmt.Fprintf(b, "%s(%s, %s, %s)\n", g.rt("DynSetItem"), g.boxed(base), idx, g.boxed(v))
+		return nil
+	}
 	base, idx, err := g.itemTarget(target)
 	if err != nil {
+		if strings.Contains(err.Error(), " expects ") && g.widenVar(target.Value) {
+			return nil
+		}
 		return err
 	}
 	elem := itemType(base.typ)
@@ -261,6 +331,9 @@ func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valu
 	}
 	v, err = g.coerce(v, elem, "item", line)
 	if err != nil {
+		if g.widenVar(target.Value) {
+			return nil
+		}
 		return err
 	}
 	fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, v.code)
@@ -316,6 +389,12 @@ func (g *generator) temp(b *strings.Builder, name string, t pyType, init string)
 // value of type t. A tuple knows its arity; a list is checked at run time.
 func unpackTypes(n int, t pyType, line int) ([]pyType, error) {
 	switch {
+	case t == tObject || t.isClass():
+		types := make([]pyType, n)
+		for i := range types {
+			types[i] = tObject
+		}
+		return types, nil
 	case t.isTuple():
 		if elems := t.elems(); len(elems) != n {
 			return nil, unsupported(fmt.Sprintf("unpacking %s into %d targets", t, n), line)
@@ -422,7 +501,14 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		}
 		if existing, declared, global := g.lookupBinding(tg.ID); declared {
 			if existing != t {
-				return mismatch(fmt.Sprintf("variable '%s'", tg.ID), existing, t, line)
+				if !g.isSubtype(t, existing) && g.mismatchOK(tg.ID, t) {
+					return nil
+				}
+				conv, err := g.coerce(value{code: src, typ: t, prec: precAtom}, existing, fmt.Sprintf("variable '%s'", tg.ID), line)
+				if err != nil {
+					return err
+				}
+				src = conv.code
 			}
 			fmt.Fprintf(b, "%s = %s\n", tg.ID, src)
 			g.afterAssign(b, tg.ID, global)
@@ -437,6 +523,11 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 	case *pyast.Tuple:
 		if star := starIndex(tg.Elts); star >= 0 {
 			return g.starUnpack(b, tg, star, src, t, line)
+		}
+		if t == tObject || t.isClass() {
+			tmp := g.tmp("u")
+			g.temp(b, tmp, listOf(tObject), g.rt("DynList")+"("+g.boxed(value{code: src, typ: t, prec: precAtom})+")")
+			return g.assignTarget(b, target, tmp, listOf(tObject), line)
 		}
 		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isVarTuple() && !t.isIter() {
 			// A str, dict, set or range unpacks through a list of its items.
@@ -471,12 +562,24 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		if cb, err := g.typedExpr(tg.Value); err == nil && cb.typ.isClass() {
 			return g.classSetItem(b, tg, cb, nil, src, t, line)
 		}
+		if base, err := g.typedExpr(tg.Value); err == nil && (base.typ == tObject || g.indexIsObject(tg.Index)) {
+			idx, err := g.dynIndexCode(tg.Index)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(b, "%s(%s, %s, %s)\n", g.rt("DynSetItem"), g.boxed(base), idx, g.boxed(value{code: src, typ: t, prec: precAtom}))
+			return nil
+		}
 		base, idx, err := g.itemTarget(tg)
 		if err != nil {
 			return err
 		}
 		if elem := itemType(base.typ); elem != t {
-			return mismatch("item", elem, t, line)
+			conv, cerr := g.coerce(value{code: src, typ: t, prec: precAtom}, elem, "item", line)
+			if cerr != nil {
+				return mismatch("item", elem, t, line)
+			}
+			src = conv.code
 		}
 		fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, src)
 		return nil
@@ -520,6 +623,9 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 		return err
 	}
 	if res.typ != t {
+		if !g.isSubtype(res.typ, t) && g.mismatchOK(target.ID, res.typ) {
+			return nil
+		}
 		if res, err = g.coerce(res, t, fmt.Sprintf("variable '%s'", target.ID), n.Line()); err != nil {
 			return err
 		}
@@ -534,7 +640,7 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	}
 
 	// Plain "x += y" when both sides already have the same type.
-	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && !t.isSet() && !t.isClass() {
+	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && t != tObject && !t.isSet() && !t.isClass() {
 		fmt.Fprintf(b, "%s %s= %s\n", target.ID, goOp, right.code)
 		g.afterAssign(b, target.ID, global)
 		return nil
@@ -570,6 +676,9 @@ var simpleOperand = regexp.MustCompile(`^(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)$`)
 func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyast.Subscript) error {
 	if cb, err := g.typedExpr(target.Value); err == nil && cb.typ.isClass() {
 		return g.augClassItem(b, n, target, cb)
+	}
+	if cb, err := g.typedExpr(target.Value); err == nil && (cb.typ == tObject || g.indexIsObject(target.Index)) {
+		return g.augDynItem(b, n, target, cb)
 	}
 	base, idx, err := g.itemTarget(target)
 	if err != nil {
@@ -614,6 +723,10 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 		bare = true
 	}
 	if bare {
+		if g.ret == tObject {
+			g.emitReturn(b, g.rt("NoneV"))
+			return nil
+		}
 		if g.ret.isOptional() {
 			g.emitReturn(b, g.rt("NoneOf")+"["+g.goType(g.ret.optElem())+"]()")
 			return nil
@@ -881,6 +994,11 @@ func (g *generator) forRange(b *strings.Builder, n *pyast.For, call *pyast.Call)
 		if err != nil {
 			return err
 		}
+		if v.typ == tObject {
+			if v, err = g.coerce(v, tInt, "range() argument", a.Line()); err != nil {
+				return err
+			}
+		}
 		if v.typ != tInt {
 			return mismatch("range() argument", tInt, v.typ, a.Line())
 		}
@@ -923,7 +1041,7 @@ func (g *generator) forRange(b *strings.Builder, n *pyast.For, call *pyast.Call)
 	// it alive after the loop.
 	if !discard {
 		if t, declared, _ := g.lookupBinding(target.ID); declared {
-			if t != tInt {
+			if t != tInt && !g.mismatchOK(target.ID, tInt) && !g.isSubtype(tInt, t) {
 				return mismatch(fmt.Sprintf("loop variable '%s'", target.ID), t, tInt, n.Line())
 			}
 		} else {
@@ -1041,7 +1159,7 @@ func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
 	}
 	for _, l := range bound {
 		if existing, declared, _ := g.lookupBinding(l.name); declared {
-			if existing != l.typ {
+			if existing != l.typ && !g.isSubtype(l.typ, existing) && !g.mismatchOK(l.name, l.typ) {
 				return mismatch(fmt.Sprintf("loop variable '%s'", l.name), existing, l.typ, n.Line())
 			}
 			continue
@@ -1083,7 +1201,18 @@ func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
 		sub, ok := target.(*pyast.Subscript)
 		if !ok {
 			if attr, isAttr := target.(*pyast.Attribute); isAttr {
-				return unsupported("del of the attribute '"+attr.Attr+"' (deleting attributes arrives in phase 9)", n.Line())
+				recv, err := g.recvExpr(attr.Value, attr.Attr)
+				if err != nil {
+					return err
+				}
+				if !g.boxable(recv) {
+					return unsupported("del of the attribute '"+attr.Attr+"'", n.Line())
+				}
+				if c := g.classOf(recv.typ); c != nil && c.lookup(g.mangled(attr.Attr)) != nil {
+					return unsupported("del of the attribute '"+attr.Attr+"' of class '"+c.name+"', which the class declares", n.Line())
+				}
+				fmt.Fprintf(b, "%s(%s, %s)\n", g.rt("DynDelAttr"), g.boxed(recv), strconv.Quote(attr.Attr))
+				continue
 			}
 			if _, isName := target.(*pyast.Name); isName {
 				return unsupported("del of a variable", n.Line())
@@ -1098,6 +1227,14 @@ func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
 			if err := g.classDelItem(b, sub, base, n.Line()); err != nil {
 				return err
 			}
+			continue
+		}
+		if base.typ == tObject || g.indexIsObject(sub.Index) {
+			idx, err := g.dynIndexCode(sub.Index)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(b, "%s(%s, %s)\n", g.rt("DynDelItem"), g.boxed(base), idx)
 			continue
 		}
 		if sl, isSlice := sub.Index.(*pyast.Slice); isSlice {
@@ -1203,4 +1340,4 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 
 // typingKnown are the other names of typing and collections.abc that are
 // harmless to import.
-var typingKnown = map[string]bool{"Iterator": true, "Generator": true, "Optional": true, "Union": true, "ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}
+var typingKnown = map[string]bool{"Any": true, "Iterator": true, "Generator": true, "Optional": true, "Union": true, "ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}

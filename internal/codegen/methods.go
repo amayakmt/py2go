@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/amayakmt/py2go/internal/pyast"
 	"github.com/amayakmt/py2go/runtime"
@@ -10,6 +11,28 @@ import (
 // methodCall generates "receiver.name(args)" for the str and list methods
 // the transpiler knows.
 func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error) {
+	v, err := g.methodCallTyped(n, m)
+	if err != nil && g.recordJoins && strings.Contains(err.Error(), " expects ") && g.widenVar(m.Value) {
+		// The variable holds other items than it was given: the next round
+		// compiles it as a container of objects. For now the call is dynamic.
+		if recv, rerr := g.recvExpr(m.Value, m.Attr); rerr == nil {
+			if dv, derr := g.dynMethodCall(n, m, recv); derr == nil {
+				return dv, nil
+			}
+		}
+	}
+	if err != nil && !g.infer && fallbackOK(err) {
+		// A method the static rules do not know may still exist at run time.
+		if recv, rerr := g.recvExpr(m.Value, m.Attr); rerr == nil && g.dynMethodOK(recv) {
+			if dv, derr := g.dynMethodCall(n, m, recv); derr == nil {
+				return dv, nil
+			}
+		}
+	}
+	return v, err
+}
+
+func (g *generator) methodCallTyped(n *pyast.Call, m *pyast.Attribute) (value, error) {
 	// dict.fromkeys(keys, value) is called on the type itself.
 	if cls, ok := m.Value.(*pyast.Name); ok && cls.ID == "dict" && !g.isVariable("dict") {
 		return g.dictClassMethod(n, m)
@@ -43,7 +66,7 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 	case recv.typ.isClass():
 		return g.instanceCall(n, m, recv)
 	case recv.typ == tObject:
-		return value{}, unsupported(fmt.Sprintf("method '%s' on a value of type object (test it with isinstance first)", m.Attr), n.Line())
+		return g.dynMethodCall(n, m, recv)
 	case recv.typ == tExc:
 		return g.excMethod(n, m, recv)
 	case recv.typ == tStr:

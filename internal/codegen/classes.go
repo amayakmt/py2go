@@ -567,8 +567,9 @@ func (g *generator) methodSig(c *classInfo, fn *pyast.FunctionDef, kind memberKi
 	}
 	cp.Decorators = nil
 	g.buildingMethod = true
+	g.buildingProperty = kind == mProperty || len(fn.Decorators) > 0 && hasPropertyDecorator(fn)
 	sig, err := g.buildSig(&cp, c.pyName()+"."+fn.Name, true)
-	g.buildingMethod = false
+	g.buildingMethod, g.buildingProperty = false, false
 	if err != nil {
 		return nil, err
 	}

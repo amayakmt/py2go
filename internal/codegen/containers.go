@@ -16,14 +16,14 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 	}
 	if len(n.Keys) == 0 {
 		if !want.isDict() {
-			return value{}, unsupported("empty dict without a type annotation", n.Line())
+			want = dictOf(tObject, tObject)
 		}
 		return value{code: g.rt("NewDict") + "[" + g.dictGoArgs(want) + "]()", typ: want, prec: precAtom}, nil
 	}
 
 	var key, val pyType
 	type entry struct {
-		k, v     string
+		k, v     value
 		unpacked bool
 	}
 	entries := make([]entry, 0, len(n.Keys))
@@ -42,7 +42,7 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 			} else if v.typ != dictOf(key, val) {
 				return value{}, unsupported(fmt.Sprintf("dict display mixes %s and %s", dictOf(key, val), v.typ), n.Values[i].Line())
 			}
-			entries = append(entries, entry{k: v.code, unpacked: true})
+			entries = append(entries, entry{k: v, unpacked: true})
 			spread = true
 			continue
 		}
@@ -63,17 +63,29 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 			}
 			key, val = k.typ, v.typ
 		} else if k.typ != key || v.typ != val {
-			return value{}, unsupported(fmt.Sprintf("dict display mixes key and value types (%s: %s and %s: %s)", key, val, k.typ, v.typ), kn.Line())
+			var ok1, ok2 bool
+			if key, ok1 = g.joinTypes(key, k.typ); !ok1 {
+				key = tObject
+			}
+			if val, ok2 = g.joinTypes(val, v.typ); !ok2 {
+				val = tObject
+			}
 		}
-		entries = append(entries, entry{k: k.code, v: v.code})
+		entries = append(entries, entry{k: k, v: v})
 	}
 	t := dictOf(key, val)
 	args := g.dictGoArgs(t)
+	for i := range entries {
+		if !entries[i].unpacked {
+			entries[i].k = g.relabel(entries[i].k, key)
+			entries[i].v = g.relabel(entries[i].v, val)
+		}
+	}
 
 	if !spread {
 		pairs := make([]string, len(entries))
 		for i, e := range entries {
-			pairs[i] = fmt.Sprintf("%s[%s]{Key: %s, Val: %s}", g.rt("KV"), args, e.k, e.v)
+			pairs[i] = fmt.Sprintf("%s[%s]{Key: %s, Val: %s}", g.rt("KV"), args, e.k.typed().code, e.v.typed().code)
 		}
 		return value{code: g.rt("NewDict") + "[" + args + "](" + strings.Join(pairs, ", ") + ")", typ: t, prec: precAtom}, nil
 	}
@@ -84,9 +96,9 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 	fmt.Fprintf(&b, "func() %s {\nvar %s = %s[%s]()\n", g.goType(t), d, g.rt("NewDict"), args)
 	for _, e := range entries {
 		if e.unpacked {
-			fmt.Fprintf(&b, "%s.Update(%s)\n", d, e.k)
+			fmt.Fprintf(&b, "%s.Update(%s)\n", d, e.k.code)
 		} else {
-			fmt.Fprintf(&b, "%s.Set(%s, %s)\n", d, e.k, e.v)
+			fmt.Fprintf(&b, "%s.Set(%s, %s)\n", d, e.k.typed().code, e.v.typed().code)
 		}
 	}
 	fmt.Fprintf(&b, "return %s\n}()", d)
@@ -109,20 +121,28 @@ func (g *generator) setLit(n *pyast.Set, want pyType) (value, error) {
 	}
 	var elem pyType
 	codes := make([]string, len(n.Elts))
+	vals := make([]value, len(n.Elts))
 	for i, e := range n.Elts {
 		v, err := g.exprAs(e, elemWant)
 		if err != nil {
 			return value{}, err
 		}
+		if !g.hashable(v.typ) {
+			return value{}, unsupported(fmt.Sprintf("set element of type %s (not hashable)", v.typ), e.Line())
+		}
+		vals[i] = v
 		if i == 0 {
-			if !g.hashable(v.typ) {
-				return value{}, unsupported(fmt.Sprintf("set element of type %s (not hashable)", v.typ), e.Line())
-			}
 			elem = v.typ
 		} else if v.typ != elem {
-			return value{}, unsupported(fmt.Sprintf("set with mixed element types (%s and %s)", elem, v.typ), e.Line())
+			common, ok := g.joinTypes(elem, v.typ)
+			if !ok {
+				common = tObject
+			}
+			elem = common
 		}
-		codes[i] = v.code
+	}
+	for i, v := range vals {
+		codes[i] = g.relabel(v, elem).typed().code
 	}
 	ctor := "NewSet"
 	if len(n.Elts) > 2 && allConstants(n.Elts) {
@@ -199,6 +219,16 @@ func (g *generator) iterableOf(v value) (code string, elem pyType, ok bool) {
 	}
 	if v.typ.isClass() {
 		return g.userIterable(v)
+	}
+	if v.typ == tObject {
+		return g.rt("DynIter") + "(" + v.code + ")", tObject, true
+	}
+	if v.typ.isTuple() {
+		elems := v.typ.elems()
+		if allEqual(elems, elems[0]) {
+			return g.rt("SeqIterable") + "[" + g.goType(elems[0]) + "](" + v.code + ")", elems[0], true
+		}
+		return g.rt("DynIter") + "(" + g.boxed(v) + ")", tObject, true
 	}
 	elem, ok = v.typ.iterElem()
 	if !ok {

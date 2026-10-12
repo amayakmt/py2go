@@ -1,1 +1,0 @@
-unsupported: method 'frobnicate' on dict[str, int] at line 2

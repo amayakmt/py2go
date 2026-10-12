@@ -1,1 +1,1 @@
-unsupported: del of the attribute 'x' (deleting attributes arrives in phase 9) at line 7
+unsupported: del of the attribute 'x' of class 'C', which the class declares at line 7

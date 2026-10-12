@@ -1,1 +1,0 @@
-unsupported: len() of iter[int] at line 1

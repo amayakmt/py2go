@@ -21,7 +21,7 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 	}
 	if len(n.Elts) == 0 {
 		if !want.isList() {
-			return value{}, unsupported("empty list without a type annotation", n.Line())
+			want, elemWant = listOf(tObject), tObject
 		}
 		return value{code: g.rt("NewList") + "[" + g.goType(elemWant) + "]()", typ: want, prec: precAtom}, nil
 	}
@@ -40,13 +40,13 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 		} else if v.typ != elem {
 			common, ok := g.joinTypes(elem, v.typ)
 			if !ok {
-				return value{}, unsupported(fmt.Sprintf("list with mixed element types (%s and %s)", elem, v.typ), e.Line())
+				common = tObject
 			}
 			elem = common
 		}
 	}
 	if elem == tNoneType {
-		return value{}, unsupported("list of None without a type annotation", n.Line())
+		elem = tObject
 	}
 	for i, v := range vals {
 		codes[i] = g.relabel(v, elem).code
@@ -83,10 +83,10 @@ func (g *generator) tupleLit(n *pyast.Tuple, want pyType) (value, error) {
 		return value{code: g.rt("NewVarTuple") + "[" + g.goType(want.elem()) + "](" + strings.Join(codes, ", ") + ")", typ: want, prec: precAtom}, nil
 	}
 	if len(n.Elts) == 0 {
-		return value{}, unsupported("empty tuple", n.Line())
+		return value{code: g.rt("NewVarTuple") + "[any]()", typ: varTupleOf(tObject), prec: precAtom}, nil
 	}
 	if len(n.Elts) > maxTupleArity {
-		return value{}, unsupported(fmt.Sprintf("tuple with more than %d elements", maxTupleArity), n.Line())
+		return g.longTuple(n)
 	}
 	var wants []pyType
 	if want.isTuple() && len(want.elems()) == len(n.Elts) {
@@ -140,9 +140,15 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	if base.typ.isClass() {
 		return g.classGetItem(n, base)
 	}
+	if base.typ == tObject || g.indexIsObject(n.Index) {
+		return g.dynSubscript(base, n.Index)
+	}
 
 	if sl, ok := n.Index.(*pyast.Slice); ok {
 		if base.typ != tStr && !base.typ.isList() && !base.typ.isVarTuple() {
+			if g.boxable(base) {
+				return g.dynSubscript(base, n.Index)
+			}
 			return value{}, unsupported("slice of "+string(base.typ), n.Line())
 		}
 		bounds, err := g.bounds(sl)
@@ -164,6 +170,9 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 			return value{}, err
 		}
 		if key.typ != base.typ.keyType() {
+			if mentionsObject(key.typ) {
+				return g.dynSubscript(base, n.Index)
+			}
 			return value{}, mismatch("dict key", base.typ.keyType(), key.typ, n.Index.Line())
 		}
 		return value{code: base.at(precAtom) + ".Get(" + key.code + ")", typ: base.typ.valType(), prec: precAtom}, nil
@@ -184,6 +193,9 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 		return g.tupleIndex(n, base, idx)
 	case base.typ == tRange:
 		return value{code: base.at(precAtom) + ".Get(" + idx.code + ")", typ: tInt, prec: precAtom}, nil
+	}
+	if g.boxable(base) {
+		return g.dynSubscript(base, n.Index)
 	}
 	return value{}, unsupported("subscript of "+string(base.typ), n.Line())
 }
@@ -218,6 +230,11 @@ func (g *generator) bounds(sl *pyast.Slice) (string, error) {
 		v, err := g.typedExpr(part.node)
 		if err != nil {
 			return "", err
+		}
+		if v.typ == tObject {
+			if v, err = g.coerce(v, tInt, "slice bound", part.node.Line()); err != nil {
+				return "", err
+			}
 		}
 		if v.typ != tInt {
 			return "", unsupported(fmt.Sprintf("slice bound of type %s", v.typ), part.node.Line())
@@ -309,7 +326,7 @@ func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 	}
 	quoted := strconv.Quote(spec)
 	if c := g.classOf(v.typ); c != nil {
-		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && m.sig.pos[0].typ == tStr && m.sig.ret == tStr {
+		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && (m.sig.pos[0].typ == tStr || m.sig.pos[0].typ == tObject) && m.sig.ret == tStr {
 			return v.at(precAtom) + ".M___format__(" + quoted + ")", nil
 		}
 		if spec == "" {
@@ -349,6 +366,16 @@ func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 		return call(g.rt("FormatFloat"), v.code, quoted), nil
 	}
 
+	if v.typ == tObject {
+		return call(g.rt("FormatDyn"), v.code, quoted), nil
+	}
+	if v.typ == tBool && spec != "" {
+		if err := runtime.ValidateSpec("int", spec); err != nil {
+			return reject(err)
+		}
+		return call(g.rt("FormatInt"), call(g.rt("BoolToInt"), v.code), quoted), nil
+	}
+
 	// bool, list and tuple: Python only accepts an empty spec for these
 	// here (a bool with a spec formats as an int, which is not supported).
 	if spec != "" {
@@ -371,11 +398,13 @@ func (g *generator) formatDynamic(f *pyast.FormattedValue, v value, spec string)
 		return "", unsupported("!a conversion in an f-string", f.Line())
 	}
 	if c := g.classOf(v.typ); c != nil {
-		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && m.sig.pos[0].typ == tStr && m.sig.ret == tStr {
+		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && (m.sig.pos[0].typ == tStr || m.sig.pos[0].typ == tObject) && m.sig.ret == tStr {
 			return v.at(precAtom) + ".M___format__(" + spec + ")", nil
 		}
 	}
 	switch v.typ {
+	case tObject:
+		return call(g.rt("FormatDyn"), v.code, spec), nil
 	case tStr:
 		return call(g.rt("FormatStr"), v.code, spec), nil
 	case tInt:
@@ -384,4 +413,32 @@ func (g *generator) formatDynamic(f *pyast.FormattedValue, v value, spec string)
 		return call(g.rt("FormatFloat"), v.code, spec), nil
 	}
 	return call(g.rt("FormatOther"), g.relabel(v, tObject).code, spec), nil
+}
+
+// longTuple builds a tuple with more items than the fixed-size tuple types
+// have: it holds them as a sequence of one type, or of objects.
+func (g *generator) longTuple(n *pyast.Tuple) (value, error) {
+	vals := make([]value, len(n.Elts))
+	var elem pyType
+	for i, e := range n.Elts {
+		v, err := g.typedExpr(e)
+		if err != nil {
+			return value{}, err
+		}
+		if !g.boxable(v) {
+			return value{}, unsupported("tuple item of type "+string(v.typ), e.Line())
+		}
+		vals[i] = v
+		switch {
+		case i == 0:
+			elem = v.typ
+		case elem != v.typ:
+			elem = tObject
+		}
+	}
+	codes := make([]string, len(vals))
+	for i, v := range vals {
+		codes[i] = g.relabel(v, elem).typed().code
+	}
+	return value{code: g.rt("NewVarTuple") + "[" + g.goType(elem) + "](" + strings.Join(codes, ", ") + ")", typ: varTupleOf(elem), prec: precAtom}, nil
 }

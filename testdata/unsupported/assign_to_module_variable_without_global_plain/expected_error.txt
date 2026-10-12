@@ -1,1 +1,0 @@
-unsupported: assignment to undeclared name 'counter' (needs a type annotation) at line 5

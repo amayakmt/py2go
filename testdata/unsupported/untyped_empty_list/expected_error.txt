@@ -1,1 +1,0 @@
-unsupported: empty list without a type annotation at line 1

@@ -158,6 +158,9 @@ func (g *generator) truth(v value) value {
 	if v.typ == tOptExc {
 		return value{code: v.at(precCmp+1) + " != nil", typ: tBool, prec: precCmp}
 	}
+	if v.typ == tObject {
+		return value{code: g.rt("DynBool") + "(" + v.code + ")", typ: tBool, prec: precAtom}
+	}
 	return truth(v)
 }
 
@@ -191,7 +194,16 @@ func (g *generator) classContains(n *pyast.Compare, r value, negate bool) (value
 	c := g.classOf(r.typ)
 	m := c.lookup("__contains__")
 	if m == nil || m.kind != mMethod || len(m.sig.pos) != 1 {
-		return value{}, unsupported(fmt.Sprintf("argument of type '%s' is not iterable", c.name), n.Line())
+		// Without __contains__ the items are searched, if the class iterates.
+		l, err := g.typedExpr(n.Left)
+		if err != nil {
+			return value{}, err
+		}
+		code := g.rt("DynContains") + "(" + g.boxed(r) + ", " + g.boxed(l) + ")"
+		if negate {
+			return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
+		}
+		return value{code: code, typ: tBool, prec: precAtom}, nil
 	}
 	l, err := g.exprAs(n.Left, m.sig.pos[0].typ)
 	if err != nil {
@@ -229,7 +241,14 @@ func (g *generator) classGetItem(n *pyast.Subscript, base value) (value, error) 
 		return value{}, unsupported(fmt.Sprintf("'%s' object is not subscriptable", c.name), n.Line())
 	}
 	if _, isSlice := n.Index.(*pyast.Slice); isSlice {
-		return value{}, unsupported("slice of an instance (a slice object arrives in phase 8)", n.Line())
+		if m.sig.pos[0].typ != tObject {
+			return value{}, unsupported("slice of an instance whose __getitem__ takes a "+string(m.sig.pos[0].typ), n.Line())
+		}
+		idx, err := g.dynIndexCode(n.Index)
+		if err != nil {
+			return value{}, err
+		}
+		return value{code: base.at(precAtom) + ".M___getitem__(" + idx + ")", typ: m.sig.ret, prec: precAtom}, nil
 	}
 	idx, err := g.exprAs(n.Index, m.sig.pos[0].typ)
 	if err != nil {
@@ -371,6 +390,9 @@ func (g *generator) userIterable(v value) (code string, elem pyType, ok bool) {
 	if r := iter.sig.ret; r.isIter() || r.isGen() {
 		return v.at(precAtom) + ".M___iter__()", r.elem(), true
 	}
+	if iter.sig.ret == tObject {
+		return g.rt("DynIter") + "(" + v.code + ")", tObject, true
+	}
 	ic := g.classOf(iter.sig.ret)
 	if ic == nil {
 		return "", "", false
@@ -469,7 +491,7 @@ func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) 
 		case "float":
 			return g.rt("InstanceOf") + "[float64](" + x.code + ")", nil
 		}
-		return "", unsupported("isinstance() of an object against "+s.builtin+" (the element types are not known)", line)
+		return g.rt("IsInstanceName") + "(" + x.code + ", " + strconv.Quote(s.builtin) + ", true)", nil
 	case tInt:
 		return strconv.FormatBool(s.builtin == "int"), nil
 	case tBool:
@@ -520,16 +542,23 @@ func (g *generator) issubclassCall(n *pyast.Call) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("issubclass() with %d arguments", len(n.Args)), n.Line())
 	}
 	first, ok := n.Args[0].(*pyast.Name)
-	if !ok {
-		return value{}, unsupported("issubclass() with a first argument that is not a class name", n.Line())
-	}
 	var sub *classInfo
-	if c := g.classes[first.ID]; c != nil && !g.isVariable(first.ID) {
-		sub = c
-	} else if runtime.IsExceptionClass(first.ID) && !g.isVariable(first.ID) {
+	switch {
+	case ok && g.classes[first.ID] != nil && !g.isVariable(first.ID):
+		sub = g.classes[first.ID]
+	case ok && runtime.IsExceptionClass(first.ID) && !g.isVariable(first.ID):
 		sub = g.builtinClass(first.ID)
-	} else {
-		return value{}, unsupported("issubclass() with a first argument that is not a class name", n.Line())
+	default:
+		// A class held in a variable: decided when the program runs.
+		a, err := g.typedExpr(n.Args[0])
+		if err != nil {
+			return value{}, err
+		}
+		b, err := g.classesObject(n.Args[1])
+		if err != nil {
+			return value{}, err
+		}
+		return g.dynValue(g.rt("DynIsSubclass")+"("+g.boxed(a)+", "+b+")", tBool), nil
 	}
 	specs, err := g.typeSpecs(n.Args[1])
 	if err != nil {
@@ -709,7 +738,7 @@ func (g *generator) objectCompare(op string, l, r value, line int) (value, bool,
 	case "Lt", "LtE", "Gt", "GtE":
 		fn := map[string]string{"Lt": "Lt", "LtE": "Le", "Gt": "Gt", "GtE": "Ge"}[op]
 		if l.typ == tObject || r.typ == tObject {
-			return value{}, true, unsupported("ordering comparison of an object", line)
+			return g.dynCompare(op, l, r), true, nil
 		}
 		return value{code: g.rt(fn) + "(" + box(l) + ", " + box(r) + ")", typ: tBool, prec: precAtom}, true, nil
 	}
@@ -739,6 +768,9 @@ func (g *generator) callableCall(n *pyast.Call) (value, error) {
 	x, err := g.recvExpr(n.Args[0])
 	if err != nil {
 		return value{}, err
+	}
+	if x.typ == tObject {
+		return value{code: g.rt("DynCallable") + "(" + x.code + ")", typ: tBool, prec: precAtom}, nil
 	}
 	callable := x.typ.isFunc() || x.typ.isClassRef()
 	if c := g.classOf(x.typ); c != nil {
@@ -790,6 +822,12 @@ func (g *generator) noneCompare(n *pyast.Compare) (value, bool, error) {
 			code = v.at(precAtom) + ".IsSome()"
 		}
 		return value{code: code, typ: tBool, prec: precUnary}, true, nil
+	case v.typ == tObject:
+		code := g.rt("IsNone") + "(" + v.code + ")"
+		if negate {
+			return value{code: "!" + code, typ: tBool, prec: precUnary}, true, nil
+		}
+		return value{code: code, typ: tBool, prec: precAtom}, true, nil
 	case v.typ == tOptExc:
 		code := v.at(precCmp+1) + " == nil"
 		if negate {
@@ -814,7 +852,7 @@ func (g *generator) noneCompare(n *pyast.Compare) (value, bool, error) {
 // that hash by identity. A class with its own __eq__ or __hash__ would need
 // the dict to call it, which the runtime's maps do not (phase 9).
 func (g *generator) hashable(t pyType) bool {
-	if t.hashable() {
+	if t == tObject || t.hashable() {
 		return true
 	}
 	if t.isTuple() {
@@ -837,6 +875,13 @@ func (g *generator) hashable(t pyType) bool {
 // __radd__ taking an int, as in Python.
 func (g *generator) sumInstances(n *pyast.Call, list value, start *value) (value, error) {
 	elem := list.typ.elem()
+	dyn := func() (value, error) {
+		startCode := "int64(0)"
+		if start != nil {
+			startCode = g.boxed(*start)
+		}
+		return g.dynValue(g.rt("DynSum")+"("+g.boxed(list)+", "+startCode+")", tObject), nil
+	}
 	var b strings.Builder
 	var acc value
 	if start != nil {
@@ -845,16 +890,16 @@ func (g *generator) sumInstances(n *pyast.Call, list value, start *value) (value
 		acc = value{code: "_acc", typ: acc.typ, prec: precAtom}
 	} else {
 		first, err := g.classBinary("Add", value{code: "0", typ: tInt, prec: precAtom, konst: true}, value{code: "_items.Get(0)", typ: elem, prec: precAtom}, n.Line())
-		if err != nil {
-			return value{}, err
+		if err != nil || first.typ == tObject {
+			return dyn()
 		}
 		fmt.Fprintf(&b, "var _items %s = %s\nif _items.Len() == 0 {\npanic(%s(\"TypeError\", \"sum() of no instances needs a start value here\"))\n}\nvar _acc %s = %s\n",
 			g.goType(list.typ), list.code, g.rt("NewError"), g.goType(first.typ), first.code)
 		acc = value{code: "_acc", typ: first.typ, prec: precAtom}
 	}
 	step, err := g.classBinary("Add", acc, value{code: "_x", typ: elem, prec: precAtom}, n.Line())
-	if err != nil {
-		return value{}, err
+	if err != nil || step.typ == tObject {
+		return dyn()
 	}
 	if !g.isSubtype(step.typ, acc.typ) {
 		return value{}, unsupported(fmt.Sprintf("sum() whose steps change the type from %s to %s", acc.typ, step.typ), n.Line())

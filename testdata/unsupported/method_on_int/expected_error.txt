@@ -1,1 +1,0 @@
-unsupported: method 'bit_length' on int at line 2

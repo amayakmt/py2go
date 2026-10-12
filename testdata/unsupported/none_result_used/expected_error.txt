@@ -1,1 +1,1 @@
-unsupported: use of a None value at line 5
+unsupported: variable 'x' expects int, got NoneType at line 5

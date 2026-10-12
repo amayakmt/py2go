@@ -1,1 +1,1 @@
-unsupported: call to undefined function 'chr' at line 1
+unsupported: variable 'x' expects int, got str at line 1

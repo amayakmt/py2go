@@ -1,1 +1,0 @@
-unsupported: comparison of list[int] with tuple[int] at line 1

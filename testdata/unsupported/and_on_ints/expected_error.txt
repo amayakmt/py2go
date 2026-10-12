@@ -1,1 +1,0 @@
-unsupported: 'and' on int operand (only bool is supported) at line 2

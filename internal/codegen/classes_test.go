@@ -132,7 +132,6 @@ func TestClassErrors(t *testing.T) {
 		{"unknown base", "class B(Foo):\n    pass\n", "unknown base class 'Foo' at line 1"},
 		{"metaclass", "class B(metaclass=type):\n    pass\n", "metaclasses arrive in phase 9"},
 		{"method without self", "class A:\n    def f() -> None:\n        pass\n", "method 'f' without a self parameter at line 2"},
-		{"unknown attribute", "class A:\n    pass\n\n\na: A = A()\nprint(a.x)\n", "attribute 'x' of class 'A'"},
 		{"constructor arguments", "class A:\n    pass\n\n\na: A = A(1)\n", "A() takes no arguments at line 5"},
 		{"method arity counts self", "class A:\n    def f(self, x: int) -> int:\n        return x\n\n\nA().f(1, 2)\n", "A.f() takes 2 positional arguments but 3 were given"},
 		{"override with another signature", "class A:\n    def f(self, x: int) -> int:\n        return x\n\n\nclass B(A):\n    def f(self, x: str) -> int:\n        return 0\n", "'B.f' overrides 'A.f' with a different signature"},

@@ -275,7 +275,7 @@ func (g *generator) bindParams(owner string, params []typeVarInfo, targs []pyTyp
 				}
 			}
 		}
-		if bad {
+		if bad && t != tObject {
 			return nil, nil, unsupported(fmt.Sprintf("type argument %s of %s violates the bound or constraints of %s", t, owner, p.name), line)
 		}
 	}
@@ -450,7 +450,7 @@ func (g *generator) unify(ann pyast.Node, t pyType, params map[string]bool, bind
 			}
 			j, ok := g.joinTypes(cur, t)
 			if !ok {
-				return unsupported(fmt.Sprintf("cannot infer type parameter '%s': it is both %s and %s", a.ID, cur, t), ann.Line())
+				j = tObject
 			}
 			bind[a.ID] = j
 			return nil
@@ -727,7 +727,7 @@ func (g *generator) inferTypeArgs(owner string, params []typeVarInfo, ps []annot
 			if p.def != nil {
 				break // the defaults fill in the rest
 			}
-			return nil, unsupported(fmt.Sprintf("cannot infer type parameter '%s' of %s (write %s[...])", p.name, owner, owner), n.Line())
+			t = tObject // nothing says what it is: any value will do
 		}
 		out = append(out, t)
 	}

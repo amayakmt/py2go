@@ -1,1 +1,1 @@
-unsupported: format spec 'd': unknown format code "d" for object of type 'str' at line 2
+unsupported: format spec 'd': Unknown format code 'd' for object of type 'str' at line 2

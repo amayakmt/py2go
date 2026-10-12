@@ -1,1 +1,0 @@
-unsupported: lambda without a Callable type from its context (annotate the variable, or pass it where a Callable is expected) at line 1

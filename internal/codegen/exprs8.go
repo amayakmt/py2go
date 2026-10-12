@@ -37,7 +37,10 @@ func (g *generator) ifExp(n *pyast.IfExp, want pyType) (value, error) {
 	if a.typ != b.typ {
 		var ok bool
 		if t, ok = g.joinTypes(a.typ, b.typ); !ok {
-			return value{}, unsupported(fmt.Sprintf("conditional expression with branches of type %s and %s", a.typ, b.typ), n.Line())
+			if !g.isSubtype(a.typ, tObject) || !g.isSubtype(b.typ, tObject) {
+				return value{}, unsupported(fmt.Sprintf("conditional expression with branches of type %s and %s", a.typ, b.typ), n.Line())
+			}
+			t = tObject
 		}
 		if a, err = g.coerce(a, t, "conditional expression", n.Line()); err != nil {
 			return value{}, err
@@ -54,6 +57,9 @@ func (g *generator) ifExp(n *pyast.IfExp, want pyType) (value, error) {
 func (g *generator) joinTypes(a, b pyType) (pyType, bool) {
 	if a == b {
 		return a, true
+	}
+	if (a == tObject && g.isSubtype(b, tObject)) || (b == tObject && g.isSubtype(a, tObject)) {
+		return tObject, true
 	}
 	switch {
 	case a == tNoneType && b != tNoneType:
@@ -234,7 +240,7 @@ func (g *generator) yieldExpr(n *pyast.Yield) (value, error) {
 		return value{}, unsupported("'yield' outside function", n.Line())
 	}
 	if n.Value == nil {
-		if g.gen.yield != tNoneType {
+		if g.gen.yield != tNoneType && g.gen.yield != tObject {
 			return value{}, unsupported("yield without a value in a generator of "+string(g.gen.yield), n.Line())
 		}
 		return value{code: yielderVar + ".Yield(" + g.rt("NoneV") + ")", typ: g.gen.send, prec: precAtom}, nil
@@ -262,12 +268,19 @@ func (g *generator) yieldFrom(n *pyast.YieldFrom) (value, error) {
 	}
 	if v.typ.isGen() {
 		a := v.typ.typeArgs()
+		if g.gen.yield == tObject && g.gen.send == tObject && (a[0] != tObject || a[1] != tObject) {
+			// A generator with other types is walked, not delegated to.
+			return value{code: g.rt("YieldFromIter") + "(" + yielderVar + ", " + g.rt("DynIter") + "(" + v.code + "))", typ: tNoneType, prec: precAtom}, nil
+		}
 		if a[0] != g.gen.yield || a[1] != g.gen.send {
 			return value{}, unsupported(fmt.Sprintf("yield from %s in a generator of %s sent %s", v.typ, g.gen.yield, g.gen.send), n.Line())
 		}
 		return value{code: g.rt("YieldFromGen") + "(" + yielderVar + ", " + v.code + ")", typ: a[2], prec: precAtom}, nil
 	}
 	code, elem, ok := g.iterableOf(v)
+	if ok && g.gen.yield == tObject && elem != tObject {
+		code, elem = g.rt("DynIter")+"("+g.boxed(v)+")", tObject
+	}
 	if !ok || elem != g.gen.yield {
 		return value{}, unsupported(fmt.Sprintf("yield from %s in a generator of %s", v.typ, g.gen.yield), n.Line())
 	}
@@ -341,9 +354,21 @@ func (g *generator) nextCall(n *pyast.Call) (value, error) {
 		plain = it.at(precAtom) + ".NextValue()"
 	default:
 		if c := g.classOf(it.typ); c != nil {
-			if m := c.lookup("__next__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 0 && len(n.Args) == 1 {
+			if m := c.lookup("__next__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 0 && len(n.Args) == 1 && m.sig.ret != tObject {
 				return value{code: it.at(precAtom) + ".M___next__()", typ: m.sig.ret, prec: precAtom}, nil
 			}
+		}
+		if it.typ == tObject || g.classOf(it.typ) != nil {
+			def := "nil"
+			hasDef := "false"
+			if len(n.Args) == 2 {
+				d, err := g.typedExpr(n.Args[1])
+				if err != nil {
+					return value{}, err
+				}
+				def, hasDef = g.boxed(d), "true"
+			}
+			return g.dynValue(g.rt("DynNext")+"("+g.boxed(it)+", "+def+", "+hasDef+")", tObject), nil
 		}
 		return value{}, unsupported(fmt.Sprintf("next() of %s, which is not an iterator", it.typ), n.Line())
 	}
@@ -506,7 +531,7 @@ func (g *generator) starredDisplay(elts []pyast.Node, want pyType, kind string, 
 		} else if v.typ != elem {
 			j, ok := g.joinTypes(elem, v.typ)
 			if !ok {
-				return value{}, unsupported(fmt.Sprintf("display with mixed element types (%s and %s)", elem, v.typ), e.Line())
+				j = tObject
 			}
 			elem = j
 		}

@@ -25,6 +25,9 @@ func (g *generator) withStmt(b *strings.Builder, n *pyast.With) error {
 		return err
 	}
 	c := g.classOf(mgr.typ)
+	if c == nil && g.boxable(mgr) && (mgr.typ == tObject || mentionsObject(mgr.typ)) {
+		return g.dynWith(b, n, item, body, mgr)
+	}
 	if c == nil {
 		return unsupported(fmt.Sprintf("with of a value of type %s (context managers are classes with __enter__ and __exit__)", mgr.typ), n.Line())
 	}
@@ -91,6 +94,8 @@ func (g *generator) withStmt(b *strings.Builder, n *pyast.With) error {
 			return c
 		case optionalOf(tBool):
 			return g.rt("OptTruth") + "(" + c + ")"
+		case tObject:
+			return g.rt("DynBool") + "(" + c + ")"
 		}
 		return "func() bool {\n_ = " + c + "\nreturn false\n}()"
 	}
@@ -107,6 +112,41 @@ func (g *generator) withStmt(b *strings.Builder, n *pyast.With) error {
 	}
 	fmt.Fprintf(b, "if %s != nil {\nif !%s(%s, func() bool {\nreturn %s\n}) {\npanic(%s)\n}\n} else {\n%s\n}\n", pending, g.rt("ExitCall"), pending,
 		suppressed(call(g.rt("ExcClass")+"("+pending+")", excValue)), pending, "_ = "+suppressed(call("nil", noValue)))
+	if err := g.dispatchFlow(b, ctx); err != nil {
+		return err
+	}
+	b.WriteString("}\n")
+	return nil
+}
+
+// dynWith is a with statement whose manager is an object: __enter__ and
+// __exit__ are found by name when it runs.
+func (g *generator) dynWith(b *strings.Builder, n *pyast.With, item *pyast.WithItem, body []pyast.Node, mgr value) error {
+	b.WriteString("{\n")
+	m := g.tmp("with")
+	g.temp(b, m, tObject, g.boxed(mgr))
+	entered := g.rt("DynCallMethod") + "(" + m + `, "__enter__", nil, nil)`
+	if item.Vars != nil {
+		tmp := g.tmp("v")
+		g.temp(b, tmp, tObject, entered)
+		if err := g.assignTarget(b, item.Vars, tmp, tObject, n.Line()); err != nil {
+			return err
+		}
+	} else {
+		b.WriteString("_ = " + entered + "\n")
+	}
+	code, ctx, err := g.withFlow(func(cb *strings.Builder) error { return g.block(cb, body) })
+	if err != nil {
+		return err
+	}
+	pending := g.tmp("pending")
+	g.declareFlow(b, ctx)
+	fmt.Fprintf(b, "%s := %s(func() {\n%s})\n", pending, g.rt("Catch"), code)
+	exit := func(kind, value string) string {
+		return g.rt("DynBool") + "(" + g.rt("DynCallMethod") + "(" + m + `, "__exit__", []any{` + kind + ", " + value + ", nil}, nil))"
+	}
+	fmt.Fprintf(b, "if %s != nil {\nif !%s(%s, func() bool {\nreturn %s\n}) {\npanic(%s)\n}\n} else {\n_ = %s\n}\n", pending, g.rt("ExitCall"), pending,
+		exit(g.rt("ExcClass")+"("+pending+")", g.rt("ExcValue")+"("+pending+")"), pending, exit("nil", "nil"))
 	if err := g.dispatchFlow(b, ctx); err != nil {
 		return err
 	}

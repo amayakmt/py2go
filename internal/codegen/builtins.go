@@ -12,6 +12,21 @@ import (
 // functions of the same name are tried first, in namedCall.
 func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	name := callee.ID
+	if v, ok, err := g.dynBuiltin(name, n, false); ok || err != nil {
+		return v, err
+	}
+	v, err := g.builtinCallTyped(n, callee)
+	if err != nil && !g.infer && fallbackOK(err) {
+		// What the static rules refuse, the run-time ones may do.
+		if dv, ok, derr := g.dynBuiltin(name, n, true); ok && derr == nil {
+			return dv, nil
+		}
+	}
+	return v, err
+}
+
+func (g *generator) builtinCallTyped(n *pyast.Call, callee *pyast.Name) (value, error) {
+	name := callee.ID
 	switch name {
 	case "next":
 		return g.nextCall(n)
@@ -621,6 +636,12 @@ func (g *generator) rangeCall(n *pyast.Call) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
+		if v.typ == tObject {
+			v, err = g.coerce(v, tInt, "range() argument", a.Line())
+			if err != nil {
+				return value{}, err
+			}
+		}
 		if v.typ != tInt {
 			return value{}, mismatch("range() argument", tInt, v.typ, a.Line())
 		}
@@ -754,6 +775,16 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 		return value{}, unsupported("keyword arguments", n.Line())
 	}
 	if len(n.Args) == 0 {
+		switch name {
+		case "list":
+			return value{code: g.rt("NewList") + "[any]()", typ: listOf(tObject), prec: precAtom}, nil
+		case "set":
+			return value{code: g.rt("NewSet") + "[any]()", typ: setOf(tObject), prec: precAtom}, nil
+		case "dict":
+			return value{code: g.rt("NewDict") + "[any, any]()", typ: dictOf(tObject, tObject), prec: precAtom}, nil
+		case "tuple":
+			return value{code: g.rt("NewVarTuple") + "[any]()", typ: varTupleOf(tObject), prec: precAtom}, nil
+		}
 		return value{}, unsupported(fmt.Sprintf("empty %s without a type annotation", name), n.Line())
 	}
 	if len(n.Args) != 1 {
@@ -816,7 +847,7 @@ func (g *generator) dictFromKeywords(n *pyast.Call) (value, error) {
 		} else if v.typ != val {
 			return value{}, unsupported(fmt.Sprintf("dict() keywords mix value types (%s and %s)", val, v.typ), kw.Line())
 		}
-		pairs[i] = fmt.Sprintf("%s[string, %s]{Key: %s, Val: %s}", g.rt("KV"), g.goType(val), strconv.Quote(kw.Arg), v.code)
+		pairs[i] = fmt.Sprintf("%s[string, %s]{Key: %s, Val: %s}", g.rt("KV"), g.goType(val), strconv.Quote(pyName(kw.Arg)), v.code)
 	}
 	t := dictOf(tStr, val)
 	return value{code: g.rt("NewDict") + "[string, " + g.goType(val) + "](" + strings.Join(pairs, ", ") + ")", typ: t, prec: precAtom}, nil

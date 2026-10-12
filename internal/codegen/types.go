@@ -218,7 +218,7 @@ func (t pyType) iterElem() (pyType, bool) {
 // element: the scalars, and tuples of hashable values.
 func (t pyType) hashable() bool {
 	switch {
-	case t == tInt, t == tBool, t == tStr:
+	case t == tInt, t == tBool, t == tStr, t == tFloat:
 		return true
 	case t.isTuple():
 		for _, e := range t.elems() {
@@ -342,7 +342,7 @@ func (g *generator) annotationType(n pyast.Node, allowNone bool) (pyType, error)
 		if t, ok := typeTable[n.ID]; ok {
 			return t, nil
 		}
-		if n.ID == "object" {
+		if n.ID == "object" || (n.ID == "Any" && g.classes["Any"] == nil) {
 			return tObject, nil
 		}
 		if _, user := g.classes[n.ID]; !user && runtime.IsExceptionClass(n.ID) {
@@ -398,7 +398,6 @@ var typingAliases = map[string]string{
 // typingNames are typing names that exist, but need something the typed
 // subset does not have yet.
 var typingNames = map[string]string{
-	"Any":      "needs the dynamic object model of phase 9",
 	"Literal":  "needs literal types",
 	"Callable": "write the parameters: Callable[[int], int]",
 	"Sequence": "use list[...]; sequences are not a type of their own",
@@ -479,7 +478,35 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		return g.unionType(append(args, &pyast.Constant{PyType: "none", Lineno: n.Line()}), n.Line())
 	case "Union":
 		return g.unionType(args, n.Line())
-	case "Literal", "Type", "Sequence":
+	case "Literal":
+		// The type of the values written in the brackets, or object.
+		var lit pyType
+		for _, a := range args {
+			c, ok := a.(*pyast.Constant)
+			if !ok {
+				return tObject, nil
+			}
+			var ct pyType
+			switch c.PyType {
+			case "int":
+				ct = tInt
+			case "str":
+				ct = tStr
+			case "bool":
+				ct = tBool
+			default:
+				return tObject, nil
+			}
+			if lit != "" && lit != ct {
+				return tObject, nil
+			}
+			lit = ct
+		}
+		if lit == "" {
+			return tObject, nil
+		}
+		return lit, nil
+	case "Type", "Sequence":
 		return "", unsupported("type annotation '"+head.ID+"[...]' ("+typingNames[head.ID]+")", n.Line())
 	}
 
@@ -617,7 +644,9 @@ func (g *generator) unionType(parts []pyast.Node, line int) (pyType, error) {
 	case len(members) == 0:
 		return "", unsupported("the type None where a type is needed", line)
 	case len(members) > 1:
-		return "", unsupported("union of several types (arrives with the dynamic object model in phase 9)", line)
+		// A value of one of several types is an object whose type is found
+		// when the program runs.
+		return tObject, nil
 	case !hasNone:
 		return members[0], nil
 	}

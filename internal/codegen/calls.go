@@ -429,6 +429,9 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 		if err != nil {
 			return value{}, err
 		}
+		if v.typ == tObject || (v.typ.isDict() && v.typ.keyType() == tObject) {
+			v = value{code: g.rt("StrDict") + "(" + v.code + ")", typ: dictOf(tStr, tObject), prec: precAtom}
+		}
 		if !v.typ.isDict() || v.typ.keyType() != tStr {
 			return value{}, unsupported(fmt.Sprintf("**%s, which is not a dict with str keys", v.typ), dstar.Line())
 		}
@@ -448,7 +451,7 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 	var missing, missingKw string
 	var args []string
 	need := func(p param, from string, t pyType, line int) error {
-		if t != p.typ {
+		if t != p.typ && !g.isSubtype(t, p.typ) {
 			return unsupported(fmt.Sprintf("%s unpacked into parameter '%s' of type %s", from, p.name, p.typ), line)
 		}
 		return nil
@@ -548,10 +551,14 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 		}
 		tail := "nil"
 		if list != "" {
-			if itemT != elem {
+			switch {
+			case itemT == elem:
+				tail = list
+			case elem == tObject:
+				tail = g.rt("DynList") + "(" + list + ")"
+			default:
 				return value{}, unsupported(fmt.Sprintf("*%s unpacked into *%s", listOf(itemT), sig.vararg.name), n.Line())
 			}
-			tail = list
 		}
 		args = append(args, call(g.rt("VarTupleOf")+"["+g.goType(elem)+"]",
 			g.rt("NewList")+"["+g.goType(elem)+"]("+strings.Join(extra, ", ")+")", tail, strconv.Itoa(max(nPos-s, 0))))
@@ -571,7 +578,12 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 		val := sig.kwarg.typ.valType()
 		if dict != "" {
 			if val != valT {
-				return value{}, unsupported(fmt.Sprintf("**dict[str, %s] unpacked into **%s of dict[str, %s]", valT, sig.kwarg.name, val), n.Line())
+				if val != tObject {
+					return value{}, unsupported(fmt.Sprintf("**dict[str, %s] unpacked into **%s of dict[str, %s]", valT, sig.kwarg.name, val), n.Line())
+				}
+				nd := g.tmp("d")
+				fmt.Fprintf(&b, "var %s %s = %s(%s)\n_ = %s\n", nd, g.goType(dictOf(tStr, tObject)), g.rt("StrDict"), dict, nd)
+				dict, valT = nd, tObject
 			}
 			args = append(args, call(g.rt("SplitKeys")+"["+g.goType(val)+"]", dict, strconv.Quote(fname), quoteList(known), quoteList(posonly), "true"))
 		} else {
