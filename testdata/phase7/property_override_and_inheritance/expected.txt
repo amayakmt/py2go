@@ -1,0 +1,3 @@
+shape0 0
+shape3 3
+square 4

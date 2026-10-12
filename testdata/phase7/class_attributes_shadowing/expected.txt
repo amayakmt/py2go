@@ -1,0 +1,4 @@
+15 counter counter counter
+counter a-only counter
+6 11 17
+changed a-only changed

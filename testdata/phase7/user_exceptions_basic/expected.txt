@@ -1,0 +1,6 @@
+1
+invalid: [-2] negative -2 negative
+not found: missing c c NotFound
+('plain', 42) AppError('plain', 42)
+base catch: missing zzz True True
+True True False

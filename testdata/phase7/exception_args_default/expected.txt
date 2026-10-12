@@ -1,0 +1,5 @@
+ NoMsg()
+one NoMsg('one')
+('one', 2) NoMsg('one', 2)
+ Defaulted()
+5 Defaulted(5)

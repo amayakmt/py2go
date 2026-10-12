@@ -1,0 +1,4 @@
+False True True False
+empty is falsy
+3 0 7
+True

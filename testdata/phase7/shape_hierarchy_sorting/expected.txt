@@ -1,0 +1,3 @@
+[Circle(area=0.79), Square(area=2.25), Circle(area=3.14), Rect(area=6.00)]
+['6.28', '10.00', '6.00', '3.14']
+Rect(area=6.00) Circle(area=0.79)

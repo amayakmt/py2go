@@ -1,0 +1,8 @@
+<class '__main__.A'> <class '__main__.B'> <class '__main__.A'> <class '__main__.B'>
+True False True False
+<class '__main__.A'> <class '__main__.B'>
+<class '__main__.A'> and <class '__main__.B'>
+A B __main__
+int str float list
+True True True
+<class '__main__.B'>

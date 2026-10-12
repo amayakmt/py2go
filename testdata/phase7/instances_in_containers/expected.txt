@@ -1,0 +1,6 @@
+{'eng': [ann(120), cy(100)], 'ops': [bob(90), di(95)]}
+[bob(90), di(95), cy(100), ann(120)]
+ann(120) bob(90)
+{'eng': 220, 'ops': 185}
+['ANN', 'CY']
+[('ann', ann(120)), ('bob', bob(90))]

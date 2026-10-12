@@ -1,0 +1,4 @@
+a1 anvil x2 = 199.00
+b1 bolt x30 = 7.50
+a1: wanted 3, have 2 a1
+KeyError 'zz'

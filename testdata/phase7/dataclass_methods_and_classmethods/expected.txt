@@ -1,0 +1,2 @@
+Temp(deg=100.0, unit='C') Temp(deg=212.0, unit='F') False True
+Temp(deg=105.0, unit='C')

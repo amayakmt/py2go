@@ -1,0 +1,6 @@
+$12.34
+Money(1234) $12.34
+[Money(1234), Money(1234)]
+$12.34 Money(1234)
+Plain<1> Plain<1> [Plain<1>]
+{'a': Money(1234)}

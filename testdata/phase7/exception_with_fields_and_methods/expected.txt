@@ -1,0 +1,4 @@
+400 bad False bad
+504 timeout True timeout
+500 oops True oops
+2

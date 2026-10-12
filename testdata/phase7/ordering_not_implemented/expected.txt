@@ -1,0 +1,3 @@
+TypeError: '<' not supported between instances of 'Box' and 'Box'
+TypeError: '<' not supported between instances of 'Box' and 'Box'
+False True True

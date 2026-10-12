@@ -1,0 +1,8 @@
+int 42
+str HI
+rex barks
+cat with 9
+something else
+something else
+int 2
+fido no dog

@@ -1,0 +1,2 @@
+shape sq /big Labeled(name='sq')
+True True

@@ -1,0 +1,3 @@
+48 ['push 3', 'push 4', 'op +', 'dup', 'op *', 'push 1', 'op -']
+error: bad op / []
+IndexError: pop from empty list

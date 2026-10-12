@@ -1,0 +1,4 @@
+2.0 12.0 4.0
+5.0 75.0
+error: negative radius
+AttributeError: property 'area' of 'Circle' object has no setter

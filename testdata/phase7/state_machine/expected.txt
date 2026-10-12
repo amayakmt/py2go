@@ -1,0 +1,6 @@
+start -> running Running
+pause -> paused Paused
+bogus -> paused Paused
+resume -> running Running
+stop -> idle Idle
+stop -> idle Idle

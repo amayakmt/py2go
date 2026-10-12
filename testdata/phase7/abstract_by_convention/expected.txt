@@ -1,0 +1,2 @@
+Rect area=7.0
+NotImplementedError: subclass must implement

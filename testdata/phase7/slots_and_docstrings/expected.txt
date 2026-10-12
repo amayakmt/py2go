@@ -1,0 +1,5 @@
+3 Tiny A tiny class.
+
+With a longer docstring.
+
+Tiny Tiny

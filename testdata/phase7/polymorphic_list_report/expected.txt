@@ -1,0 +1,5 @@
+Employee     ann     500
+Manager      bob    1100
+Intern        cy     200
+1800
+bob ['Manager', 'Employee', 'Intern']

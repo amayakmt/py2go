@@ -1,0 +1,5 @@
+[b, a, c, d]
+[a, c, d, b] [d, c, a, b]
+[d, c, a, b] b d
+[b, a, c, d]
+[d, c, b, a]

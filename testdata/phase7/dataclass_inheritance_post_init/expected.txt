@@ -1,0 +1,3 @@
+Derived(id=7, name='ABC', extra=2.5) 7 ABC 2.5
+Derived(id=1, name='N', extra=1.5)
+True True

@@ -1,0 +1,4 @@
+Order(id=1, items=[Item(name='pen', qty=3, price=1.5), Item(name='book', qty=1, price=12.0)], meta={'rush': 1})
+16.5 2 True
+[Order(id=1, items=[Item(name='pen', qty=3, price=1.5), Item(name='book', qty=1, price=12.0)], meta={'rush': 1}), Order(id=2, items=[Item(name='x', qty=1, price=0.0)], meta={})]
+2

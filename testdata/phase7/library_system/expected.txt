@@ -1,0 +1,7 @@
+ann borrowed Dune
+not available: Dune
+ann borrowed Emma
+limit: ann reached the limit of 2 ann
+bob borrowed Emma
+['Dune [1] x0', 'Emma [2] x0', 'Ulysses [3] x1']
+True False ['Dune [1] x1', 'Emma [2] x0', 'Ulysses [3] x1']

@@ -1,0 +1,2 @@
+['Entity', 'Named', 'Timestamped', 'User']
+True True True

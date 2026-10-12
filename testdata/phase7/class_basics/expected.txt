@@ -1,0 +1,3 @@
+Point(3, 4) Point(1, 2) 25 Point(4, 6)
+3
+10 Point(10, 4)

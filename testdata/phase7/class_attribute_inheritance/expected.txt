@@ -1,0 +1,4 @@
+['base:a', 'derived:b', 'derived:c']
+base derived derived
+['a', 'b', 'c'] True
+['base:a', 'changed:b', 'changed:c']

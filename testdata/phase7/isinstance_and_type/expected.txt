@@ -1,0 +1,5 @@
+[4, 27, 0]
+True True False True
+Square Shape Square
+True False True
+True False True
