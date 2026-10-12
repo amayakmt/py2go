@@ -20,6 +20,9 @@ type Seq interface {
 // Eq is Python's == for two values of the same static type. Lists and
 // tuples compare element by element.
 func Eq(a, b any) bool {
+	if e, ok := a.(eqer); ok {
+		return e.pyEq(b)
+	}
 	if x, ok := a.(Seq); ok {
 		y, ok := b.(Seq)
 		if !ok || x.Len() != y.Len() {
@@ -35,6 +38,14 @@ func Eq(a, b any) bool {
 	return a == b
 }
 
+// eqer, reprer and subsetter are implemented by the container types that are
+// not lists or tuples: dict, set, range and the dict views.
+type eqer interface{ pyEq(other any) bool }
+type reprer interface{ pyRepr() string }
+type subsetter interface {
+	pySubset(other any, proper bool) bool
+}
+
 // Lt, Le, Gt and Ge are Python's ordering operators. Lists and tuples
 // order lexicographically: the first position that differs decides, and
 // if there is none the shorter sequence is smaller.
@@ -44,6 +55,10 @@ func Gt(a, b any) bool { return order(b, a, "<") }
 func Ge(a, b any) bool { return order(b, a, "<=") }
 
 func order(a, b any, op string) bool {
+	if s, ok := a.(subsetter); ok {
+		// For sets, "<" and "<=" mean proper subset and subset.
+		return s.pySubset(b, op == "<")
+	}
 	switch x := a.(type) {
 	case Seq:
 		y := b.(Seq)
@@ -301,6 +316,31 @@ func (l *List[T]) Repeat(n int64) *List[T] {
 	return &List[T]{items: items}
 }
 
+// DelAt is del xs[i].
+func (l *List[T]) DelAt(i int64) {
+	k, ok := l.norm(i)
+	if !ok {
+		panic(indexError("list assignment index out of range"))
+	}
+	l.items = append(l.items[:k], l.items[k+1:]...)
+}
+
+// DelSlice is del xs[a:b:c].
+func (l *List[T]) DelSlice(b Bounds) {
+	start, step, count := b.indices(int64(len(l.items)))
+	drop := make(map[int64]bool, count)
+	for i := int64(0); i < count; i++ {
+		drop[start+i*step] = true
+	}
+	kept := l.items[:0]
+	for i, x := range l.items {
+		if !drop[int64(i)] {
+			kept = append(kept, x)
+		}
+	}
+	l.items = kept
+}
+
 // RepeatInPlace is list *= n: the same list object, now repeated.
 func (l *List[T]) RepeatInPlace(n int64) { l.items = l.Repeat(n).items }
 
@@ -363,6 +403,8 @@ func Repr(v any) string {
 		return quote(v)
 	case *PyError:
 		return v.repr()
+	case reprer:
+		return v.pyRepr()
 	case Seq:
 		parts := make([]string, v.Len())
 		for i := range parts {

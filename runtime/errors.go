@@ -176,3 +176,12 @@ func Enter() {
 }
 
 func Leave() { depth-- }
+
+// Bound is the read of a module variable from a function. It raises
+// NameError if the module-level assignment has not run yet.
+func Bound[T any](v T, set bool, name string) T {
+	if !set {
+		panic(newError("NameError", "name '"+name+"' is not defined"))
+	}
+	return v
+}
