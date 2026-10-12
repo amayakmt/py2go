@@ -267,6 +267,33 @@ func TestFormat(t *testing.T) {
 			t.Errorf("format(%v, %q) = %q, want %q", tc.v, tc.spec, got, tc.want)
 		}
 	}
+	for _, tc := range []struct {
+		v          int64
+		spec, want string
+	}{
+		{255, "x", "ff"}, {255, "X", "FF"}, {255, "#x", "0xff"}, {5, "b", "101"}, {5, "#010b", "0b00000101"},
+		{8, "o", "10"}, {65, "c", "A"}, {1234567, ",", "1,234,567"}, {1234567, "_", "1_234_567"},
+		{255, "_x", "ff"}, {65535, "_x", "ffff"}, {1 << 20, "_b", "1_0000_0000_0000_0000_0000"},
+		{-255, "x", "-ff"}, {-255, "#x", "-0xff"}, {3, "e", "3.000000e+00"}, {3, "%", "300.000000%"},
+		{1, "05,d", "0,001"},
+	} {
+		if got := FormatInt(tc.v, tc.spec); got != tc.want {
+			t.Errorf("format(%d, %q) = %q, want %q", tc.v, tc.spec, got, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		v          float64
+		spec, want string
+	}{
+		{1234.5678, "e", "1.234568e+03"}, {1234.5678, ".2e", "1.23e+03"}, {1234.5678, "E", "1.234568E+03"},
+		{1234.5678, "g", "1234.57"}, {0.00001234, "g", "1.234e-05"}, {1e20, "g", "1e+20"}, {100000, "g", "100000"},
+		{1000000, "g", "1e+06"}, {0.5, "%", "50.000000%"}, {0.256, ".1%", "25.6%"}, {1234567.891, ",.2f", "1,234,567.89"},
+		{3.0, ".3g", "3"}, {3.14159, ".3", "3.14"}, {2.5, "#.0f", "2."}, {-1.5, "08.2f", "-0001.50"},
+	} {
+		if got := FormatFloat(tc.v, tc.spec); got != tc.want {
+			t.Errorf("format(%v, %q) = %q, want %q", tc.v, tc.spec, got, tc.want)
+		}
+	}
 	strs := []struct{ v, spec, want string }{
 		{"abc", "", "abc"}, {"abc", "6", "abc   "}, {"abc", ">6", "   abc"}, {"abc", "^7", "  abc  "},
 		{"abc", "*^7", "**abc**"}, {"abcdef", ".3", "abc"}, {"héllo", "8", "héllo   "}, {"héllo", ">8.2", "      hé"}, {"", "3", "   "},
@@ -283,6 +310,8 @@ func TestValidateSpec(t *testing.T) {
 		{"int", ""}, {"int", "05d"}, {"int", ">8"}, {"int", ".2f"}, {"int", ",d"},
 		{"float", ""}, {"float", ".2f"}, {"float", "08.3f"}, {"float", "+,.1f"},
 		{"str", ""}, {"str", ">10"}, {"str", "<8.3s"}, {"str", "*^9"},
+		{"int", "x"}, {"int", "#010b"}, {"int", "_o"}, {"int", "e"}, {"int", "05,d"}, {"int", "c"},
+		{"float", ".2"}, {"float", "g"}, {"float", "%"}, {"float", "#.3e"}, {"float", ">12,.2f"},
 	}
 	for _, g := range good {
 		if err := ValidateSpec(g.kind, g.spec); err != nil {
@@ -290,9 +319,9 @@ func TestValidateSpec(t *testing.T) {
 		}
 	}
 	bad := []struct{ kind, spec string }{
-		{"int", "x"}, {"int", "e"}, {"int", ".2"}, {"int", "s"}, {"float", "d"}, {"float", ".2"}, {"float", "g"},
-		{"float", "%"}, {"str", "d"}, {"str", "+"}, {"str", "05"}, {"str", ","}, {"str", "=5"},
-		{"int", "05,d"}, {"int", "."}, {"int", "5.2.1"},
+		{"int", ".2"}, {"int", "s"}, {"float", "d"}, {"float", "x"}, {"float", "c"},
+		{"str", "d"}, {"str", "+"}, {"str", "05"}, {"str", ","}, {"str", "=5"},
+		{"int", "."}, {"int", "5.2.1"}, {"int", "+c"},
 	}
 	for _, b := range bad {
 		if err := ValidateSpec(b.kind, b.spec); err == nil {

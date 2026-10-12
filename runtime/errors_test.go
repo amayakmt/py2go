@@ -62,12 +62,12 @@ func TestExceptionHierarchy(t *testing.T) {
 	if !Match(e, "ValueError", "LookupError") || Match(e, "ValueError", "TypeError") || Match(e) {
 		t.Error("Match tests every listed class")
 	}
-	for _, name := range []string{"Exception", "OSError", "RecursionError"} {
+	for _, name := range []string{"Exception", "OSError", "RecursionError", "TimeoutError", "SyntaxError"} {
 		if !IsExceptionClass(name) {
 			t.Errorf("%s must be a known class", name)
 		}
 	}
-	for _, name := range []string{"Foo", "int", "TimeoutError", ""} {
+	for _, name := range []string{"Foo", "int", "CustomThing", ""} {
 		if IsExceptionClass(name) {
 			t.Errorf("%q must not be a known class", name)
 		}

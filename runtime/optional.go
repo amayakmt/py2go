@@ -73,6 +73,8 @@ func (o Opt[T]) PyEq(other any) (bool, bool) {
 		return Eq(o.v, x.v), true
 	case NoneT:
 		return !o.some, true
+	case nil:
+		return !o.some, true
 	}
 	if !o.some {
 		return false, true

@@ -12,7 +12,7 @@ import (
 //
 //	[[fill]align][sign][0][width][,][.precision][type]
 //
-// Only the subset the transpiler supports is accepted: types d, f and s.
+// The types are b, c, d, e, E, f, F, g, G, n, o, s, x, X and %.
 type spec struct {
 	fill     rune
 	align    byte // '<', '>', '^', '=' or 0 for the type's default
@@ -20,9 +20,11 @@ type spec struct {
 	zero     bool
 	width    int
 	comma    bool
+	under    bool // '_' as the grouping character
+	alt      bool // '#'
 	hasPrec  bool
 	prec     int
-	typ      byte // 'd', 'f', 's' or 0
+	typ      byte // the type letter, or 0
 	explicit bool // the spec named a fill or align itself
 }
 
@@ -43,6 +45,10 @@ func parseSpec(s string) (spec, error) {
 		sp.sign = byte(runes[i])
 		i++
 	}
+	if i < len(runes) && runes[i] == '#' {
+		sp.alt = true
+		i++
+	}
 	if i < len(runes) && runes[i] == '0' {
 		sp.zero = true
 		i++
@@ -52,6 +58,9 @@ func parseSpec(s string) (spec, error) {
 	}
 	if i < len(runes) && runes[i] == ',' {
 		sp.comma = true
+		i++
+	} else if i < len(runes) && runes[i] == '_' {
+		sp.under = true
 		i++
 	}
 	if i < len(runes) && runes[i] == '.' {
@@ -70,12 +79,9 @@ func parseSpec(s string) (spec, error) {
 			return sp, fmt.Errorf("invalid format specifier %q", s)
 		}
 		sp.typ = byte(runes[i])
-		if runes[i] > 0x7f || !strings.ContainsRune("dfs", runes[i]) {
-			return sp, fmt.Errorf("format type %q is not supported (use d, f or s)", string(runes[i]))
+		if runes[i] > 0x7f || !strings.ContainsRune("bcdeEfFgGnosxX%", runes[i]) {
+			return sp, fmt.Errorf("Unknown format code '%s' for object", string(runes[i]))
 		}
-	}
-	if sp.zero && sp.comma {
-		return sp, fmt.Errorf("format specifier %q: '0' together with ',' is not supported", s)
 	}
 	return sp, nil
 }
@@ -86,37 +92,52 @@ func parseSpec(s string) (spec, error) {
 func ValidateSpec(kind, s string) error {
 	sp, err := parseSpec(s)
 	if err != nil {
+		if sp.typ == 0 && strings.HasPrefix(err.Error(), "Unknown format code") {
+			code := err.Error()
+			code = code[strings.Index(code, "'")+1:]
+			code = code[:strings.Index(code, "'")]
+			return fmt.Errorf("Unknown format code '%s' for object of type '%s'", code, kindTypeName(kind))
+		}
 		return err
+	}
+	unknown := func() error {
+		return fmt.Errorf("Unknown format code '%s' for object of type '%s'", string(sp.typ), kindTypeName(kind))
 	}
 	switch kind {
 	case "str":
 		switch {
 		case sp.typ != 0 && sp.typ != 's':
-			return fmt.Errorf("unknown format code %q for object of type 'str'", string(sp.typ))
-		case sp.sign != '-' || sp.zero || sp.comma || sp.align == '=':
-			return fmt.Errorf("sign, '0', ',' and '=' are not allowed in a string format specifier")
+			return unknown()
+		case sp.sign != '-' || sp.zero || sp.comma || sp.under || sp.alt || sp.align == '=':
+			return fmt.Errorf("Sign not allowed in string format specifier")
 		}
 	case "int":
 		switch {
-		case sp.typ == 's':
-			return fmt.Errorf("unknown format code 's' for object of type 'int'")
-		case sp.hasPrec && sp.typ != 'f':
-			return fmt.Errorf("precision not allowed in integer format specifier")
+		case strings.IndexByte("sn", sp.typ) >= 0 && sp.typ == 's':
+			return unknown()
+		case sp.hasPrec && !strings.ContainsRune("eEfFgG%", rune(sp.typ)) && sp.typ != 0:
+			return fmt.Errorf("Precision not allowed in integer format specifier")
+		case sp.hasPrec && sp.typ == 0:
+			return fmt.Errorf("Precision not allowed in integer format specifier")
+		case sp.typ == 'c' && (sp.sign != '-' || sp.alt):
+			return fmt.Errorf("Sign not allowed with integer format specifier 'c'")
 		}
 	case "float":
 		switch {
-		case sp.typ == 'd' || sp.typ == 's':
-			return fmt.Errorf("unknown format code %q for object of type 'float'", string(sp.typ))
-		case sp.hasPrec && sp.typ != 'f':
-			return fmt.Errorf("a precision needs the 'f' type (g-style formatting is not supported)")
+		case strings.ContainsRune("bcdosxX", rune(sp.typ)) && sp.typ != 0:
+			return unknown()
 		}
 	}
 	return nil
 }
 
+func kindTypeName(kind string) string { return kind }
+
 // SpecIsFloat reports whether the spec ends in the f type, which makes an
 // int format as a float.
-func SpecIsFloat(s string) bool { return strings.HasSuffix(s, "f") }
+func SpecIsFloat(s string) bool {
+	return s != "" && strings.ContainsRune("eEfFgG%", rune(s[len(s)-1]))
+}
 
 func mustSpec(kind, s string) spec {
 	if err := ValidateSpec(kind, s); err != nil {
@@ -167,12 +188,19 @@ func (sp spec) signFor(negative bool) string {
 }
 
 // group inserts thousands separators into the integer part of a number.
-func group(num string) string {
+func group(num string) string { return groupBy(num, ',', 3) }
+
+// groupBy inserts sep between every n digits of the integer part.
+func groupBy(num string, sep byte, n int) string {
 	intPart, rest, _ := strings.Cut(num, ".")
+	// An exponent stays out of the grouping.
+	if k := strings.IndexAny(intPart, "eE"); k >= 0 {
+		return num
+	}
 	var b strings.Builder
 	for i, c := range intPart {
-		if i > 0 && (len(intPart)-i)%3 == 0 {
-			b.WriteByte(',')
+		if i > 0 && (len(intPart)-i)%n == 0 {
+			b.WriteByte(sep)
 		}
 		b.WriteRune(c)
 	}
@@ -182,14 +210,72 @@ func group(num string) string {
 	return b.String()
 }
 
+// separate groups the digits as the spec asks. With 0 padding the zeros are
+// part of the grouped number, so the field is full width with separators
+// among them.
+func (sp spec) separate(num string, base int, sign string) string {
+	if sp.zero && (sp.comma || sp.under) && !sp.explicit {
+		intPart, rest, hasFrac := strings.Cut(num, ".")
+		tail := ""
+		if hasFrac {
+			tail = "." + rest
+		}
+		for {
+			grouped := sp.group(intPart, base)
+			if len(sign)+len(grouped)+len(tail) >= sp.width {
+				if grouped[0] == ',' || grouped[0] == '_' {
+					intPart = "0" + intPart
+					continue
+				}
+				return grouped + tail
+			}
+			intPart = "0" + intPart
+		}
+	}
+	return sp.group(num, base)
+}
+
+func (sp spec) group(num string, base int) string {
+	switch {
+	case sp.comma:
+		return group(num)
+	case sp.under && base == 10:
+		return groupBy(num, '_', 3)
+	case sp.under:
+		return groupBy(num, '_', 4)
+	}
+	return num
+}
+
 // FormatInt is format(v, spec) for an int.
 func FormatInt(v int64, s string) string {
 	sp := mustSpec("int", s)
-	digits := strconv.FormatUint(absUint(v), 10)
-	if sp.comma {
-		digits = group(digits)
+	if strings.ContainsRune("eEfFgG%", rune(sp.typ)) && sp.typ != 0 {
+		return FormatFloat(float64(v), s)
 	}
-	return sp.pad('>', sp.signFor(v < 0), digits)
+	if sp.typ == 'c' {
+		return sp.pad('>', "", string(rune(v)))
+	}
+	base, prefix := 10, ""
+	switch sp.typ {
+	case 'b':
+		base, prefix = 2, "0b"
+	case 'o':
+		base, prefix = 8, "0o"
+	case 'x', 'X':
+		base, prefix = 16, "0x"
+	}
+	digits := strconv.FormatUint(absUint(v), base)
+	if sp.typ == 'X' {
+		digits = strings.ToUpper(digits)
+		prefix = "0X"
+	}
+	sign := sp.signFor(v < 0)
+	if sp.alt && base != 10 {
+		sign += prefix
+	}
+	digits = sp.separate(digits, base, sign)
+	return sp.pad('>', sign, digits)
 }
 
 func absUint(v int64) uint64 {
@@ -204,24 +290,90 @@ func FormatFloat(v float64, s string) string {
 	sp := mustSpec("float", s)
 	negative := math.Signbit(v) && !math.IsNaN(v)
 	var body string
+	a := math.Abs(v)
 	switch {
 	case math.IsNaN(v):
 		body = "nan"
+		if sp.typ == 'F' || sp.typ == 'E' || sp.typ == 'G' {
+			body = "NAN"
+		}
 	case math.IsInf(v, 0):
 		body = "inf"
-	case sp.typ == 'f':
+		if sp.typ == 'F' || sp.typ == 'E' || sp.typ == 'G' {
+			body = "INF"
+		}
+		if sp.typ == '%' {
+			body += "%"
+		}
+	default:
 		prec := 6
 		if sp.hasPrec {
 			prec = sp.prec
 		}
-		body = strconv.FormatFloat(math.Abs(v), 'f', prec, 64)
-	default:
-		body = FloatRepr(math.Abs(v))
+		switch sp.typ {
+		case 'f', 'F':
+			body = strconv.FormatFloat(a, 'f', prec, 64)
+		case 'e', 'E':
+			body = strconv.FormatFloat(a, 'e', prec, 64)
+			if sp.typ == 'E' {
+				body = strings.ToUpper(body)
+			}
+		case 'g', 'G', 'n':
+			body = generalFormat(a, prec, sp.alt)
+			if sp.typ == 'G' {
+				body = strings.ToUpper(body)
+			}
+		case '%':
+			body = strconv.FormatFloat(a*100, 'f', prec, 64) + "%"
+		default:
+			if sp.hasPrec {
+				body = generalFormat(a, prec, sp.alt)
+			} else {
+				body = FloatRepr(a)
+			}
+		}
+		if sp.alt && !strings.ContainsAny(body, ".eEn") {
+			body += "."
+		}
 	}
-	if sp.comma && !math.IsNaN(v) && !math.IsInf(v, 0) {
-		body = group(body)
+	sign := sp.signFor(negative)
+	if !math.IsNaN(v) && !math.IsInf(v, 0) {
+		body = sp.separate(body, 10, sign)
 	}
-	return sp.pad('>', sp.signFor(negative), body)
+	return sp.pad('>', sign, body)
+}
+
+// generalFormat is the g format: the shortest of the fixed and exponent forms
+// for the given number of significant digits.
+func generalFormat(a float64, prec int, keepZeros bool) string {
+	if prec == 0 {
+		prec = 1
+	}
+	if a == 0 {
+		if keepZeros {
+			return "0." + strings.Repeat("0", prec-1)
+		}
+		return "0"
+	}
+	exp := strconv.FormatFloat(a, 'e', prec-1, 64)
+	x, _ := strconv.Atoi(exp[strings.IndexByte(exp, 'e')+1:])
+	var out string
+	if x >= -4 && x < prec {
+		out = strconv.FormatFloat(a, 'f', prec-1-x, 64)
+	} else {
+		out = exp
+	}
+	if !keepZeros {
+		mant, e, hasExp := strings.Cut(out, "e")
+		if strings.Contains(mant, ".") {
+			mant = strings.TrimRight(strings.TrimRight(mant, "0"), ".")
+		}
+		out = mant
+		if hasExp {
+			out += "e" + e
+		}
+	}
+	return out
 }
 
 // FormatStr is format(v, spec) for a str.
@@ -250,4 +402,25 @@ func FormatOther(v any, s string) string {
 		return Str(v)
 	}
 	panic(newError("TypeError", "unsupported format string passed to "+TypeName(v)+".__format__"))
+}
+
+// FormatDyn formats a value of any type with a spec.
+func FormatDyn(v any, s string) string {
+	v = Unbox(v)
+	switch x := v.(type) {
+	case string:
+		return FormatStr(x, s)
+	case int64:
+		return FormatIntDyn(x, s)
+	case float64:
+		return FormatFloat(x, s)
+	case bool:
+		if s == "" {
+			return Str(x)
+		}
+		return FormatIntDyn(b2i(x), s)
+	case interface{ PyFormat(spec string) string }:
+		return x.PyFormat(s)
+	}
+	return FormatOther(v, s)
 }

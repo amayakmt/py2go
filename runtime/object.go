@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // Instances of user-defined classes are Go pointers. The generated code makes
@@ -34,7 +35,7 @@ type Hasher interface{ PyHash() int64 }
 // TypeName is the name Python shows for the type of v in error messages.
 func TypeName(v any) string {
 	switch v := v.(type) {
-	case nil:
+	case nil, NoneT:
 		return "NoneType"
 	case Named:
 		return v.PyClassName()
@@ -64,6 +65,12 @@ func TypeName(v any) string {
 			return "set"
 		case len(name) >= 5 && name[:5] == "Range":
 			return "range"
+		case strings.HasPrefix(name, "Iterator"), strings.HasPrefix(name, "Gen["):
+			return "generator"
+		case name == "ClassRef":
+			return "type"
+		case name == "Callable":
+			return "function"
 		}
 	}
 	return t.String()
@@ -197,6 +204,8 @@ func AsInt(x any) int64 {
 type ClassRef struct {
 	Name    string
 	Builtin bool
+	ctor    any       // the constructor of a class of the program
+	info    *FuncInfo // and the names of its parameters
 }
 
 var classRefs = map[string]*ClassRef{}

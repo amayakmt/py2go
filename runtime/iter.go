@@ -102,6 +102,8 @@ type truther interface{ pyTruth() bool }
 // Truth is Python's truth test for the supported types.
 func Truth(v any) bool {
 	switch v := v.(type) {
+	case nil, NoneT:
+		return false
 	case bool:
 		return v
 	case int64:
@@ -116,6 +118,8 @@ func Truth(v any) bool {
 		return v.Len() != 0
 	case truther:
 		return v.pyTruth()
+	case interface{ PyTruth() bool }:
+		return v.PyTruth()
 	}
 	return true
 }

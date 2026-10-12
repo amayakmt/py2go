@@ -41,13 +41,13 @@ func (d *Dict[K, V]) keyCount() int { return d.live }
 func (d *Dict[K, V]) pyTruth() bool { return d.live > 0 }
 
 func (d *Dict[K, V]) Has(k K) bool {
-	_, ok := d.index[k]
+	_, ok := d.index[normKey(k)]
 	return ok
 }
 
 // Get is d[k].
 func (d *Dict[K, V]) Get(k K) V {
-	i, ok := d.index[k]
+	i, ok := d.index[normKey(k)]
 	if !ok {
 		panic(NewError("KeyError", k))
 	}
@@ -56,7 +56,7 @@ func (d *Dict[K, V]) Get(k K) V {
 
 // GetDefault is d.get(k, default).
 func (d *Dict[K, V]) GetDefault(k K, def V) V {
-	if i, ok := d.index[k]; ok {
+	if i, ok := d.index[normKey(k)]; ok {
 		return d.entries[i].val
 	}
 	return def
@@ -64,12 +64,12 @@ func (d *Dict[K, V]) GetDefault(k K, def V) V {
 
 // Set is d[k] = v.
 func (d *Dict[K, V]) Set(k K, v V) {
-	if i, ok := d.index[k]; ok {
+	if i, ok := d.index[normKey(k)]; ok {
 		d.entries[i].val = v
 		return
 	}
 	d.compact()
-	d.index[k] = len(d.entries)
+	d.index[normKey(k)] = len(d.entries)
 	d.entries = append(d.entries, dictEntry[K, V]{key: k, val: v})
 	d.live++
 }
@@ -84,7 +84,7 @@ func (d *Dict[K, V]) compact() {
 	kept := d.entries[:0]
 	for _, e := range d.entries {
 		if !e.dead {
-			d.index[e.key] = len(kept)
+			d.index[normKey(e.key)] = len(kept)
 			kept = append(kept, e)
 		}
 	}
@@ -104,7 +104,7 @@ func (d *Dict[K, V]) remove(i int) {
 
 // Delete is del d[k].
 func (d *Dict[K, V]) Delete(k K) {
-	i, ok := d.index[k]
+	i, ok := d.index[normKey(k)]
 	if !ok {
 		panic(NewError("KeyError", k))
 	}
@@ -113,7 +113,7 @@ func (d *Dict[K, V]) Delete(k K) {
 
 // Pop is d.pop(k).
 func (d *Dict[K, V]) Pop(k K) V {
-	i, ok := d.index[k]
+	i, ok := d.index[normKey(k)]
 	if !ok {
 		panic(NewError("KeyError", k))
 	}
@@ -144,7 +144,7 @@ func (d *Dict[K, V]) PopItem() Tuple2[K, V] {
 
 // SetDefault is d.setdefault(k, default).
 func (d *Dict[K, V]) SetDefault(k K, def V) V {
-	if i, ok := d.index[k]; ok {
+	if i, ok := d.index[normKey(k)]; ok {
 		return d.entries[i].val
 	}
 	d.Set(k, def)
@@ -183,7 +183,7 @@ func (d *Dict[K, V]) Copy() *Dict[K, V] {
 	out := &Dict[K, V]{index: make(map[K]int, d.live)}
 	for _, e := range d.entries {
 		if !e.dead {
-			out.index[e.key] = len(out.entries)
+			out.index[normKey(e.key)] = len(out.entries)
 			out.entries = append(out.entries, e)
 		}
 	}
@@ -316,7 +316,7 @@ func (v *ValuesView[K, V]) Has(x V) bool {
 
 // Has is (key, value) in d.items().
 func (v *ItemsView[K, V]) Has(item Tuple2[K, V]) bool {
-	i, ok := v.d.index[item.F0]
+	i, ok := v.d.index[normKey(item.F0)]
 	return ok && Eq(v.d.entries[i].val, item.F1)
 }
 
@@ -358,7 +358,7 @@ func (d *Dict[K, V]) pyEq(other any) bool {
 		if e.dead {
 			continue
 		}
-		i, ok := o.index[e.key]
+		i, ok := o.index[normKey(e.key)]
 		if !ok || !Eq(e.val, o.entries[i].val) {
 			return false
 		}
@@ -407,7 +407,7 @@ func (v *KeysView[K, V]) pyEq(other any) bool {
 
 // GetOpt is d.get(k): the value, or None when the key is missing.
 func (d *Dict[K, V]) GetOpt(k K) Opt[V] {
-	if i, ok := d.index[k]; ok {
+	if i, ok := d.index[normKey(k)]; ok {
 		return Some(d.entries[i].val)
 	}
 	return NoneOf[V]()

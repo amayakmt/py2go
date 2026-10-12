@@ -86,7 +86,7 @@ func (s *Set[T]) lookup(key T, hash int64) int {
 			if e.state == slotEmpty {
 				return -1
 			}
-			if e.state == slotActive && e.hash == hash && e.key == key {
+			if e.state == slotActive && e.hash == hash && keyEq(e.key, key) {
 				return int(i) + j
 			}
 		}
@@ -153,7 +153,7 @@ func (s *Set[T]) addEntry(key T, hash int64) {
 				return
 			}
 			if e.state == slotActive {
-				if e.hash == hash && e.key == key {
+				if e.hash == hash && keyEq(e.key, key) {
 					return
 				}
 			} else { // dummy
@@ -571,7 +571,7 @@ func (s *Set[T]) pyEq(other any) bool {
 		// A keys view equals a set with the same items.
 		v, isView := other.(interface{ asSet() *Set[T] })
 		if !isView {
-			return false
+			return s.eqForeign(other)
 		}
 		o = v.asSet()
 	}
@@ -580,7 +580,10 @@ func (s *Set[T]) pyEq(other any) bool {
 
 // pySubset implements the ordering operators, which mean "is a subset".
 func (s *Set[T]) pySubset(other any, proper bool) bool {
-	o := other.(*Set[T])
+	o, ok := other.(*Set[T])
+	if !ok {
+		return s.subsetForeign(other, proper)
+	}
 	if proper && s.used >= o.used {
 		return false
 	}
@@ -599,4 +602,34 @@ func (s *Set[T]) pyRepr() string {
 		}
 	}
 	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// foreignSet is a set whose items have another static type than this one's.
+type foreignSet interface {
+	Len() int64
+	ContainsAny(item any) bool
+}
+
+func (s *Set[T]) eqForeign(other any) bool {
+	o, ok := other.(foreignSet)
+	if _, isSet := other.(subsetter); !ok || !isSet || int64(s.used) != o.Len() {
+		return false
+	}
+	return s.subsetForeign(other, false)
+}
+
+func (s *Set[T]) subsetForeign(other any, proper bool) bool {
+	o, ok := other.(foreignSet)
+	if !ok {
+		panic(newError("TypeError", "can only compare a set to another set"))
+	}
+	if proper && int64(s.used) >= o.Len() {
+		return false
+	}
+	for _, e := range s.table {
+		if e.state == slotActive && !o.ContainsAny(e.key) {
+			return false
+		}
+	}
+	return true
 }

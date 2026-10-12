@@ -21,6 +21,12 @@ type Seq interface {
 // Eq is Python's == for two values of the same static type. Lists and
 // tuples compare element by element.
 func Eq(a, b any) bool {
+	if _, ok := a.(NoneT); ok {
+		a = nil
+	}
+	if _, ok := b.(NoneT); ok {
+		b = nil
+	}
 	if e, ok := a.(Equaler); ok {
 		if r, ok := e.PyEq(b); ok {
 			return r
@@ -44,7 +50,7 @@ func Eq(a, b any) bool {
 	}
 	if x, ok := a.(Seq); ok {
 		y, ok := b.(Seq)
-		if !ok || x.Len() != y.Len() {
+		if !ok || x.Len() != y.Len() || x.Kind() != y.Kind() {
 			return false
 		}
 		for i := int64(0); i < x.Len(); i++ {
@@ -53,6 +59,15 @@ func Eq(a, b any) bool {
 			}
 		}
 		return true
+	}
+	if ka, ia, fa := numeric(a); ka != notNum {
+		if kb, ib, fb := numeric(b); kb != notNum {
+			if ka == isInt && kb == isInt {
+				return ia == ib
+			}
+			return asFloat(ka, ia, fa) == asFloat(kb, ib, fb)
+		}
+		return false
 	}
 	return a == b
 }
@@ -95,6 +110,9 @@ func compare(a, b any, op, symbol string) bool {
 	if aUser || bUser {
 		panic(NotOrderable(symbol, a, b))
 	}
+	if !orderable(a, b) {
+		panic(NotOrderable(symbol, a, b))
+	}
 	switch op {
 	case "lt":
 		return order(a, b, "<")
@@ -110,6 +128,14 @@ func order(a, b any, op string) bool {
 	if s, ok := a.(subsetter); ok {
 		// For sets, "<" and "<=" mean proper subset and subset.
 		return s.pySubset(b, op == "<")
+	}
+	if ka, ia, fa := numeric(a); ka != notNum {
+		if kb, ib, fb := numeric(b); kb != notNum {
+			if ka == isInt && kb == isInt {
+				return compareScalar(ia, ib, op)
+			}
+			return compareScalar(asFloat(ka, ia, fa), asFloat(kb, ib, fb), op)
+		}
 	}
 	switch x := a.(type) {
 	case Seq:
@@ -536,3 +562,24 @@ func CheckUnpackStar(got, want int64) {
 
 // Items is the elements of the list, not a copy.
 func (l *List[T]) Items() []T { return l.items }
+
+// orderable reports whether Python orders a and b: numbers with numbers,
+// strings with strings, lists with lists, tuples with tuples, sets with sets.
+func orderable(a, b any) bool {
+	if ka, _, _ := numeric(a); ka != notNum {
+		kb, _, _ := numeric(b)
+		return kb != notNum
+	}
+	switch x := a.(type) {
+	case string:
+		_, ok := b.(string)
+		return ok
+	case Seq:
+		y, ok := b.(Seq)
+		return ok && x.Kind() == y.Kind()
+	case subsetter:
+		_, ok := b.(subsetter)
+		return ok
+	}
+	return false
+}
