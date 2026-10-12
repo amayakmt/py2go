@@ -1,0 +1,1 @@
+unsupported: an exception as the argument of an exception at line 4

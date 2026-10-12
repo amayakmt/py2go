@@ -1,0 +1,1 @@
+unsupported: identifier 'type' (reserved in Go output) at line 3

@@ -1,0 +1,1 @@
+unsupported: attribute access '.args' at line 4

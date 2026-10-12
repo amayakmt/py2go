@@ -1,0 +1,1 @@
+unsupported: call to undefined function 'type' at line 4

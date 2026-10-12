@@ -1,0 +1,1 @@
+unsupported: unknown exception class 'MyError' at line 3

@@ -1,0 +1,4 @@
+try:
+    return
+finally:
+    pass
