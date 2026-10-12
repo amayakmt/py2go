@@ -1,0 +1,13 @@
+print("a,b,,c".split(","))
+print("a b  c".split())
+print("  lead and trail  ".split())
+print("".split(","), "".split())
+print("abc".split("b"), "abc".split("abc"))
+parts: list[str] = "one two three".split()
+print(len(parts), parts[0], parts[-1])
+print("-".join(parts))
+print("".join(parts))
+print(", ".join(["x"]))
+print(",".join("a b c".split()))
+words: list[str] = []
+print("[" + " ".join(words) + "]")

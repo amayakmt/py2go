@@ -1,0 +1,7 @@
+  HELLO, WORLD  
+  hello, world  
+[Hello, World]
+hi
+[x]
+True
+MIXED

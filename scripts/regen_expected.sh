@@ -3,7 +3,7 @@
 # running each input.py under CPython 3.13. Review the diff before committing:
 # these files are the oracle the transpiled Go is compared against.
 #
-#   scripts/regen_expected.sh                       all of testdata/phase2
+#   scripts/regen_expected.sh                       all of testdata/phase2 and phase3
 #   scripts/regen_expected.sh testdata/phase2/foo   just one case
 #
 # expected.txt holds stdout. If the program exits with an error, expected.err
@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 
 dirs=("$@")
 if [ ${#dirs[@]} -eq 0 ]; then
-	dirs=(testdata/phase2/*/)
+	dirs=(testdata/phase2/*/ testdata/phase3/*/)
 fi
 
 for dir in "${dirs[@]}"; do

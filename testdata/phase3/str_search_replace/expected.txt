@@ -1,0 +1,5 @@
+1 -1 0 1
+bonono ba banana -b-a-n-a-n-a-
+3 2 0 7
+True False True False
+2 bb

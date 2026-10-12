@@ -1,0 +1,5 @@
+False True True False True
+True False True False
+[0] is truthy
+tuple is truthy
+1 0

@@ -1,0 +1,6 @@
+True False True False
+1 0 3 0
+True False
+True False
+True False True
+True

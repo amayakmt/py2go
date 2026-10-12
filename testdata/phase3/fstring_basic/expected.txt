@@ -1,0 +1,11 @@
+hello world
+42 2.5 True
+43 84 8 5.0
+'world' world 42
+{literal} 42
+worldworld
+
+no fields
+WORLD has 5 letters
+n=42 x=2.5 name='world'
+[1, 2] (1, 'a')

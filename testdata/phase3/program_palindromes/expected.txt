@@ -1,0 +1,4 @@
+'A man, a plan, a canal: Panama': True
+'hello': False
+'Was it a car or a cat I saw?': True
+'': True
