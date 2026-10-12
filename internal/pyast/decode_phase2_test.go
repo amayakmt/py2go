@@ -375,3 +375,40 @@ func TestDecodeClasses(t *testing.T) {
 		t.Errorf("class Q: bases %d keywords %+v", len(q.Bases), q.Keywords)
 	}
 }
+
+func TestDecodePhase8(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/phase8.py")
+	as[*IfExp](t, as[*Assign](t, mod.Body[0]).Value)
+	as[*NamedExpr](t, as[*Expr](t, mod.Body[1]).Value)
+	w := as[*With](t, mod.Body[2])
+	if len(w.Items) != 2 || w.Items[0].Vars == nil || w.Items[1].Vars != nil {
+		t.Errorf("with items: %+v", w.Items)
+	}
+	fn := as[*FunctionDef](t, mod.Body[3])
+	as[*Yield](t, as[*Expr](t, fn.Body[0]).Value)
+	as[*Yield](t, as[*Assign](t, fn.Body[1]).Value)
+	as[*YieldFrom](t, as[*Expr](t, fn.Body[2]).Value)
+	m := as[*Match](t, mod.Body[4])
+	if len(m.Cases) != 6 {
+		t.Fatalf("cases: %d", len(m.Cases))
+	}
+	as[*MatchOr](t, m.Cases[0].Pattern)
+	seq := as[*MatchSequence](t, m.Cases[1].Pattern)
+	as[*MatchStar](t, seq.Patterns[1])
+	if m.Cases[1].Guard == nil {
+		t.Error("guard lost")
+	}
+	if mm := as[*MatchMapping](t, m.Cases[2].Pattern); mm.Rest != "kw" || len(mm.Keys) != 1 {
+		t.Errorf("mapping: %+v", mm)
+	}
+	as_ := as[*MatchAs](t, m.Cases[3].Pattern)
+	if cl := as[*MatchClass](t, as_.Pattern); len(cl.Patterns) != 1 || cl.KwdAttrs[0] != "y" {
+		t.Errorf("class pattern: %+v", cl)
+	}
+	if s := as[*MatchSingleton](t, m.Cases[4].Pattern); s.Value != "None" {
+		t.Errorf("singleton: %+v", s)
+	}
+	if w := as[*MatchAs](t, m.Cases[5].Pattern); w.Name != "" || w.Pattern != nil {
+		t.Errorf("wildcard: %+v", w)
+	}
+}

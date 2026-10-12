@@ -48,6 +48,10 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err := json.Unmarshal(raw, &aux); err != nil {
 			return nil, err
 		}
+		tparams, err := decodeTypeParams(aux.TypeParams)
+		if err != nil {
+			return nil, err
+		}
 		args, err := decodeArguments(aux.Args)
 		if err != nil {
 			return nil, err
@@ -67,7 +71,8 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			return nil, err
 		}
 		return &FunctionDef{
-			Name: aux.Name, Args: args, Body: body, Returns: returns,
+			TypeParams: tparams,
+			Name:       aux.Name, Args: args, Body: body, Returns: returns,
 			HasParams:     hasParams,
 			Decorators:    decorators,
 			HasDecorators: len(decorators) > 0,
@@ -88,6 +93,10 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			return nil, err
 		}
 		bases, err := decodeList(aux.Bases)
+		if err != nil {
+			return nil, err
+		}
+		tparams, err := decodeTypeParams(aux.TypeParams)
 		if err != nil {
 			return nil, err
 		}
@@ -116,9 +125,259 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			keywords = append(keywords, &Keyword{Arg: kw.Arg, Value: value, Lineno: kw.Lineno})
 		}
 		return &ClassDef{
-			Name: aux.Name, Bases: bases, Keywords: keywords, Body: body,
+			TypeParams: tparams,
+			Name:       aux.Name, Bases: bases, Keywords: keywords, Body: body,
 			Decorators: decorators, HasTypeParams: len(aux.TypeParams) > 0, Lineno: head.Lineno,
 		}, nil
+
+	case "IfExp":
+		var aux struct {
+			Test, Body, Orelse json.RawMessage
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		n := &IfExp{Lineno: head.Lineno}
+		var err error
+		if n.Test, err = decodeNode(aux.Test); err != nil {
+			return nil, err
+		}
+		if n.Body, err = decodeNode(aux.Body); err != nil {
+			return nil, err
+		}
+		if n.Orelse, err = decodeNode(aux.Orelse); err != nil {
+			return nil, err
+		}
+		return n, nil
+
+	case "NamedExpr":
+		var aux struct {
+			Target, Value json.RawMessage
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		n := &NamedExpr{Lineno: head.Lineno}
+		var err error
+		if n.Target, err = decodeNode(aux.Target); err != nil {
+			return nil, err
+		}
+		if n.Value, err = decodeNode(aux.Value); err != nil {
+			return nil, err
+		}
+		return n, nil
+
+	case "With":
+		var aux struct {
+			Items []struct {
+				ContextExpr  json.RawMessage `json:"context_expr"`
+				OptionalVars json.RawMessage `json:"optional_vars"`
+			} `json:"items"`
+			Body []json.RawMessage `json:"body"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		n := &With{Lineno: head.Lineno}
+		for _, it := range aux.Items {
+			ctx, err := decodeNode(it.ContextExpr)
+			if err != nil {
+				return nil, err
+			}
+			vars, err := decodeOptional(it.OptionalVars)
+			if err != nil {
+				return nil, err
+			}
+			n.Items = append(n.Items, &WithItem{Context: ctx, Vars: vars})
+		}
+		var err error
+		if n.Body, err = decodeList(aux.Body); err != nil {
+			return nil, err
+		}
+		return n, nil
+
+	case "Yield", "YieldFrom":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		v, err := decodeOptional(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		if head.Type == "Yield" {
+			return &Yield{Value: v, Lineno: head.Lineno}, nil
+		}
+		return &YieldFrom{Value: v, Lineno: head.Lineno}, nil
+
+	case "Match":
+		var aux struct {
+			Subject json.RawMessage `json:"subject"`
+			Cases   []struct {
+				Pattern json.RawMessage   `json:"pattern"`
+				Guard   json.RawMessage   `json:"guard"`
+				Body    []json.RawMessage `json:"body"`
+			} `json:"cases"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		n := &Match{Lineno: head.Lineno}
+		var err error
+		if n.Subject, err = decodeNode(aux.Subject); err != nil {
+			return nil, err
+		}
+		for _, c := range aux.Cases {
+			mc := &MatchCase{}
+			if mc.Pattern, err = decodeNode(c.Pattern); err != nil {
+				return nil, err
+			}
+			if mc.Guard, err = decodeOptional(c.Guard); err != nil {
+				return nil, err
+			}
+			if mc.Body, err = decodeList(c.Body); err != nil {
+				return nil, err
+			}
+			n.Cases = append(n.Cases, mc)
+		}
+		return n, nil
+
+	case "MatchValue":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		v, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &MatchValue{Value: v, Lineno: head.Lineno}, nil
+
+	case "MatchSingleton":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		s := "None"
+		switch string(aux.Value) {
+		case "true":
+			s = "True"
+		case "false":
+			s = "False"
+		}
+		return &MatchSingleton{Value: s, Lineno: head.Lineno}, nil
+
+	case "MatchSequence", "MatchOr":
+		var aux struct {
+			Patterns []json.RawMessage `json:"patterns"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		ps, err := decodeList(aux.Patterns)
+		if err != nil {
+			return nil, err
+		}
+		if head.Type == "MatchOr" {
+			return &MatchOr{Patterns: ps, Lineno: head.Lineno}, nil
+		}
+		return &MatchSequence{Patterns: ps, Lineno: head.Lineno}, nil
+
+	case "MatchMapping":
+		var aux struct {
+			Keys     []json.RawMessage `json:"keys"`
+			Patterns []json.RawMessage `json:"patterns"`
+			Rest     string            `json:"rest"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		keys, err := decodeList(aux.Keys)
+		if err != nil {
+			return nil, err
+		}
+		ps, err := decodeList(aux.Patterns)
+		if err != nil {
+			return nil, err
+		}
+		return &MatchMapping{Keys: keys, Patterns: ps, Rest: aux.Rest, Lineno: head.Lineno}, nil
+
+	case "MatchClass":
+		var aux struct {
+			Cls         json.RawMessage   `json:"cls"`
+			Patterns    []json.RawMessage `json:"patterns"`
+			KwdAttrs    []string          `json:"kwd_attrs"`
+			KwdPatterns []json.RawMessage `json:"kwd_patterns"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		n := &MatchClass{KwdAttrs: aux.KwdAttrs, Lineno: head.Lineno}
+		var err error
+		if n.Cls, err = decodeNode(aux.Cls); err != nil {
+			return nil, err
+		}
+		if n.Patterns, err = decodeList(aux.Patterns); err != nil {
+			return nil, err
+		}
+		if n.KwdPatterns, err = decodeList(aux.KwdPatterns); err != nil {
+			return nil, err
+		}
+		return n, nil
+
+	case "MatchStar":
+		var aux struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		return &MatchStar{Name: aux.Name, Lineno: head.Lineno}, nil
+
+	case "MatchAs":
+		var aux struct {
+			Pattern json.RawMessage `json:"pattern"`
+			Name    string          `json:"name"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		p, err := decodeOptional(aux.Pattern)
+		if err != nil {
+			return nil, err
+		}
+		return &MatchAs{Pattern: p, Name: aux.Name, Lineno: head.Lineno}, nil
+
+	case "TypeAlias":
+		var aux struct {
+			Name       json.RawMessage   `json:"name"`
+			TypeParams []json.RawMessage `json:"type_params"`
+			Value      json.RawMessage   `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		var name struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(aux.Name, &name); err != nil {
+			return nil, err
+		}
+		tparams, err := decodeTypeParams(aux.TypeParams)
+		if err != nil {
+			return nil, err
+		}
+		value, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &TypeAlias{Name: name.ID, TypeParams: tparams, Value: value, Lineno: head.Lineno}, nil
 
 	case "Expr":
 		var aux struct {
@@ -516,7 +775,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return &FormattedValue{Value: value, Conversion: aux.Conversion, FormatSpec: spec, Lineno: head.Lineno}, nil
 
-	case "Try":
+	case "Try", "TryStar":
 		var aux struct {
 			Body      []json.RawMessage `json:"body"`
 			Handlers  []json.RawMessage `json:"handlers"`
@@ -526,7 +785,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err := json.Unmarshal(raw, &aux); err != nil {
 			return nil, err
 		}
-		t := &Try{Lineno: head.Lineno}
+		t := &Try{Lineno: head.Lineno, Star: head.Type == "TryStar"}
 		var err error
 		if t.Body, err = decodeList(aux.Body); err != nil {
 			return nil, err
@@ -954,4 +1213,30 @@ func decodeOptional(raw json.RawMessage) (Node, error) {
 
 func present(raw json.RawMessage) bool {
 	return len(raw) > 0 && string(raw) != "null"
+}
+
+// decodeTypeParams reads the type parameters of a def, class or type alias.
+func decodeTypeParams(raws []json.RawMessage) ([]*TypeParam, error) {
+	var out []*TypeParam
+	for _, r := range raws {
+		var aux struct {
+			Type    string          `json:"_type"`
+			Name    string          `json:"name"`
+			Bound   json.RawMessage `json:"bound"`
+			Default json.RawMessage `json:"default_value"`
+		}
+		if err := json.Unmarshal(r, &aux); err != nil {
+			return nil, err
+		}
+		tp := &TypeParam{Kind: aux.Type, Name: aux.Name}
+		var err error
+		if tp.Bound, err = decodeOptional(aux.Bound); err != nil {
+			return nil, err
+		}
+		if tp.Default, err = decodeOptional(aux.Default); err != nil {
+			return nil, err
+		}
+		out = append(out, tp)
+	}
+	return out, nil
 }

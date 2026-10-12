@@ -9,7 +9,27 @@ type Module struct {
 	Body []Node
 }
 
+// TypeParam is one parameter of PEP 695 syntax: def f[T: int = str]. Kind is
+// "TypeVar", "TypeVarTuple" or "ParamSpec".
+type TypeParam struct {
+	Kind    string
+	Name    string
+	Bound   Node // a type, or a Tuple of constraints
+	Default Node
+}
+
+// TypeAlias is "type Name[params] = value".
+type TypeAlias struct {
+	Name       string
+	TypeParams []*TypeParam
+	Value      Node
+	Lineno     int
+}
+
+func (n *TypeAlias) Line() int { return n.Lineno }
+
 type FunctionDef struct {
+	TypeParams    []*TypeParam
 	Name          string
 	Args          *Arguments
 	Body          []Node
@@ -24,6 +44,7 @@ type FunctionDef struct {
 // ClassDef is a class statement. Keywords holds metaclass=... and friends,
 // which codegen rejects.
 type ClassDef struct {
+	TypeParams    []*TypeParam
 	Name          string
 	Bases         []Node
 	Keywords      []*Keyword
@@ -227,6 +248,7 @@ type FormattedValue struct {
 
 // Try is try/except/else/finally. Handlers, Orelse and Finalbody may be empty.
 type Try struct {
+	Star      bool // try ... except*
 	Body      []Node
 	Handlers  []*ExceptHandler
 	Orelse    []Node
@@ -354,12 +376,132 @@ type ImportFrom struct {
 	Lineno int
 }
 
+// IfExp is "body if test else orelse".
+type IfExp struct {
+	Test, Body, Orelse Node
+	Lineno             int
+}
+
+// NamedExpr is "target := value".
+type NamedExpr struct {
+	Target Node
+	Value  Node
+	Lineno int
+}
+
+// WithItem is one "context as vars" of a with statement; Vars may be nil.
+type WithItem struct {
+	Context Node
+	Vars    Node
+}
+
+// With is "with a as x, b: body".
+type With struct {
+	Items  []*WithItem
+	Body   []Node
+	Lineno int
+}
+
+// Yield is "yield value"; Value may be nil.
+type Yield struct {
+	Value  Node
+	Lineno int
+}
+
+// YieldFrom is "yield from value".
+type YieldFrom struct {
+	Value  Node
+	Lineno int
+}
+
+// Match is "match subject: case ...".
+type Match struct {
+	Subject Node
+	Cases   []*MatchCase
+	Lineno  int
+}
+
+// MatchCase is one case: a pattern, an optional guard and a body.
+type MatchCase struct {
+	Pattern Node
+	Guard   Node
+	Body    []Node
+}
+
+// The patterns of a case. Value is a literal or dotted name compared with ==.
+type MatchValue struct {
+	Value  Node
+	Lineno int
+}
+
+// MatchSingleton is the pattern None, True or False; Value is "None",
+// "True" or "False".
+type MatchSingleton struct {
+	Value  string
+	Lineno int
+}
+
+type MatchSequence struct {
+	Patterns []Node
+	Lineno   int
+}
+
+// MatchMapping is {key: pattern, **rest}; Rest may be empty.
+type MatchMapping struct {
+	Keys     []Node
+	Patterns []Node
+	Rest     string
+	Lineno   int
+}
+
+// MatchClass is Cls(p1, p2, attr=p3).
+type MatchClass struct {
+	Cls         Node
+	Patterns    []Node
+	KwdAttrs    []string
+	KwdPatterns []Node
+	Lineno      int
+}
+
+// MatchStar is *name in a sequence pattern; Name is empty for *_.
+type MatchStar struct {
+	Name   string
+	Lineno int
+}
+
+// MatchAs is "pattern as name", a capture "name", or the wildcard "_"
+// (both Pattern and Name empty).
+type MatchAs struct {
+	Pattern Node
+	Name    string
+	Lineno  int
+}
+
+type MatchOr struct {
+	Patterns []Node
+	Lineno   int
+}
+
 // Unsupported holds any node type we haven't implemented.
 type Unsupported struct {
 	Type   string
 	Lineno int
 }
 
+func (n *IfExp) Line() int          { return n.Lineno }
+func (n *NamedExpr) Line() int      { return n.Lineno }
+func (n *With) Line() int           { return n.Lineno }
+func (n *Yield) Line() int          { return n.Lineno }
+func (n *YieldFrom) Line() int      { return n.Lineno }
+func (n *Match) Line() int          { return n.Lineno }
+func (n *MatchValue) Line() int     { return n.Lineno }
+func (n *MatchSingleton) Line() int { return n.Lineno }
+func (n *MatchSequence) Line() int  { return n.Lineno }
+func (n *MatchMapping) Line() int   { return n.Lineno }
+func (n *MatchClass) Line() int     { return n.Lineno }
+func (n *MatchStar) Line() int      { return n.Lineno }
+func (n *MatchAs) Line() int        { return n.Lineno }
+func (n *MatchOr) Line() int        { return n.Lineno }
 func (n *Module) Line() int         { return 0 }
 func (n *FunctionDef) Line() int    { return n.Lineno }
 func (n *ClassDef) Line() int       { return n.Lineno }

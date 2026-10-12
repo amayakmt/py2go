@@ -84,7 +84,7 @@ func TestDecodeHello(t *testing.T) {
 
 func TestDecodeUnsupported(t *testing.T) {
 	// Hand-written JSON: a module containing a node type we don't implement.
-	data := []byte(`{"_type": "Module", "body": [{"_type": "Match", "lineno": 12}]}`)
+	data := []byte(`{"_type": "Module", "body": [{"_type": "Await", "lineno": 12}]}`)
 
 	root, err := Decode(data)
 	if err != nil {
@@ -93,8 +93,8 @@ func TestDecodeUnsupported(t *testing.T) {
 
 	mod := as[*Module](t, root)
 	u := as[*Unsupported](t, mod.Body[0])
-	if u.Type != "Match" {
-		t.Errorf("type: want Match, got %q", u.Type)
+	if u.Type != "Await" {
+		t.Errorf("type: want Await, got %q", u.Type)
 	}
 	if u.Line() != 12 {
 		t.Errorf("line: want 12, got %d", u.Line())
