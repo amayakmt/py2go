@@ -1,0 +1,7 @@
+[]
+0
+['start', 'before 0']
+1
+['start', 'before 0', 'after 0', 'before 1']
+[] ['start', 'before 0', 'after 0', 'before 1', 'after 1', 'end']
+['start', 'before 0', 'got 0', 'after 0', 'end']

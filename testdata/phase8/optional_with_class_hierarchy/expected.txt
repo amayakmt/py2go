@@ -1,0 +1,4 @@
+dog -> rex woof True
+any -> rex ... False
+fish -> nothing
+['woof', '-', '...']

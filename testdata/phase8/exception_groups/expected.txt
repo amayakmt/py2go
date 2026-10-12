@@ -1,0 +1,7 @@
+many (3 sub-exceptions) ExceptionGroup('many', [ValueError('a'), TypeError('b'), ValueError('c')])
+many 3 ['ValueError', 'TypeError', 'ValueError']
+many (2 sub-exceptions) many (1 sub-exception)
+many (1 sub-exception) b
+None
+outer (1 sub-exception) outer (2 sub-exceptions)
+True True True

@@ -1,0 +1,4 @@
+99 ['enter m0', 'body 0 0', 'exit m0 None', 'enter m0', 'body 1 0', 'exit m0 None', 'enter m0', 'body 2 0', 'exit m0 None']
+99 ['enter m0', 'body 0 1', 'exit m0 None', 'enter m0', 'body 1 1', 'exit m0 None']
+20 ['enter m0', 'body 0 2', 'exit m0 None', 'enter m0', 'body 1 2', 'exit m0 None', 'enter m0', 'body 2 2', 'exit m0 None']
+-1 ['enter m0', 'body 0 3', "exit m0 <class 'ValueError'>", 'caught boom 0']

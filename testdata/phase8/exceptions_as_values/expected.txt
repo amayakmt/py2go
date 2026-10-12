@@ -1,0 +1,4 @@
+value error a
+other KeyError 'b'
+stored ValueError('stored') ('stored',)
+caught boom

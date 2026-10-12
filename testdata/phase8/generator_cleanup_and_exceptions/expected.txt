@@ -1,0 +1,4 @@
+['open a', 'saw a-1', 'close a']
+b-1 ['open b']
+['open b', 'close b']
+error stop ['open c', 'close c']

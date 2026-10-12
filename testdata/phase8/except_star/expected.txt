@@ -1,0 +1,10 @@
+values: g (2 sub-exceptions) ['v1', 'v2']
+types: g (1 sub-exception)
+finally 0
+values:  (1 sub-exception) ['lonely']
+finally 1
+finally 2
+leftover: g2 (1 sub-exception) ['KeyError']
+no error
+else ran
+finally 3

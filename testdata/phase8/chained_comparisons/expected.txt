@@ -1,0 +1,6 @@
+True False True True True
+True ['m']
+False ['a', 'b']
+True False True
+True False
+True True

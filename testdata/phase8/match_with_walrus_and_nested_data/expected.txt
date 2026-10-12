@@ -1,0 +1,5 @@
+big sum 11
+sum 3
+max 9
+min of nothing
+?

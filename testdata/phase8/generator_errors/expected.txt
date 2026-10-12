@@ -1,0 +1,5 @@
+1
+ValueError: inside
+exhausted after error
+RuntimeError: generator raised StopIteration
+[1] []

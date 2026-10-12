@@ -1,0 +1,4 @@
+TypeError: 'NoneType' object is not subscriptable
+TypeError: 'NoneType' object is not iterable
+AttributeError: 'NoneType' object has no attribute 'upper'
+OK ok

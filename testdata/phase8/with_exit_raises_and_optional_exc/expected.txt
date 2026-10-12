@@ -1,0 +1,2 @@
+['clean', 'error:one', 'error:integer division or modulo by zero']
+exit error wins: 'from exit' ValueError

@@ -1,0 +1,4 @@
+['zero', 'small', 'minus one', 'negative -7', 'even 10', 'odd']
+move halt unknown dance
+yes
+two and a half

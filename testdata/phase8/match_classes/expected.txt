@@ -1,0 +1,11 @@
+origin
+on y axis at 4
+point 2,3
+centered circle 2
+big circle at 5
+circle
+square 9
+int 42
+str hi
+unknown
+unknown

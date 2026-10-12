@@ -1,0 +1,12 @@
+enter a
+hello from a
+exit a None None
+enter b
+body
+exit b None None
+enter c
+enter d
+c d
+exit d None None
+exit c None None
+after

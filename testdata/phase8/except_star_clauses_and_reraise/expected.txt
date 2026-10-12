@@ -1,0 +1,8 @@
+V ['v']
+K/T ['KeyError', 'TypeError']
+mixed handled
+K/T ['KeyError']
+single handled
+V ['inner (1 sub-exception)', 'b']
+nested escaped ExceptionGroup outer (1 sub-exception)
+none handled

@@ -1,0 +1,8 @@
+value 42
+exit saw <class 'ValueError'> swallowed
+continued
+exit saw <class 'KeyError'> 'kept'
+caught 'kept'
+43
+exit saw None None
+finally

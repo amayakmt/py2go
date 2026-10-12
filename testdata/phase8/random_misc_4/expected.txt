@@ -1,0 +1,8 @@
+10 None False
+17 0 False
+0 None True
+25 9 False
+4
+3
+1
+2

@@ -1,0 +1,8 @@
+16 4 False
+12 1 False
+20 6 False
+2 None False
+2
+0
+5
+3

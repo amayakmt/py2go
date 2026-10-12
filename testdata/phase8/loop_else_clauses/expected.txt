@@ -1,0 +1,6 @@
+[7, 2, 3, 13]
+no break in range
+while finished 3
+6
+found 3 in [3, 4]
+empty loop runs else

@@ -1,0 +1,10 @@
+0
+5 15
+stop ('done:15',) done:15
+1
+cleanup
+closed
+1
+caught injected
+99
+1

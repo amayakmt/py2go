@@ -1,0 +1,11 @@
+[3] ['start g0', 'end']
+['start g0', '3', 'end']
+3 -2
+3 [3]
+[] ['start g0', 'end', 'start g0', 'end', 'start g1', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end']
+['start g1', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end']
+-1 -2
+0 []
+5
+14
+done 14

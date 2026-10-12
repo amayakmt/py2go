@@ -1,0 +1,8 @@
+None True False True False
+5 False True True True
+None hi [None, 3] {'a': 'hi'}
+None [2]
+['a', None, 'c'] 1 True
+5 None 'hi'
+truthy
+falsy

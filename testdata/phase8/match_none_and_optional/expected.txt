@@ -1,0 +1,5 @@
+none zero value 5
+-1 4 0
+moving 3
+click at 10 20
+other key

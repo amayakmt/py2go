@@ -1,0 +1,4 @@
+guard 7,s-hit,empty
+wild,s-miss,ends 2 2 1
+wild,s-hit,ends 3 3 2
+guard 10,s-miss,one 2

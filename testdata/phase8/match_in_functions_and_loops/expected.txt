@@ -1,0 +1,7 @@
+['num:1', 'op:+', 'word:x', 'paren', 'num:2', 'op:*', 'word:y', 'paren', 'num:3']
++ 16
+- 8
+* 48
+/ 3
+error: unknown operator %
+divide by zero in evaluate

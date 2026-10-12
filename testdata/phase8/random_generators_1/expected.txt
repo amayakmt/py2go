@@ -1,0 +1,13 @@
+[] ['start g0', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end']
+['start g0', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end']
+-1 -2
+0 []
+[7, -1, 5, 7] ['start g0', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end', 'start g0', 'skip 0', 'skip 1', 'skip 2', 'skip 3', 'skip 4', 'end', 'start g1', 'start g0', 'end', 'end']
+['start g1', 'start g0']
+7 -1
+18 [-1, 5]
+1
+5
+11
+18
+done 18

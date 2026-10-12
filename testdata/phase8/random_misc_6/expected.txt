@@ -1,0 +1,11 @@
+[0, 1] ['start g0', 'end']
+['start g0', '0']
+0 1
+1 [0, 1]
+[0, 1, 2, 0, 4, 5] ['start g0', 'end', 'start g0', 'end', 'start g1', 'start g0', 'end', 'end']
+['start g1', 'start g0', '0', '1', '2', 'end', '0']
+0 1
+12 [0, 0]
+6
+11
+done 11

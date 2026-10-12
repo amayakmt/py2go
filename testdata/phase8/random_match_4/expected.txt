@@ -1,0 +1,10 @@
+False False
+19
+big 12
+1
+1
+no break 7
+no break -2
+False False
+False False
+no break 0
