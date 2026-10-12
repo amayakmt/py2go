@@ -1,0 +1,1 @@
+unsupported: For in a class body at line 2

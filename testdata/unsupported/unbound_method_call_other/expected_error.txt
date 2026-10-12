@@ -1,0 +1,1 @@
+unsupported: call of the unbound method A.f on something other than self at line 7

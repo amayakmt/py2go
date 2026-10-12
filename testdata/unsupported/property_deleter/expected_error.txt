@@ -1,0 +1,1 @@
+unsupported: property deleter at line 6

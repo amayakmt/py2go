@@ -1,0 +1,1 @@
+unsupported: redefinition of class 'A' at line 5

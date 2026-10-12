@@ -1,0 +1,1 @@
+unsupported: 'f' is both a function and a class at line 1

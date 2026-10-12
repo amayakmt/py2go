@@ -1,0 +1,1 @@
+unsupported: 'B.f' overrides 'A.f' with a different signature or type (method(str,)int vs method(int,)int) at line 7

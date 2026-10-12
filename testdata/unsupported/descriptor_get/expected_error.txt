@@ -1,0 +1,1 @@
+unsupported: method __get__ (the attribute hooks and descriptors arrive in phase 9) at line 2

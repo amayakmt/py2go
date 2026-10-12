@@ -1,0 +1,1 @@
+unsupported: call of the class of a value that is not exactly known (type(x)(...) works on self only) at line 6

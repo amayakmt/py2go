@@ -1,0 +1,1 @@
+unsupported: unannotated attribute in a dataclass (annotate it, or use ClassVar) at line 7

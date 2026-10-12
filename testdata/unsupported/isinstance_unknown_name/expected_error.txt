@@ -1,0 +1,1 @@
+unsupported: isinstance() with 'Foo' at line 1

@@ -1,0 +1,11 @@
+class A:
+    def f(self, x: int) -> int:
+        return x
+
+
+class B(A):
+    def f(self, x: str) -> int:
+        return 0
+
+
+b: A = B()

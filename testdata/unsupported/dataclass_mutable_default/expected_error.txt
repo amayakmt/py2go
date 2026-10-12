@@ -1,0 +1,1 @@
+unsupported: mutable default for field xs is not allowed: use default_factory at line 6

@@ -1,0 +1,1 @@
+unsupported: assignment to unknown attribute 'y' of class 'C' (assign it in __init__ or annotate it in the class body) at line 7
