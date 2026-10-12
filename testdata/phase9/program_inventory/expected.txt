@@ -1,0 +1,7 @@
+162.5 ['bolt', 'nut'] ['plank'] []
+37.5 Item('plank', 12.5 x5)
+error ValueError only 150 of bolt
+error KeyError 'gear'
+sold 5.0
+[('new', 'bolt', 100), ('new', 'nut', 250), ('new', 'plank', 8), ('restock', 'bolt', 50), ('sell', 'plank', 3), ('sell', 'nut', 50)]
+Item('plank', 12.5 x5)

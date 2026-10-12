@@ -1,0 +1,4 @@
+{1: 'bool'} 1
+{1, 2} 2
+True True True
+{1: 'A', 2: 'b'} ['int', 'int']

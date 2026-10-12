@@ -1,0 +1,9 @@
+start -> running
+pause -> paused
+error: cannot start while paused
+resume -> running
+stop -> idle
+error: cannot stop while idle
+start -> running
+['idle', 'running', 'paused', 'running', 'idle', 'running'] 6 3
+{'idle': ['running'], 'paused': ['idle', 'running'], 'running': ['idle', 'paused']}

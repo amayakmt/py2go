@@ -1,0 +1,18 @@
+ZeroDivisionError: division by zero
+TypeError: unsupported operand type(s) for +: 'int' and 'str'
+TypeError: can only concatenate list (not "tuple") to list
+KeyError: 'b'
+IndexError: list index out of range
+AttributeError: 'str' object has no attribute 'nope'
+ValueError: invalid literal for int() with base 10: 'abc'
+TypeError: 'int' object is not callable
+TypeError: object of type 'int' has no len()
+TypeError: bad operand type for unary -: 'str'
+TypeError: '<' not supported between instances of 'str' and 'int'
+ValueError: 9 is not in list
+ZeroDivisionError: integer modulo by zero
+IndexError: list index out of range
+ZeroDivisionError: integer division or modulo by zero
+TypeError: '<' not supported between instances of 'str' and 'int'
+ValueError: max() iterable argument is empty
+StopIteration: 

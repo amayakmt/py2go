@@ -1,0 +1,6 @@
+6 1 2 2 counter
+overridden counter counter
+overridden changed changed
+Counter True True True
+Counter Counter True
+made 3

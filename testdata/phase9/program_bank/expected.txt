@@ -1,0 +1,8 @@
+#1 ann: 119.50 #2 bob: 30.50 2
+insufficient: need 500.00, have 119.50 500 119.5
+invalid: deposit must be positive
+ok
+insufficient: need 0.01, have 0.00 0.01 0.0
+#1 ann: 0.00 #2 bob: 150.00
+[('deposit', 50), ('withdraw', 30.5), ('withdraw', 119.5)] [('deposit', 30.5), ('deposit', 119.5)]
+150.0 bob

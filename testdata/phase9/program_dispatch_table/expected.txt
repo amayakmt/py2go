@@ -1,0 +1,8 @@
+'add 1 2 3' -> 6
+'echo hi there' -> 'hi there'
+'rev a b c' -> 'c b a'
+'help' -> 'commands: add, echo, help, rev'
+'' -> None
+'nope' -> 'unknown command: nope'
+'add 1 x' -> "bad arguments: invalid literal for int() with base 10: 'x'"
+['abab', 'cc'] 5

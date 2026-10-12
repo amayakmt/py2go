@@ -1,0 +1,6 @@
+([20], [])
+([42], [])
+([3, 2, 1], [0])
+ValueError bad op nope
+IndexError pop from empty list
+RuntimeError too many steps

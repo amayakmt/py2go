@@ -1,0 +1,3 @@
+(Vec(4, 6), Vec(-2, -2), Vec(2, 4), Vec(9, 12), Vec(-1, -2), False, True)
+5.0 True False Vec(3, 3)
+Vec(2, 3) Vec(1, 2) False

@@ -1,0 +1,6 @@
+1
+checked a
+b 404 b not found b not found True ('b not found',)
+checked b
+[('AppError', 'x'), ('NotFound', 'y not found'), ('ValueError', 'z'), ('other', "KeyError('k')")]
+wrapped NotFound 404

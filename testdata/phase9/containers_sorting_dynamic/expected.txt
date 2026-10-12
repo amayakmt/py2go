@@ -1,0 +1,11 @@
+['Apple', 'Banana', 'apple', 'banana', 'cherry']
+['Apple', 'apple', 'banana', 'Banana', 'cherry']
+['banana', 'cherry', 'Banana', 'Apple', 'apple']
+['Apple', 'apple', 'Banana', 'banana', 'cherry']
+[-7, -1, 0, 2.5, 3] [0, -1, 2.5, 3, -7] [3, 2.5, 0, -1, -7]
+[('c', 1), ('a', 2), ('b', 2)]
+Apple cherry Apple -7
+['Apple', 'apple', 'banana', 'cherry', 'Banana']
+[3, 2.5, 0, -1, -7] [-7, -1, 0, 2.5, 3]
+['a', 'b'] [1, 2, 3] ['e', 'h', 'l', 'l', 'o'] [1, 2, 3]
+1.0 10 [1, 2] 16

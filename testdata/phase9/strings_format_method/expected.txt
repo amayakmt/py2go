@@ -1,0 +1,13 @@
+1 + 2 = 3
+a b a
+Ann is 007
+     r|l     |  c   |
+'q' q
+10 20 5
+3 5
+{literal} v    5 3.14
+x y 1
+IndexError Replacement index 1 out of range for positional args tuple
+KeyError 'x'
+a|    b|c    |002.5|ff|A|%
+x-3

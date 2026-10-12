@@ -1,0 +1,6 @@
+1 int
+now a string str
+[1, 2, 3, 4] list
+None NoneType
+5.0 float
+['[1]!'] ["['s']!"]

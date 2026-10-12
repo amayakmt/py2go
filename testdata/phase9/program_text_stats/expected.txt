@@ -1,0 +1,6 @@
+21 12 [('the', 5), ('fox', 3), ('quick', 3), ('dog', 2), ('away', 1)]
+quick 5 ['barks', 'brown', 'jumps', 'quick']
+{3: ['dog', 'fox', 'the'], 4: ['away', 'lazy', 'over', 'runs', 'said'], 5: ['barks', 'brown', 'jumps', 'quick']}
+[44, 33, 27] ['The', 'The', 'Quick,'] 3 5
+The Quick Brown Fox a-b-d-f-j-l-o-q-r-s-t
+16 102 40 True True

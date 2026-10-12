@@ -1,0 +1,10 @@
+(False, True, True, True, False, False)
+(True, False, False, True, False, True)
+(True, False, False, True, False, True)
+(False, True, True, True, False, False)
+(False, True, True, True, False, False)
+(True, False, False, True, False, True)
+True True True False False False
+True False True True
+2.5 2.0 b 5 2
+[True, 1.5, 2, 3] ['C', 'a', 'b'] [(1, 'b'), (1, 'z'), (2, 'a')]

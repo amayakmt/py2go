@@ -1,0 +1,10 @@
+closing r
+2.0
+closing r
+zde: division by zero
+closing r
+None
+closing r
+IndexError escapes: list index out of range
+outer ValueError('inner') ValueError
+['TypeError', 'TypeError', 'TypeError', 'TypeError', 'TypeError']

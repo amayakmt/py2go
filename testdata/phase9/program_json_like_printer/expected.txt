@@ -1,0 +1,34 @@
+{
+  "5": "five",
+  "n": 3,
+  "name": "x",
+  "nested": {
+    "empty_dict": {},
+    "empty_list": [],
+    "t": [
+      1,
+      2
+    ]
+  },
+  "none": null,
+  "ok": true,
+  "pi": 3.14,
+  "q": "say \"hi\"",
+  "tags": [
+    "a",
+    "b"
+  ]
+}
+[] "s" [
+  [
+    1
+  ],
+  [
+    2,
+    [
+      3
+    ]
+  ]
+]
+cannot render set
+3 1 0 3

@@ -1,0 +1,9 @@
+origin
+on x axis at 3
+on y axis at 4
+diagonal 2
+point
+circle at origin r=2
+circle 1,2 r=3
+points starting with origin
+unknown

@@ -1,0 +1,3 @@
+[1, 's', None, 'a'] [[1], 2, None, 'b']
+now a string
+[1, 'a', None, 2.5] f

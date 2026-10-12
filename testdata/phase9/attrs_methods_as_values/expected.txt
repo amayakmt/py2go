@@ -1,0 +1,7 @@
+Hello, Ada Hi, Ada Yo, Ada
+Hey, Ada True False True
+Hello, Ada Hola, Bob
+HEY! YOU! anon
+[True, True, True] X!
+Hello, Ada ABC 2
+['a', 'b'] ['Greeter', 'Greeter']

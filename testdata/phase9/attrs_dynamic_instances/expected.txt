@@ -1,0 +1,10 @@
+1 bag [1, 2] True False
+42 default 42
+11 [1, 2, 3]
+False
+False
+AttributeError: 'Bag' object has no attribute 'x'
+different False
+name bag
+items [1, 2, 3]
+q ?

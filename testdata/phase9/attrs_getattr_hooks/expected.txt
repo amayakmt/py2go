@@ -1,0 +1,4 @@
+True 3
+3 True False None
+no setting missing
+[0, 1, 2, 3] ['append', 'sort', 'count'] 1

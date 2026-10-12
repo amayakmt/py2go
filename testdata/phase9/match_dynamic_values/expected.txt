@@ -1,0 +1,14 @@
+None -> none
+True -> bool
+-3 -> negative int
+7 -> int
+2.5 -> float
+'' -> empty str
+'hi' -> str
+[] -> empty list
+[1] -> one item int
+[[2], 'x', 3] -> list starting with one item int +2
+{'kind': 'k'} -> tagged k
+{'a': 1} -> dict
+{1, 2} -> other
+(1, 2) -> list starting with int +1

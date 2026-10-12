@@ -1,0 +1,7 @@
+100 212.0
+0 32.0
+ValueError below absolute zero
+TypeError '<' not supported between instances of 'str' and 'float'
+AttributeError: property 'fahrenheit' of 'Temperature' object has no setter
+0 True
+25

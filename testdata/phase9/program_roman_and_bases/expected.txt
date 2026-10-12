@@ -1,0 +1,12 @@
+1 I True
+4 IV True
+9 IX True
+14 XIV True
+40 XL True
+90 XC True
+400 CD True
+1994 MCMXCIV True
+2024 MMXXIV True
+3999 MMMCMXCIX True
+['11111111', '377', '255', 'ff'] -1010 0
+0b1010 0o100 0xff 255 A 97 ['a', 'b', 'c', 'd', 'e']

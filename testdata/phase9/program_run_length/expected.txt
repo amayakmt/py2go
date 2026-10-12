@@ -1,0 +1,7 @@
+'aaabccdddd' [('a', 3), ('b', 1), ('c', 2), ('d', 4)] a3bc2d4 True
+'abc' [('a', 1), ('b', 1), ('c', 1)] abc True
+'' []  True
+'zzzzzzzzzzzz' [('z', 12)] z12 True
+'aabbaa' [('a', 2), ('b', 2), ('a', 2)] a2b2a2 True
+[(1, 2), (2, 1), (3, 3)] xxz
+['3', 'a', 'b', 'c', 'd'] 4

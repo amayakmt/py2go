@@ -1,0 +1,10 @@
+1 + 2 * 3 = 7
+(1 + 2) * 3 = 9
+2 ^ 3 ^ 2 = 512
+10 / 4 = 2.5
+10 / 0 = ZeroDivisionError: division by zero
+-(2 + 3) * 2 = -10
+1.5 * 4 = 6.0
+2 + = SyntaxError: unexpected None
+3 $ 4 = SyntaxError: bad character '$'
+((2)) = 2

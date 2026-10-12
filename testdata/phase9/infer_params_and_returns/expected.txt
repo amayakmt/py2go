@@ -1,0 +1,4 @@
+3 3.5 ab [1, 2] (1, 2, 3)
+nothing falsy 0 truthy x falsy [] truthy [0]
+5 None none a
+20 AB 0
