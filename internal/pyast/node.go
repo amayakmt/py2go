@@ -244,6 +244,64 @@ type Assert struct {
 	Lineno int
 }
 
+// Dict is a dict display. A nil entry in Keys marks "**mapping", whose
+// mapping is the matching entry of Values.
+type Dict struct {
+	Keys   []Node
+	Values []Node
+	Lineno int
+}
+
+type Set struct {
+	Elts   []Node
+	Lineno int
+}
+
+// Comprehension is one "for target in iter if cond ..." clause of a
+// comprehension or generator expression.
+type Comprehension struct {
+	Target  Node
+	Iter    Node
+	Ifs     []Node
+	IsAsync bool
+}
+
+type ListComp struct {
+	Elt        Node
+	Generators []*Comprehension
+	Lineno     int
+}
+
+type SetComp struct {
+	Elt        Node
+	Generators []*Comprehension
+	Lineno     int
+}
+
+type DictComp struct {
+	Key        Node
+	Value      Node
+	Generators []*Comprehension
+	Lineno     int
+}
+
+type GeneratorExp struct {
+	Elt        Node
+	Generators []*Comprehension
+	Lineno     int
+}
+
+type Delete struct {
+	Targets []Node
+	Lineno  int
+}
+
+// Global is "global a, b".
+type Global struct {
+	Names  []string
+	Lineno int
+}
+
 // Unsupported holds any node type we haven't implemented.
 type Unsupported struct {
 	Type   string
@@ -285,3 +343,12 @@ func (n *Try) Line() int            { return n.Lineno }
 func (n *ExceptHandler) Line() int  { return n.Lineno }
 func (n *Raise) Line() int          { return n.Lineno }
 func (n *Assert) Line() int         { return n.Lineno }
+func (n *Dict) Line() int           { return n.Lineno }
+func (n *Set) Line() int            { return n.Lineno }
+func (n *Comprehension) Line() int  { return n.Target.Line() }
+func (n *ListComp) Line() int       { return n.Lineno }
+func (n *SetComp) Line() int        { return n.Lineno }
+func (n *DictComp) Line() int       { return n.Lineno }
+func (n *GeneratorExp) Line() int   { return n.Lineno }
+func (n *Delete) Line() int         { return n.Lineno }
+func (n *Global) Line() int         { return n.Lineno }

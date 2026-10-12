@@ -254,3 +254,54 @@ func TestDecodeExceptions(t *testing.T) {
 		t.Errorf("try/finally: got %+v", tf)
 	}
 }
+
+func TestDecodeContainers(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/containers.py")
+	value := func(i int) Node { return as[*Assign](t, mod.Body[i]).Value }
+
+	d := as[*Dict](t, value(0))
+	if len(d.Keys) != 2 || d.Keys[0] == nil || d.Keys[1] != nil {
+		t.Errorf("dict keys: a nil key must mark **mapping, got %+v", d.Keys)
+	}
+	if as[*Name](t, d.Values[1]).ID != "e" {
+		t.Errorf("dict values: got %+v", d.Values)
+	}
+
+	if s := as[*Set](t, value(1)); len(s.Elts) != 2 {
+		t.Errorf("set: got %+v", s)
+	}
+
+	lc := as[*ListComp](t, value(2))
+	if len(lc.Generators) != 1 || len(lc.Generators[0].Ifs) != 2 {
+		t.Fatalf("list comprehension: got %+v", lc.Generators)
+	}
+	if as[*Name](t, lc.Generators[0].Target).ID != "x" || lc.Generators[0].IsAsync {
+		t.Errorf("generator: got %+v", lc.Generators[0])
+	}
+	as[*BinOp](t, lc.Elt)
+
+	as[*SetComp](t, value(3))
+	dc := as[*DictComp](t, value(4))
+	if as[*Name](t, dc.Key).ID != "k" || as[*Name](t, dc.Value).ID != "v" {
+		t.Errorf("dict comprehension: got %+v %+v", dc.Key, dc.Value)
+	}
+	if as[*Tuple](t, dc.Generators[0].Target); dc.Line() != 5 {
+		t.Errorf("dict comprehension line: got %d", dc.Line())
+	}
+	ge := as[*GeneratorExp](t, value(5))
+	if len(ge.Generators) != 2 {
+		t.Errorf("generator expression: want 2 clauses, got %d", len(ge.Generators))
+	}
+
+	del := as[*Delete](t, mod.Body[6])
+	if len(del.Targets) != 2 {
+		t.Errorf("del: got %+v", del.Targets)
+	}
+	as[*Subscript](t, del.Targets[0])
+
+	fn := as[*FunctionDef](t, mod.Body[7])
+	g := as[*Global](t, fn.Body[0])
+	if len(g.Names) != 2 || g.Names[0] != "a" || g.Names[1] != "b" {
+		t.Errorf("global: got %+v", g.Names)
+	}
+}

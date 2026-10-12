@@ -544,6 +544,101 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return a, nil
 
+	case "Dict":
+		var aux struct {
+			Keys   []json.RawMessage `json:"keys"`
+			Values []json.RawMessage `json:"values"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		d := &Dict{Lineno: head.Lineno}
+		for _, k := range aux.Keys {
+			key, err := decodeOptional(k) // null marks "**mapping"
+			if err != nil {
+				return nil, err
+			}
+			d.Keys = append(d.Keys, key)
+		}
+		var err error
+		if d.Values, err = decodeList(aux.Values); err != nil {
+			return nil, err
+		}
+		return d, nil
+
+	case "Set":
+		var aux struct {
+			Elts []json.RawMessage `json:"elts"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		elts, err := decodeList(aux.Elts)
+		if err != nil {
+			return nil, err
+		}
+		return &Set{Elts: elts, Lineno: head.Lineno}, nil
+
+	case "ListComp", "SetComp", "GeneratorExp", "DictComp":
+		var aux struct {
+			Elt        json.RawMessage   `json:"elt"`
+			Key        json.RawMessage   `json:"key"`
+			Value      json.RawMessage   `json:"value"`
+			Generators []json.RawMessage `json:"generators"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		gens, err := decodeGenerators(aux.Generators)
+		if err != nil {
+			return nil, err
+		}
+		switch head.Type {
+		case "DictComp":
+			key, err := decodeNode(aux.Key)
+			if err != nil {
+				return nil, err
+			}
+			value, err := decodeNode(aux.Value)
+			if err != nil {
+				return nil, err
+			}
+			return &DictComp{Key: key, Value: value, Generators: gens, Lineno: head.Lineno}, nil
+		}
+		elt, err := decodeNode(aux.Elt)
+		if err != nil {
+			return nil, err
+		}
+		switch head.Type {
+		case "ListComp":
+			return &ListComp{Elt: elt, Generators: gens, Lineno: head.Lineno}, nil
+		case "SetComp":
+			return &SetComp{Elt: elt, Generators: gens, Lineno: head.Lineno}, nil
+		}
+		return &GeneratorExp{Elt: elt, Generators: gens, Lineno: head.Lineno}, nil
+
+	case "Delete":
+		var aux struct {
+			Targets []json.RawMessage `json:"targets"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		targets, err := decodeList(aux.Targets)
+		if err != nil {
+			return nil, err
+		}
+		return &Delete{Targets: targets, Lineno: head.Lineno}, nil
+
+	case "Global":
+		var aux struct {
+			Names []string `json:"names"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		return &Global{Names: aux.Names, Lineno: head.Lineno}, nil
+
 	default:
 		return &Unsupported{Type: head.Type, Lineno: head.Lineno}, nil
 	}
@@ -649,6 +744,34 @@ func decodeArguments(raw json.RawMessage) (*Arguments, error) {
 		a.KwDefaults = append(a.KwDefaults, n)
 	}
 	return &a, nil
+}
+
+func decodeGenerators(raws []json.RawMessage) ([]*Comprehension, error) {
+	var out []*Comprehension
+	for _, r := range raws {
+		var aux struct {
+			Target  json.RawMessage   `json:"target"`
+			Iter    json.RawMessage   `json:"iter"`
+			Ifs     []json.RawMessage `json:"ifs"`
+			IsAsync int               `json:"is_async"`
+		}
+		if err := json.Unmarshal(r, &aux); err != nil {
+			return nil, err
+		}
+		c := &Comprehension{IsAsync: aux.IsAsync == 1}
+		var err error
+		if c.Target, err = decodeNode(aux.Target); err != nil {
+			return nil, err
+		}
+		if c.Iter, err = decodeNode(aux.Iter); err != nil {
+			return nil, err
+		}
+		if c.Ifs, err = decodeList(aux.Ifs); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // decodeConstant uses the pytype tag from the dumper to pick a Go type.
