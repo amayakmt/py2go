@@ -99,7 +99,7 @@ func (g *generator) setComp(n *pyast.SetComp, want pyType) (value, error) {
 		if err != nil {
 			return err
 		}
-		if err := hashableOrError(v.typ, "set element", n.Elt.Line()); err != nil {
+		if err := g.hashableOrError(v.typ, "set element", n.Elt.Line()); err != nil {
 			return err
 		}
 		elem = v.typ
@@ -129,7 +129,7 @@ func (g *generator) dictComp(n *pyast.DictComp, want pyType) (value, error) {
 		if err != nil {
 			return err
 		}
-		if err := hashableOrError(k.typ, "dict key", n.Key.Line()); err != nil {
+		if err := g.hashableOrError(k.typ, "dict key", n.Key.Line()); err != nil {
 			return err
 		}
 		if v.typ == tExc {

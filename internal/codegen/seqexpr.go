@@ -36,7 +36,11 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 		if i == 0 {
 			elem = v.typ
 		} else if v.typ != elem {
-			return value{}, unsupported(fmt.Sprintf("list with mixed element types (%s and %s)", elem, v.typ), e.Line())
+			common, ok := g.commonClass(elem, v.typ)
+			if !ok {
+				return value{}, unsupported(fmt.Sprintf("list with mixed element types (%s and %s)", elem, v.typ), e.Line())
+			}
+			elem = common
 		}
 		codes[i] = v.code
 	}
@@ -109,6 +113,9 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	base, err := g.typedExpr(n.Value)
 	if err != nil {
 		return value{}, err
+	}
+	if base.typ.isClass() {
+		return g.classGetItem(n, base)
 	}
 
 	if sl, ok := n.Index.(*pyast.Slice); ok {
@@ -261,6 +268,15 @@ func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 		return "", unsupported(fmt.Sprintf("format spec '%s': %v", spec, err), f.Line())
 	}
 	quoted := strconv.Quote(spec)
+	if c := g.classOf(v.typ); c != nil {
+		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && m.sig.pos[0].typ == tStr && m.sig.ret == tStr {
+			return v.at(precAtom) + ".M___format__(" + quoted + ")", nil
+		}
+		if spec == "" {
+			return call(g.rt("Str"), v.code), nil
+		}
+		return "", unsupported(fmt.Sprintf("format spec '%s' for an instance of %s (TypeError: unsupported format string passed to %s.__format__)", spec, c.name, c.name), f.Line())
+	}
 	switch {
 	case v.typ == tStr:
 		if spec == "" {

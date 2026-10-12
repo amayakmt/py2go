@@ -47,6 +47,8 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 		return nil
 	case *pyast.FunctionDef:
 		return g.nestedDef(b, n)
+	case *pyast.ClassDef:
+		return unsupported("class defined inside a function or a block", n.Line())
 	case *pyast.Nonlocal:
 		return g.nonlocalStmt(n)
 	case *pyast.ImportFrom:
@@ -66,15 +68,14 @@ func (g *generator) block(b *strings.Builder, stmts []pyast.Node) error {
 	outer := g.env
 	g.env = newScope(outer)
 	defer func() { g.env = outer }()
+	if nar := g.pendingNarrow; nar != nil {
+		g.pendingNarrow = nil
+		g.declareLocal(b, nar.name, nar.to, nar.expr)
+	}
 	if err := g.predeclareDefs(b, stmts); err != nil {
 		return err
 	}
-	for _, s := range stmts {
-		if err := g.stmt(b, s); err != nil {
-			return err
-		}
-	}
-	return nil
+	return g.stmtList(b, stmts)
 }
 
 func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
@@ -132,6 +133,9 @@ func (g *generator) declareLocal(b *strings.Builder, name string, t pyType, init
 }
 
 func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
+	if attr, isAttr := n.Target.(*pyast.Attribute); isAttr {
+		return g.annAssignAttr(b, n, attr)
+	}
 	target, ok := n.Target.(*pyast.Name)
 	if !ok {
 		return unsupported("annotated assignment to "+targetKind(n.Target), n.Line())
@@ -142,7 +146,7 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 	if err := checkName(target.ID, n.Line()); err != nil {
 		return err
 	}
-	t, err := annotationType(n.Annotation, false)
+	t, err := g.annotationType(n.Annotation, false)
 	if err != nil {
 		return err
 	}
@@ -197,6 +201,8 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 		return nil
 	case *pyast.Subscript:
 		return g.assignItem(b, target, n.Value, n.Line())
+	case *pyast.Attribute:
+		return g.assignAttr(b, target, n.Value, n.Line())
 	case *pyast.Tuple:
 		return g.unpackAssign(b, target, n.Value, n.Line())
 	default:
@@ -206,6 +212,9 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 
 // assignItem is "xs[i] = v".
 func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valueNode pyast.Node, line int) error {
+	if base, err := g.typedExpr(target.Value); err == nil && base.typ.isClass() {
+		return g.classSetItem(b, target, base, valueNode, "", "", line)
+	}
 	base, idx, err := g.itemTarget(target)
 	if err != nil {
 		return err
@@ -421,6 +430,9 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		return nil
 
 	case *pyast.Subscript:
+		if cb, err := g.typedExpr(tg.Value); err == nil && cb.typ.isClass() {
+			return g.classSetItem(b, tg, cb, nil, src, t, line)
+		}
 		base, idx, err := g.itemTarget(tg)
 		if err != nil {
 			return err
@@ -430,6 +442,9 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		}
 		fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, src)
 		return nil
+
+	case *pyast.Attribute:
+		return g.assignAttrValue(b, tg, src, t, line)
 	}
 	return unsupported("assignment to "+targetKind(target), line)
 }
@@ -440,6 +455,8 @@ func (g *generator) augAssign(b *strings.Builder, n *pyast.AugAssign) error {
 		return g.augName(b, n, target)
 	case *pyast.Subscript:
 		return g.augItem(b, n, target)
+	case *pyast.Attribute:
+		return g.augAttr(b, n, target)
 	}
 	return unsupported("augmented assignment to "+targetKind(n.Target), n.Line())
 }
@@ -457,12 +474,14 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	if global {
 		cur, _ = g.readGlobal(target.ID)
 	}
-	res, err := g.binary(n.Op, cur, right, n.Line())
+	res, err := g.augmented(n.Op, cur, right, n.Line())
 	if err != nil {
 		return err
 	}
 	if res.typ != t {
-		return mismatch(fmt.Sprintf("variable '%s'", target.ID), t, res.typ, n.Line())
+		if res, err = g.coerce(res, t, fmt.Sprintf("variable '%s'", target.ID), n.Line()); err != nil {
+			return err
+		}
 	}
 
 	// "xs += ys" on a list changes the list in place, so every name that
@@ -474,7 +493,7 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	}
 
 	// Plain "x += y" when both sides already have the same type.
-	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && !t.isSet() {
+	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && !t.isSet() && !t.isClass() {
 		fmt.Fprintf(b, "%s %s= %s\n", target.ID, goOp, right.code)
 		g.afterAssign(b, target.ID, global)
 		return nil
@@ -508,6 +527,9 @@ var simpleOperand = regexp.MustCompile(`^(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)$`)
 // augItem is "xs[i] += v". The list and the index are evaluated once, so
 // an expression with side effects is first stored in a temporary.
 func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyast.Subscript) error {
+	if cb, err := g.typedExpr(target.Value); err == nil && cb.typ.isClass() {
+		return g.augClassItem(b, n, target, cb)
+	}
 	base, idx, err := g.itemTarget(target)
 	if err != nil {
 		return err
@@ -558,6 +580,13 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 		return nil
 	}
 
+	if name, ok := n.Value.(*pyast.Name); ok && name.ID == "NotImplemented" && g.specialRet && !g.isVariable("NotImplemented") {
+		if g.flow != nil {
+			return unsupported("return NotImplemented inside a try statement", n.Line())
+		}
+		fmt.Fprintf(b, "return %s, false\n", zeroValue(g, g.ret))
+		return nil
+	}
 	v, err := g.exprAs(n.Value, g.ret)
 	if err != nil {
 		return err
@@ -576,7 +605,7 @@ func (g *generator) condition(test pyast.Node) (value, error) {
 	if err != nil {
 		return v, err
 	}
-	return truth(v), nil
+	return g.truth(v), nil
 }
 
 func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
@@ -587,7 +616,10 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 			return err
 		}
 		b.WriteString(cond.code + " {\n")
-		if err := g.block(b, n.Body); err != nil {
+		g.pendingNarrow = g.narrowOf(n.Test)
+		err = g.block(b, n.Body)
+		g.pendingNarrow = nil
+		if err != nil {
 			return err
 		}
 		b.WriteString("}")
@@ -885,6 +917,9 @@ func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
 	for _, target := range n.Targets {
 		sub, ok := target.(*pyast.Subscript)
 		if !ok {
+			if attr, isAttr := target.(*pyast.Attribute); isAttr {
+				return unsupported("del of the attribute '"+attr.Attr+"' (deleting attributes arrives in phase 9)", n.Line())
+			}
 			if _, isName := target.(*pyast.Name); isName {
 				return unsupported("del of a variable", n.Line())
 			}
@@ -893,6 +928,12 @@ func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
 		base, err := g.typedExpr(sub.Value)
 		if err != nil {
 			return err
+		}
+		if base.typ.isClass() {
+			if err := g.classDelItem(b, sub, base, n.Line()); err != nil {
+				return err
+			}
+			continue
 		}
 		if sl, isSlice := sub.Index.(*pyast.Slice); isSlice {
 			if !base.typ.isList() {
@@ -965,6 +1006,17 @@ var typingModules = map[string]bool{"typing": true, "collections.abc": true, "__
 // importFrom accepts "from typing import Callable" and its kind, which only
 // bring annotation names into scope, and nothing else.
 func (g *generator) importFrom(n *pyast.ImportFrom) error {
+	if n.Module == "dataclasses" && n.Level == 0 {
+		for _, a := range n.Names {
+			if a.Name != "dataclass" && a.Name != "field" {
+				return unsupported(fmt.Sprintf("'%s' from dataclasses (the module arrives in phase 12)", a.Name), n.Line())
+			}
+			if a.AsName != "" {
+				return unsupported("import ... as in the dataclasses module", n.Line())
+			}
+		}
+		return nil
+	}
 	if n.Level > 0 || !typingModules[n.Module] {
 		return unsupported(fmt.Sprintf("import from module '%s' (modules arrive in phase 11)", n.Module), n.Line())
 	}
@@ -986,4 +1038,4 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 
 // typingKnown are the other names of typing and collections.abc that are
 // harmless to import.
-var typingKnown = map[string]bool{"Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}
+var typingKnown = map[string]bool{"ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}

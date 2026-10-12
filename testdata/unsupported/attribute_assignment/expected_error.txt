@@ -1,1 +1,1 @@
-unsupported: assignment to Attribute at line 2
+unsupported: assignment to attribute 'x' of int at line 2

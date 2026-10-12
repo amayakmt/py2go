@@ -28,7 +28,7 @@ func (g *generator) collectGlobals(mod *pyast.Module) error {
 				if _, seen := g.globalTypes[name.ID]; seen {
 					continue
 				}
-				if t, err := annotationType(n.Annotation, false); err == nil {
+				if t, err := g.annotationType(n.Annotation, false); err == nil {
 					g.globalTypes[name.ID] = t
 					g.globalLines[name.ID] = n.Line()
 				}
@@ -66,6 +66,9 @@ func (g *generator) collectGlobals(mod *pyast.Module) error {
 
 	// A Go package has one namespace for functions and variables.
 	for name, line := range g.globalLines {
+		if _, isClass := g.classes[name]; isClass {
+			return unsupported(fmt.Sprintf("'%s' is both a class and a module-level variable", name), line)
+		}
 		if sig, isFunc := g.sigs[name]; isFunc {
 			if len(sig.decorators) > 0 {
 				continue // the decorated name is itself a variable

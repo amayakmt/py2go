@@ -23,6 +23,14 @@ const (
 	tRange pyType = "range"
 	tNone  pyType = "None" // only the result of a call to a function that returns None
 
+	// tObject is the annotation "object": anything, held as a Go any.
+	tObject pyType = "object"
+
+	// tOptExc is the type of e.__cause__ and e.__context__: an exception, or
+	// None, which is a nil pointer. It can be tested with "is None", printed,
+	// and its class name read.
+	tOptExc pyType = "exception|None"
+
 	// tExc is the type of the name bound by "except ... as e". It cannot be
 	// written as an annotation, so an exception never outlives its handler.
 	tExc pyType = "exception"
@@ -122,6 +130,24 @@ func (t pyType) isVarTuple() bool {
 	return len(args) == 2 && args[1] == "..."
 }
 
+// isClass is the type of an instance of a class the program defines. Its
+// pyType is the class name, and the Go type an interface of the same name.
+func (t pyType) isClass() bool {
+	switch t {
+	case "", tInt, tFloat, tBool, tStr, tRange, tNone, tExc, tObject, tOptExc:
+		return false
+	}
+	return !strings.ContainsAny(string(t), "[,|")
+}
+
+// classRefOf is the type of a class used as a value, such as cls in a
+// classmethod. Only calls and attribute reads use it.
+func classRefOf(name string) pyType { return pyType("type[" + name + "]") }
+func (t pyType) isClassRef() bool   { return t.head() == "type" && strings.Contains(string(t), "[") }
+func (t pyType) classRefName() string {
+	return strings.TrimSuffix(strings.TrimPrefix(string(t), "type["), "]")
+}
+
 func (t pyType) isFunc() bool       { return t.head() == "func" }
 func (t pyType) isIterable() bool   { return t.head() == "iterable" }
 func (t pyType) isDict() bool       { return t.head() == "dict" }
@@ -195,8 +221,14 @@ func (t pyType) goType() string {
 		return "bool"
 	case t == tStr:
 		return "string"
-	case t == tExc:
+	case t == tExc, t == tOptExc:
 		return "*runtime.PyError"
+	case t == tObject:
+		return "any"
+	case t.isClass():
+		return string(t)
+	case t.isClassRef():
+		return "*runtime.ClassRef"
 	case t == tRange:
 		return "*runtime.Range"
 	case t.isFunc():
@@ -252,20 +284,42 @@ var typeTable = map[string]pyType{
 // annotationType resolves a type annotation. allowNone permits the literal
 // None, which is valid as a return annotation only.
 func annotationType(n pyast.Node, allowNone bool) (pyType, error) {
+	return (&generator{}).annotationType(n, allowNone)
+}
+
+// annotationType resolves an annotation, which can name a class the program
+// defines. A class used before its definition is written as a string.
+func (g *generator) annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 	switch n := n.(type) {
 	case *pyast.Name:
 		if t, ok := typeTable[n.ID]; ok {
 			return t, nil
+		}
+		if n.ID == "object" {
+			return tObject, nil
+		}
+		if _, ok := g.classes[n.ID]; ok {
+			return pyType(n.ID), nil
 		}
 		if why, ok := typingNames[n.ID]; ok {
 			return "", unsupported("type annotation '"+n.ID+"' ("+why+")", n.Line())
 		}
 		return "", unsupported("type annotation '"+n.ID+"'", n.Line())
 	case *pyast.Subscript:
-		return containerType(n)
+		return g.containerType(n)
 	case *pyast.Constant:
 		if n.PyType == "none" && allowNone {
 			return tNone, nil
+		}
+		if s, ok := n.Value.(string); ok && n.PyType == "str" {
+			// A forward reference: "Node".
+			if _, ok := g.classes[s]; ok {
+				return pyType(s), nil
+			}
+			if _, ok := typeTable[s]; ok {
+				return typeTable[s], nil
+			}
+			return "", unsupported("type annotation '"+s+"'", n.Line())
 		}
 		return "", unsupported("type annotation "+constantText(n), n.Line())
 	case *pyast.Unsupported:
@@ -308,7 +362,7 @@ var typingNames = map[string]string{
 
 // containerType resolves list[T], set[T], dict[K, V], tuple[A, B, ...],
 // tuple[T, ...], Iterable[T] and Callable[[A, B], R].
-func containerType(n *pyast.Subscript) (pyType, error) {
+func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 	head, ok := n.Value.(*pyast.Name)
 	if !ok {
 		return "", unsupported("type annotation of kind Subscript", n.Line())
@@ -317,7 +371,7 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 	if t, ok := n.Index.(*pyast.Tuple); ok {
 		args = t.Elts
 	}
-	resolve := func(node pyast.Node) (pyType, error) { return annotationType(node, false) }
+	resolve := func(node pyast.Node) (pyType, error) { return g.annotationType(node, false) }
 
 	name := head.ID
 	if alias, ok := typingAliases[name]; ok {
@@ -325,7 +379,7 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 	}
 	switch name {
 	case "Callable":
-		return callableType(n, args)
+		return g.callableType(n, args)
 	case "Iterable":
 		if len(args) != 1 {
 			return "", unsupported(fmt.Sprintf("Iterable[...] with %d type arguments", len(args)), n.Line())
@@ -335,6 +389,8 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 			return "", err
 		}
 		return iterableOfType(elem), nil
+	case "ClassVar":
+		return "", unsupported("ClassVar outside a class body", n.Line())
 	case "Optional", "Union", "Literal", "Type", "Sequence":
 		return "", unsupported("type annotation '"+head.ID+"[...]' ("+typingNames[head.ID]+")", n.Line())
 	}
@@ -351,7 +407,7 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 		if name == "list" {
 			return listOf(elem), nil
 		}
-		if !elem.hashable() {
+		if !g.hashable(elem) {
 			return "", unsupported(fmt.Sprintf("set element type %s (not hashable)", elem), n.Line())
 		}
 		return setOf(elem), nil
@@ -368,7 +424,7 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 		if err != nil {
 			return "", err
 		}
-		if !key.hashable() {
+		if !g.hashable(key) {
 			return "", unsupported(fmt.Sprintf("dict key type %s (not hashable)", key), n.Line())
 		}
 		return dictOf(key, val), nil
@@ -417,7 +473,7 @@ func constantText(c *pyast.Constant) string {
 }
 
 // callableType resolves Callable[[A, B], R].
-func callableType(n *pyast.Subscript, args []pyast.Node) (pyType, error) {
+func (g *generator) callableType(n *pyast.Subscript, args []pyast.Node) (pyType, error) {
 	if len(args) != 2 {
 		return "", unsupported("Callable[...] needs a parameter list and a return type", n.Line())
 	}
@@ -427,13 +483,13 @@ func callableType(n *pyast.Subscript, args []pyast.Node) (pyType, error) {
 	}
 	params := make([]pyType, len(list.Elts))
 	for i, p := range list.Elts {
-		t, err := annotationType(p, false)
+		t, err := g.annotationType(p, false)
 		if err != nil {
 			return "", err
 		}
 		params[i] = t
 	}
-	ret, err := annotationType(args[1], true)
+	ret, err := g.annotationType(args[1], true)
 	if err != nil {
 		return "", err
 	}

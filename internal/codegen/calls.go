@@ -100,7 +100,7 @@ func (g *generator) bindCall(n *pyast.Call, sig *funcSig, callee, fname string) 
 		}
 	}
 	if given > nPos && sig.vararg == nil {
-		return value{}, unsupported(runtime.MsgTooManyPositional(fname, int64(given), int64(sig.minPositional()), int64(nPos), kwonlyGiven), n.Line())
+		return value{}, unsupported(runtime.MsgTooManyPositional(fname, int64(given+sig.implicit), int64(sig.minPositional()+sig.implicit), int64(nPos+sig.implicit), kwonlyGiven), n.Line())
 	}
 
 	slots := make([]*slot, nPos+len(sig.kwonly))
@@ -263,10 +263,17 @@ func (g *generator) bindCall(n *pyast.Call, sig *funcSig, callee, fname string) 
 		}
 	}
 
-	codes := make([]string, 0, len(params)+2)
+	codes := make([]string, 0, len(params)+3)
+	if sig.leadArg != "" {
+		codes = append(codes, sig.leadArg)
+	}
 	for i, p := range params {
 		if slotVal[i] < 0 {
-			codes = append(codes, p.defaultVar)
+			d, err := g.defaultArg(p)
+			if err != nil {
+				return value{}, err
+			}
+			codes = append(codes, d)
 		} else {
 			codes = append(codes, ref[slotVal[i]])
 		}
@@ -414,7 +421,7 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 	// Too many positional arguments.
 	maxPos := strconv.Itoa(nPos)
 	if sig.vararg == nil {
-		fmt.Fprintf(&b, "if %s > %s {\n%s(%q, %s, %d, %d, 0)\n}\n", n_, maxPos, g.rt("TooManyPositional"), fname, n_, sig.minPositional(), nPos)
+		fmt.Fprintf(&b, "if %s > %s {\n%s(%q, %s+%d, %d, %d, 0)\n}\n", n_, maxPos, g.rt("TooManyPositional"), fname, n_, sig.implicit, sig.minPositional()+sig.implicit, nPos+sig.implicit)
 	}
 
 	// Each parameter, filled from the static arguments, the list, the
@@ -467,7 +474,11 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 				fmt.Fprintf(&b, "case %s.Has(%q):\n%s = %s.Get(%q)\n", dict, p.name, a, dict, p.name)
 			}
 			if p.hasDefault {
-				fmt.Fprintf(&b, "default:\n%s = %s\n", a, p.defaultVar)
+				d, err := g.defaultArg(p)
+				if err != nil {
+					return value{}, err
+				}
+				fmt.Fprintf(&b, "default:\n%s = %s\n", a, d)
 			} else {
 				fmt.Fprintf(&b, "default:\n%s = append(%s, %q)\n", missing, missing, p.name)
 			}
@@ -488,7 +499,11 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 			fmt.Fprintf(&b, "if %s.Has(%q) {\n%s = %s.Get(%q)\n} else ", dict, p.name, a, dict, p.name)
 		}
 		if p.hasDefault {
-			fmt.Fprintf(&b, "{\n%s = %s\n}\n", a, p.defaultVar)
+			d, err := g.defaultArg(p)
+			if err != nil {
+				return value{}, err
+			}
+			fmt.Fprintf(&b, "{\n%s = %s\n}\n", a, d)
 		} else {
 			fmt.Fprintf(&b, "{\n%s = append(%s, %q)\n}\n", missingKw, missingKw, p.name)
 		}
@@ -563,4 +578,14 @@ func quoteList(names []string) string {
 		q[i] = strconv.Quote(n)
 	}
 	return "[]string{" + strings.Join(q, ", ") + "}"
+}
+
+// defaultArg is the value a call passes for a parameter it gives no argument
+// for: the default evaluated when the def ran, or for a dataclass field with
+// default_factory a new value made by the factory.
+func (g *generator) defaultArg(p param) (string, error) {
+	if p.factory != nil {
+		return g.factoryValue(&dcField{name: p.name, typ: p.typ, factory: p.factory, line: p.line})
+	}
+	return p.defaultVar, nil
 }

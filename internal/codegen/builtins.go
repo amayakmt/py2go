@@ -13,6 +13,14 @@ import (
 func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	name := callee.ID
 	switch name {
+	case "isinstance":
+		return g.isinstanceCall(n)
+	case "issubclass":
+		return g.issubclassCall(n)
+	case "type":
+		return g.typeCall(n)
+	case "callable":
+		return g.callableCall(n)
 	case "print":
 		return g.printCall(n)
 	case "sorted":
@@ -46,7 +54,7 @@ func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error
 			args[i] = v
 		}
 		return g.minMax(name, n, args)
-	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod":
+	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod", "hash":
 		if n.HasKeywords {
 			return value{}, unsupported("keyword arguments", n.Line())
 		}
@@ -79,6 +87,21 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 	}
 	badArg := func(a value) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("%s() of %s", name, a.typ), n.Line())
+	}
+	if len(args) == 1 {
+		if v, ok, err := g.classBuiltin(name, n, args[0]); ok || err != nil {
+			return v, err
+		}
+	}
+	if name == "hash" {
+		if err := arity(name, n, 1, 1); err != nil {
+			return value{}, err
+		}
+		a := args[0]
+		if a.typ == tInt || a.typ == tStr || a.typ == tBool || a.typ.isTuple() {
+			return atom(call(g.rt("Hash"), g.relabel(a, tObject).code), tInt)
+		}
+		return value{}, unsupported(fmt.Sprintf("hash() of %s", a.typ), n.Line())
 	}
 
 	switch name {
@@ -148,7 +171,7 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		if err := arity(name, n, 1, 1); err != nil {
 			return value{}, err
 		}
-		return truth(args[0]), nil
+		return g.truth(args[0]), nil
 
 	case "abs":
 		if err := arity(name, n, 1, 1); err != nil {
@@ -194,24 +217,33 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		return atom(call(g.rt("DivModFloat"), a.code, b.code), tupleOf([]pyType{tFloat, tFloat}))
 
 	case "sum":
-		if len(n.Args) == 2 {
-			return value{}, unsupported("sum() with a start value", n.Line())
-		}
-		if err := arity(name, n, 1, 1); err != nil {
+		if err := arity(name, n, 1, 2); err != nil {
 			return value{}, err
 		}
 		a, err := g.asList(args[0], "sum()", n.Line())
 		if err != nil {
 			return value{}, err
 		}
+		var start *value
+		if len(args) == 2 {
+			start = &args[1]
+		}
+		if g.classOf(a.typ.elem()) != nil || (start != nil && start.typ.isClass()) {
+			return g.sumInstances(n, a, start)
+		}
+		var total value
 		switch a.typ {
 		case listOf(tInt):
-			return atom(call(g.rt("SumInt"), a.code), tInt)
+			total = value{code: call(g.rt("SumInt"), a.code), typ: tInt, prec: precAtom}
 		case listOf(tFloat):
-			return atom(call(g.rt("SumFloat"), a.code), tFloat)
+			total = value{code: call(g.rt("SumFloat"), a.code), typ: tFloat, prec: precAtom}
 		default:
 			return badArg(args[0])
 		}
+		if start == nil {
+			return total, nil
+		}
+		return g.binary("Add", *start, total, n.Line())
 
 	case "min", "max":
 		return g.minMax(name, n, args)
@@ -231,6 +263,9 @@ func (g *generator) minMax(name string, n *pyast.Call, args []value) (value, err
 		if err != nil {
 			return value{}, err
 		}
+		if g.classOf(a.typ.elem()) != nil {
+			return value{code: call(g.rt(title+"AnyList"), a.code), typ: a.typ.elem(), prec: precAtom}, nil
+		}
 		if !ordered(a.typ.elem()) {
 			return value{}, unsupported(fmt.Sprintf("%s() of %s", name, args[0].typ), n.Line())
 		}
@@ -242,6 +277,15 @@ func (g *generator) minMax(name string, n *pyast.Call, args []value) (value, err
 
 	t := args[0].typ
 	codes := make([]string, len(args))
+	if g.classOf(t) != nil {
+		for i, a := range args {
+			if a.typ != t {
+				return value{}, unsupported(fmt.Sprintf("%s() of %s and %s", name, t, a.typ), n.Line())
+			}
+			codes[i] = a.code
+		}
+		return value{code: g.rt(title+"Any") + "[" + g.goType(t) + "](" + strings.Join(codes, ", ") + ")", typ: t, prec: precAtom}, nil
+	}
 	for i, a := range args {
 		if a.typ != t || !ordered(t) {
 			return value{}, unsupported(fmt.Sprintf("%s() of %s and %s (arguments must share one of int, float, str)", name, t, a.typ), n.Line())
@@ -331,7 +375,7 @@ func (g *generator) keyFunc(node pyast.Node, item pyType) (code string, key pyTy
 	if lam, ok := node.(*pyast.Lambda); ok {
 		v, err = g.lambda(lam, []pyType{item}, "")
 	} else {
-		v, err = g.typedExpr(node)
+		v, err = g.exprAs(node, funcOf([]pyType{item}, tNone))
 	}
 	if err != nil {
 		return "", "", err
@@ -402,7 +446,7 @@ func (g *generator) functionArg(node pyast.Node, params []pyType) (value, error)
 	if lam, ok := node.(*pyast.Lambda); ok {
 		v, err = g.lambda(lam, params, "")
 	} else {
-		v, err = g.typedExpr(node)
+		v, err = g.exprAs(node, funcOf(params, tNone))
 	}
 	if err != nil {
 		return value{}, err
@@ -728,7 +772,7 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 		}
 		return value{code: call(g.rt("ListFrom")+"["+g.goType(elem)+"]", code), typ: listOf(elem), prec: precAtom}, nil
 	case "set":
-		if err := hashableOrError(elem, "set element", n.Line()); err != nil {
+		if err := g.hashableOrError(elem, "set element", n.Line()); err != nil {
 			return value{}, err
 		}
 		return value{code: call(g.rt("SetFrom")+"["+g.goType(elem)+"]", code), typ: setOf(elem), prec: precAtom}, nil
@@ -741,7 +785,7 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("dict() of %s (needs pairs)", v.typ), n.Line())
 	}
 	k, val := elem.elems()[0], elem.elems()[1]
-	if err := hashableOrError(k, "dict key", n.Line()); err != nil {
+	if err := g.hashableOrError(k, "dict key", n.Line()); err != nil {
 		return value{}, err
 	}
 	t := dictOf(k, val)

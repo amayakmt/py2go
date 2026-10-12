@@ -23,6 +23,9 @@ func (g *generator) attribute(n *pyast.Attribute) (value, error) {
 			}
 		}
 	}
+	if v, ok, err := g.classAttribute(n); ok || err != nil {
+		return v, err
+	}
 	if call, ok := n.Value.(*pyast.Call); ok && n.Attr == "__name__" {
 		if name, _ := callName(call); name == "type" && len(call.Args) == 1 && !call.HasKeywords {
 			v, err := g.typedExpr(call.Args[0])
@@ -48,6 +51,9 @@ func (g *generator) isExceptionClass(name string) bool {
 	if _, isFunc := g.sigs[name]; isFunc {
 		return false
 	}
+	if c := g.classes[name]; c != nil {
+		return c.exc
+	}
 	return runtime.IsExceptionClass(name)
 }
 
@@ -60,6 +66,9 @@ func (g *generator) isUnknownName(name string) bool {
 	if _, isFunc := g.sigs[name]; isFunc {
 		return false
 	}
+	if g.classes[name] != nil {
+		return false
+	}
 	return !runtime.IsExceptionClass(name)
 }
 
@@ -68,17 +77,41 @@ func (g *generator) isUnknownName(name string) bool {
 func (g *generator) excValue(n pyast.Node) (string, error) {
 	switch n := n.(type) {
 	case *pyast.Name:
+		if c := g.classes[n.ID]; c != nil && !g.isVariable(n.ID) {
+			if !c.exc {
+				return "", unsupported(fmt.Sprintf("exceptions must derive from BaseException ('%s' does not)", n.ID), n.Line())
+			}
+			v, err := g.constructCall(&pyast.Call{Func: n, Lineno: n.Line()}, c)
+			if err != nil {
+				return "", err
+			}
+			return v.at(precAtom) + ".PyExc()", nil
+		}
 		if g.isExceptionClass(n.ID) {
 			return call(g.rt("NewError"), strconv.Quote(n.ID)), nil
 		}
 		if t, ok := g.env.lookup(n.ID); ok && t == tExc {
 			return n.ID, nil
 		}
+		if v, err := g.name(n); err == nil && v.typ.isClass() && g.classOf(v.typ).exc {
+			return v.at(precAtom) + ".PyExc()", nil
+		}
 		if g.isUnknownName(n.ID) {
 			return "", unsupported(fmt.Sprintf("unknown exception class '%s'", n.ID), n.Line())
 		}
 	case *pyast.Call:
 		name, isName := callName(n)
+		if isName && g.classes[name] != nil && !g.isVariable(name) {
+			c := g.classes[name]
+			if !c.exc {
+				return "", unsupported(fmt.Sprintf("exceptions must derive from BaseException ('%s' does not)", name), n.Line())
+			}
+			v, err := g.constructCall(n, c)
+			if err != nil {
+				return "", err
+			}
+			return v.at(precAtom) + ".PyExc()", nil
+		}
 		if isName && g.isUnknownName(name) {
 			return "", unsupported(fmt.Sprintf("unknown exception class '%s'", name), n.Line())
 		}
@@ -118,12 +151,24 @@ func (g *generator) raiseStmt(b *strings.Builder, n *pyast.Raise) error {
 	if err != nil {
 		return err
 	}
-	// The cause only appears in the traceback on stderr. Check that it is
-	// well formed, then drop it.
-	if c, isConst := n.Cause.(*pyast.Constant); n.Cause != nil && !(isConst && c.PyType == "none") {
-		if _, err := g.excValue(n.Cause); err != nil {
+	// "raise X from Y" records the cause, and "from None" suppresses the
+	// context. A raise inside a handler records the exception being handled.
+	switch c, isConst := n.Cause.(*pyast.Constant); {
+	case n.Cause == nil:
+		if len(g.handlers) > 0 {
+			code = call(g.rt("WithContext"), code, g.handlers[len(g.handlers)-1])
+		}
+	case isConst && c.PyType == "none":
+		code = call(g.rt("RaiseFrom"), code, "nil")
+	default:
+		cause, err := g.excValue(n.Cause)
+		if err != nil {
 			return err
 		}
+		code = call(g.rt("RaiseFrom"), code, cause)
+	}
+	if n.Cause != nil && len(g.handlers) > 0 {
+		code = call(g.rt("WithContext"), code, g.handlers[len(g.handlers)-1])
 	}
 	fmt.Fprintf(b, "panic(%s)\n", code)
 	return nil
@@ -249,9 +294,12 @@ func (g *generator) jump(b *strings.Builder, kind string, line int) error {
 // emitReturn is "return" or "return value" in the current closure or function.
 func (g *generator) emitReturn(b *strings.Builder, value string) {
 	if g.flow == nil {
-		if value == "" {
+		switch {
+		case value == "":
 			b.WriteString("return\n")
-		} else {
+		case g.specialRet:
+			fmt.Fprintf(b, "return %s, true\n", value)
+		default:
 			fmt.Fprintf(b, "return %s\n", value)
 		}
 		return
@@ -280,7 +328,7 @@ func (g *generator) hoistDecls(b *strings.Builder, body []pyast.Node) {
 		if _, declared := g.env.lookup(name.ID); declared {
 			continue
 		}
-		if t, err := annotationType(a.Annotation, false); err == nil {
+		if t, err := g.annotationType(a.Annotation, false); err == nil {
 			g.declare(b, name.ID, t, "")
 		}
 	}
@@ -399,6 +447,9 @@ func (g *generator) exceptClasses(n pyast.Node) ([]string, error) {
 		if !ok {
 			return nil, unsupported("except clause of kind "+targetKind(node), node.Line())
 		}
+		if g.classes[name.ID] != nil && !g.isVariable(name.ID) && !g.classes[name.ID].exc {
+			return nil, unsupported(fmt.Sprintf("catching classes that do not inherit from BaseException is not allowed ('%s')", name.ID), name.Line())
+		}
 		if !g.isExceptionClass(name.ID) {
 			return nil, unsupported(fmt.Sprintf("unknown exception class '%s'", name.ID), name.Line())
 		}
@@ -422,15 +473,15 @@ func (g *generator) handlerBody(b *strings.Builder, h *pyast.ExceptHandler, exc 
 		if err := checkName(h.Name, h.Line()); err != nil {
 			return err
 		}
-		g.declareLocal(b, h.Name, tExc, exc)
+		if tn, ok := h.Type.(*pyast.Name); ok && g.classes[tn.ID] != nil && !g.isVariable(tn.ID) {
+			c := g.classes[tn.ID]
+			g.declareLocal(b, h.Name, c.typ(), exc+".Obj.("+c.name+")")
+		} else {
+			g.declareLocal(b, h.Name, tExc, exc)
+		}
 	}
 	if err := g.predeclareDefs(b, h.Body); err != nil {
 		return err
 	}
-	for _, s := range h.Body {
-		if err := g.stmt(b, s); err != nil {
-			return err
-		}
-	}
-	return nil
+	return g.stmtList(b, h.Body)
 }

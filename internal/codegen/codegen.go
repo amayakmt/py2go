@@ -47,6 +47,19 @@ type generator struct {
 	globalReads map[string]bool // read by some function: they need a "was it set" flag
 	fnGlobals   map[string]bool // names the current function declared global
 	compRoot    *scope          // the scope of the comprehension being generated, or nil
+
+	// Classes.
+	classes           map[string]*classInfo
+	classOrder        []*classInfo
+	builtinCls        map[string]*classInfo
+	dataclassImported bool
+	storedAttrs       map[string]bool // attribute names some code assigns
+	method            *methodCtx      // the method being compiled, or nil
+	specialRet        bool            // the method returns (result, implemented)
+	infer             bool            // classes are being scanned for their instance attributes
+	inferGrew         bool
+	pendingNarrow     *narrowing
+	buildingMethod    bool // method names are not Go identifiers, so any name will do
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -68,9 +81,20 @@ func Generate(root pyast.Node) ([]byte, error) {
 		globalReads: map[string]bool{},
 		fnGlobals:   map[string]bool{},
 		fnNonlocals: map[string]bool{},
+
+		classes:     map[string]*classInfo{},
+		builtinCls:  map[string]*classInfo{},
+		storedAttrs: map[string]bool{},
 	}
+	if err := g.registerClassNames(mod); err != nil {
+		return nil, err
+	}
+	g.prescan(mod)
 	g.collectSignatures(mod)
 	g.decoratedTypes()
+	if err := g.collectClasses(mod); err != nil {
+		return nil, err
+	}
 	if err := g.collectGlobals(mod); err != nil {
 		return nil, err
 	}
@@ -78,6 +102,9 @@ func Generate(root pyast.Node) ([]byte, error) {
 	g.mainEnv = newScope(nil)
 	g.env = g.mainEnv
 	var funcs, body strings.Builder
+	if err := g.inferClasses(); err != nil {
+		return nil, err
+	}
 
 	// Function definitions go to package level.
 	// Everything else goes into main(), in source order.
@@ -85,6 +112,8 @@ func Generate(root pyast.Node) ([]byte, error) {
 		var err error
 		if fn, ok := stmt.(*pyast.FunctionDef); ok {
 			err = g.funcDef(&funcs, &body, fn)
+		} else if cd, ok := stmt.(*pyast.ClassDef); ok {
+			err = g.classDecl(&funcs, &body, g.classes[cd.Name])
 		} else {
 			err = g.stmt(&body, stmt)
 		}

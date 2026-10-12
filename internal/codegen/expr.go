@@ -43,6 +43,13 @@ type value struct {
 	// depends on the value.
 	intLit bool
 	intVal int64
+
+	// classRef is set for a class used as a value (a class name, cls, or
+	// type(x)). code is empty unless the value is a variable, and
+	// dynamicRef marks type(x) of an instance whose exact class is not known.
+	classRef   *classInfo
+	exactRef   bool
+	dynamicRef bool
 }
 
 // at returns the code, parenthesized if it binds looser than min.
@@ -175,6 +182,18 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 	if err != nil {
 		return v, err
 	}
+	if v.typ.isClassRef() && v.classRef != nil {
+		if want.isFunc() {
+			if v, err = g.constructorValue(v, n.Line()); err != nil {
+				return v, err
+			}
+		} else {
+			v = g.classObject(v)
+		}
+	}
+	if want != "" {
+		v = g.relabel(v, want)
+	}
 	if v.typ == tNone {
 		return v, unsupported("use of a None value", n.Line())
 	}
@@ -225,6 +244,9 @@ func (g *generator) isVariable(name string) bool {
 
 func (g *generator) name(n *pyast.Name) (value, error) {
 	if t, ok := g.env.lookup(n.ID); ok {
+		if t.isClassRef() {
+			return g.classRefValue(n.ID, t), nil
+		}
 		sig, _ := g.env.lookupSig(n.ID)
 		if sig != nil && len(sig.decorators) > 0 {
 			sig = nil
@@ -232,6 +254,9 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 		return value{code: n.ID, typ: t, prec: precAtom, fsig: sig}, nil
 	}
 	if v, ok := g.readGlobal(n.ID); ok {
+		return v, nil
+	}
+	if v, ok := g.classNameValue(n.ID); ok {
 		return v, nil
 	}
 	if sig, ok := g.sigs[n.ID]; ok && len(sig.decorators) == 0 {
@@ -271,11 +296,19 @@ func (g *generator) call(n *pyast.Call) (value, error) {
 	}
 	// Any other expression, such as make_adder(1)(2) or handlers[0](x), is
 	// called through its value.
-	fv, err := g.typedExpr(n.Func)
+	fv, err := g.recvExpr(n.Func)
 	if err != nil {
 		return value{}, err
 	}
-	if !fv.typ.isFunc() {
+	switch {
+	case fv.typ.isClass():
+		return g.callInstance(n, fv)
+	case fv.typ.isClassRef() && fv.classRef != nil:
+		if fv.dynamicRef {
+			return value{}, unsupported("call of the class of a value that is not exactly known (type(x)(...) works on self only)", n.Line())
+		}
+		return g.constructCall(n, fv.classRef)
+	case !fv.typ.isFunc():
 		return value{}, unsupported(fmt.Sprintf("call of a value of type %s", fv.typ), n.Line())
 	}
 	return g.callValue(n, fv)
@@ -292,16 +325,28 @@ func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) 
 		if t.isFunc() {
 			return g.callValue(n, value{code: name, typ: t, prec: precAtom})
 		}
+		if t.isClass() {
+			return g.callInstance(n, value{code: name, typ: t, prec: precAtom})
+		}
+		if t.isClassRef() {
+			return g.constructCall(n, g.classes[t.classRefName()])
+		}
 		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
 	}
 	if g.fnName != "" {
 		if t, ok := g.globalTypes[name]; ok {
+			v, _ := g.readGlobal(name)
+			if t.isClass() {
+				return g.callInstance(n, v)
+			}
 			if !t.isFunc() {
 				return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
 			}
-			v, _ := g.readGlobal(name)
 			return g.callValue(n, v)
 		}
+	}
+	if cv, ok := g.classNameValue(name); ok {
+		return g.constructCall(n, cv.classRef)
 	}
 	// A function the program defines hides a builtin of the same name.
 	if err := g.sigErrs[name]; err != nil {
@@ -337,6 +382,9 @@ func (g *generator) binOp(n *pyast.BinOp) (value, error) {
 func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	bad := func() (value, error) {
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s and %s", opSymbols[op], l.typ, r.typ), line)
+	}
+	if l.typ.isClass() || r.typ.isClass() {
+		return g.classBinary(op, l, r, line)
 	}
 	if op == "MatMult" {
 		return value{}, unsupported("operator "+opSymbols[op], line)
@@ -496,11 +544,14 @@ func (g *generator) unaryOp(n *pyast.UnaryOp) (value, error) {
 	bad := func() (value, error) {
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s", opSymbols[n.Op], v.typ), n.Line())
 	}
+	if v.typ.isClass() && n.Op != "Not" {
+		return g.classUnary(n.Op, v, n.Line())
+	}
 
 	switch n.Op {
 	case "Not":
 		// "not x" is a bool for any x, so truthiness applies to every type.
-		t := truth(v)
+		t := g.truth(v)
 		return value{code: "!" + t.at(precUnary), typ: tBool, prec: precUnary, konst: v.konst}, nil
 
 	case "UAdd":
@@ -594,14 +645,26 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 	if op == "In" || op == "NotIn" {
 		return g.contains(n, op == "NotIn")
 	}
+	if v, ok, err := g.typeCompare(n); ok || err != nil {
+		return v, err
+	}
+	if v, ok, err := g.noneCompare(n); ok || err != nil {
+		return v, err
+	}
 	goOp := map[string]string{"Eq": "==", "NotEq": "!=", "Lt": "<", "LtE": "<=", "Gt": ">", "GtE": ">="}[op]
-	if goOp == "" {
+	if goOp == "" && op != "Is" && op != "IsNot" {
 		return value{}, unsupported("operator '"+opSymbols[op]+"'", n.Line())
 	}
 
 	l, r, err := g.operandPair(n.Left, n.Comparators[0])
 	if err != nil {
 		return value{}, err
+	}
+	if v, ok, err := g.objectCompare(op, l, r, n.Line()); ok || err != nil {
+		return v, err
+	}
+	if goOp == "" {
+		return value{}, unsupported("operator '"+opSymbols[op]+"'", n.Line())
 	}
 
 	if l.typ == tExc || r.typ == tExc {
@@ -669,6 +732,9 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 	if err != nil {
 		return value{}, err
 	}
+	if r.typ.isClass() {
+		return g.classContains(n, r, negate)
+	}
 	var want pyType
 	switch {
 	case r.typ.isList() || r.typ.isSet() || r.typ.isVarTuple():
@@ -720,15 +786,22 @@ func allEqual(types []pyType, t pyType) bool {
 }
 
 func (g *generator) boolOp(n *pyast.BoolOp) (value, error) {
+	return g.boolOperands(n.Op, n.Values)
+}
+
+// boolOperands generates "a and b and c" or "a or b or c". After
+// "isinstance(x, C) and ..." (or "not isinstance(x, C) or ...") the operands
+// that follow see x as a C, which the generated code binds in a closure.
+func (g *generator) boolOperands(op string, values []pyast.Node) (value, error) {
 	goOp, prec := "&&", precAnd
-	if n.Op == "Or" {
+	if op == "Or" {
 		goOp, prec = "||", precOr
 	}
-	word := strings.ToLower(n.Op)
+	word := strings.ToLower(op)
 
-	parts := make([]string, 0, len(n.Values))
+	parts := make([]string, 0, len(values))
 	konst := true
-	for _, e := range n.Values {
+	for i, e := range values {
 		v, err := g.typedExpr(e)
 		if err != nil {
 			return value{}, err
@@ -741,6 +814,33 @@ func (g *generator) boolOp(n *pyast.BoolOp) (value, error) {
 		konst = konst && v.konst
 		// Same-operator children can share the parent's precedence.
 		parts = append(parts, v.at(prec))
+
+		if i == len(values)-1 {
+			break
+		}
+		test := e
+		if op == "Or" {
+			not, ok := e.(*pyast.UnaryOp)
+			if !ok || not.Op != "Not" {
+				continue
+			}
+			test = not.Operand
+		}
+		nar := g.narrowOf(test)
+		if nar == nil {
+			continue
+		}
+		outer := g.env
+		g.env = newScope(outer)
+		g.env.declare(nar.name, nar.to)
+		rest, err := g.boolOperands(op, values[i+1:])
+		g.env = outer
+		if err != nil {
+			return value{}, err
+		}
+		parts = append(parts, fmt.Sprintf("func() bool {\nvar %s %s = %s\nreturn %s\n}()", nar.name, g.goType(nar.to), nar.expr, rest.code))
+		konst = false
+		break
 	}
 	return value{code: strings.Join(parts, " "+goOp+" "), typ: tBool, prec: prec, konst: konst}, nil
 }

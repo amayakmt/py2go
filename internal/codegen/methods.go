@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/amayakmt/py2go/internal/pyast"
+	"github.com/amayakmt/py2go/runtime"
 )
 
 // methodCall generates "receiver.name(args)" for the str and list methods
@@ -13,11 +14,32 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 	if cls, ok := m.Value.(*pyast.Name); ok && cls.ID == "dict" && !g.isVariable("dict") {
 		return g.dictClassMethod(n, m)
 	}
-	recv, err := g.typedExpr(m.Value)
+	if sup, isSuper := g.superTarget(m.Value); isSuper {
+		return g.superCall(n, sup, m.Attr)
+	}
+	// Exception.__init__(self, ...) and object.__init__(self): the base
+	// class called by name.
+	if base, ok := m.Value.(*pyast.Name); ok && !g.isVariable(base.ID) && g.classes[base.ID] == nil &&
+		(base.ID == "object" || runtime.IsExceptionClass(base.ID)) && g.method != nil && g.method.kind == mMethod &&
+		len(n.Args) >= 1 && !n.HasKeywords {
+		if first, ok := n.Args[0].(*pyast.Name); ok && first.ID == g.selfName() {
+			rest := *n
+			rest.Args = n.Args[1:]
+			sup := superInfo{cls: g.method.cls, definer: g.method.definer, self: g.selfName()}
+			return g.superBuiltin(&rest, sup, m.Attr)
+		}
+	}
+	recv, err := g.recvExpr(m.Value)
 	if err != nil {
 		return value{}, err
 	}
 	switch {
+	case recv.typ.isClassRef():
+		return g.classLevelCall(n, m, recv)
+	case recv.typ.isClass():
+		return g.instanceCall(n, m, recv)
+	case recv.typ == tObject:
+		return value{}, unsupported(fmt.Sprintf("method '%s' on a value of type object (test it with isinstance first)", m.Attr), n.Line())
 	case recv.typ == tStr:
 		return g.strMethod(n, m, recv)
 	case recv.typ.isList():
@@ -203,7 +225,7 @@ func (g *generator) dictClassMethod(n *pyast.Call, m *pyast.Attribute) (value, e
 	if err != nil {
 		return value{}, err
 	}
-	if err := hashableOrError(elem, "dict key", n.Line()); err != nil {
+	if err := g.hashableOrError(elem, "dict key", n.Line()); err != nil {
 		return value{}, err
 	}
 	val, err := g.typedExpr(n.Args[1])

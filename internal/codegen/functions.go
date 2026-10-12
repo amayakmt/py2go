@@ -15,6 +15,10 @@ type param struct {
 	hasDefault bool
 	defaultVar string // Go variable that holds the default value
 	line       int
+	defNode    pyast.Node // the default expression, evaluated once when the def runs
+	// factory makes a default per call instead: a dataclass field with
+	// default_factory.
+	factory pyast.Node
 }
 
 // funcSig is what is known about a def: its parameters, which can have
@@ -34,6 +38,14 @@ type funcSig struct {
 
 	doc    string
 	hasDoc bool
+
+	// implicit counts the parameters that error messages show but the call
+	// does not write: the self of a bound method.
+	implicit int
+	selfName string // the name the method gives its first parameter
+	// leadArg is code the call passes before the real arguments: the number
+	// of positional arguments an exception class was called with.
+	leadArg string
 
 	decorators []pyast.Node
 	node       *pyast.FunctionDef
@@ -130,12 +142,11 @@ func cleanDoc(s string) string {
 }
 
 // buildSig validates a def line and reads its parameters and return type.
-func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, error) {
-	if fn.Name == "main" && !nested {
-		return nil, unsupported("function named main (collides with generated main)", fn.Line())
-	}
-	if err := checkName(fn.Name, fn.Line()); err != nil {
-		return nil, err
+func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, error) {
+	if !g.buildingMethod {
+		if err := checkName(fn.Name, fn.Line()); err != nil {
+			return nil, err
+		}
 	}
 	if fn.HasTypeParams {
 		return nil, unsupported("generic functions", fn.Line())
@@ -158,7 +169,7 @@ func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, er
 		if arg.Annotation == nil {
 			return param{}, unsupported(fmt.Sprintf("%sparameter '%s' without type annotation", what, arg.Name), arg.Line())
 		}
-		t, err := annotationType(arg.Annotation, false)
+		t, err := g.annotationType(arg.Annotation, false)
 		if err != nil {
 			return param{}, err
 		}
@@ -173,6 +184,9 @@ func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, er
 			return nil, err
 		}
 		p.hasDefault = i >= firstDefault
+		if p.hasDefault {
+			p.defNode = a.Defaults[i-firstDefault]
+		}
 		sig.pos = append(sig.pos, p)
 	}
 	sig.nPosOnly = len(a.PosOnly)
@@ -182,6 +196,9 @@ func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, er
 			return nil, err
 		}
 		p.hasDefault = i < len(a.KwDefaults) && a.KwDefaults[i] != nil
+		if p.hasDefault {
+			p.defNode = a.KwDefaults[i]
+		}
 		sig.kwonly = append(sig.kwonly, p)
 	}
 	if a.Vararg != nil {
@@ -204,7 +221,7 @@ func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, er
 	if fn.Returns == nil {
 		return nil, unsupported("function without return annotation", fn.Line())
 	}
-	ret, err := annotationType(fn.Returns, true)
+	ret, err := g.annotationType(fn.Returns, true)
 	if err != nil {
 		return nil, err
 	}
@@ -213,21 +230,19 @@ func buildSig(fn *pyast.FunctionDef, qualname string, nested bool) (*funcSig, er
 	return sig, nil
 }
 
-// defaultNodes returns the default expression of every parameter that has
-// one, with the parameter it belongs to.
+// defaultNodes returns the parameters that have a default evaluated when the
+// def runs, with the expression of each.
 func (s *funcSig) defaultNodes() (ps []*param, nodes []pyast.Node) {
-	a := s.node.Args
-	firstDefault := len(s.pos) - len(a.Defaults)
 	for i := range s.pos {
-		if i >= firstDefault {
+		if s.pos[i].defNode != nil {
 			ps = append(ps, &s.pos[i])
-			nodes = append(nodes, a.Defaults[i-firstDefault])
+			nodes = append(nodes, s.pos[i].defNode)
 		}
 	}
 	for i := range s.kwonly {
-		if i < len(a.KwDefaults) && a.KwDefaults[i] != nil {
+		if s.kwonly[i].defNode != nil {
 			ps = append(ps, &s.kwonly[i])
-			nodes = append(nodes, a.KwDefaults[i])
+			nodes = append(nodes, s.kwonly[i].defNode)
 		}
 	}
 	return ps, nodes
@@ -248,12 +263,15 @@ func (g *generator) collectSignatures(mod *pyast.Module) {
 		if _, dup := g.sigErrs[fn.Name]; dup {
 			continue
 		}
-		sig, err := buildSig(fn, fn.Name, false)
+		sig, err := g.buildSig(fn, fn.Name, false)
 		if err != nil {
 			g.sigErrs[fn.Name] = err
 			continue
 		}
 		g.sigs[fn.Name] = sig
+		if fn.Name == "main" {
+			sig.goName = "_pyf_main" // Go's main is the module body
+		}
 		ps, _ := sig.defaultNodes()
 		for i, p := range ps {
 			p.defaultVar = fmt.Sprintf("_pyd_%s_%d", fn.Name, i)
@@ -331,6 +349,8 @@ func (g *generator) typeOfDecorator(n pyast.Node) (pyType, error) {
 
 // functionState is what changes when code generation enters a function.
 type functionState struct {
+	method       *methodCtx
+	specialRet   bool
 	env          *scope
 	fnName, top  string
 	ret          pyType
@@ -344,11 +364,12 @@ type functionState struct {
 }
 
 func (g *generator) saveFunctionState() functionState {
-	return functionState{g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
+	return functionState{g.method, g.specialRet, g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
 		g.loopDepth, g.compRoot, g.callsUnknown}
 }
 
 func (g *generator) restoreFunctionState(s functionState) {
+	g.method, g.specialRet = s.method, s.specialRet
 	g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers = s.env, s.fnName, s.top, s.ret, s.flow, s.handlers
 	g.fnGlobals, g.fnNonlocals, g.loopDepth, g.compRoot, g.callsUnknown = s.fnGlobals, s.fnNonlocals, s.loopDepth, s.compRoot, s.callsUnknown
 }
@@ -356,7 +377,7 @@ func (g *generator) restoreFunctionState(s functionState) {
 // funcBody generates a function: a top-level function (header "func f(...)
 // R") or a nested one (header "func(...) R", a function literal). It
 // returns the text without a trailing newline.
-func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string, parent *scope, top bool) (string, error) {
+func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string, parent *scope, top bool, mc *methodCtx) (string, error) {
 	saved := g.saveFunctionState()
 	defer g.restoreFunctionState(saved)
 
@@ -370,6 +391,20 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 	if top {
 		g.topFn = fn.Name
 	}
+	g.specialRet = false
+	if mc != nil {
+		mc.selfVar = sig.selfName
+		g.method = mc
+		g.specialRet = mc.special
+		g.topFn = ""
+		switch mc.kind {
+		case mClassMethod:
+			env.declare(sig.selfName, classRefOf(mc.cls.name))
+		case mStatic:
+		default:
+			env.declare(sig.selfName, mc.cls.typ())
+		}
+	}
 	for _, p := range sig.goParams() {
 		env.declare(p.name, p.typ)
 	}
@@ -382,10 +417,8 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 	if err := g.predeclareDefs(&body, stmts); err != nil {
 		return "", err
 	}
-	for _, s := range stmts {
-		if err := g.stmt(&body, s); err != nil {
-			return "", err
-		}
+	if err := g.stmtList(&body, stmts); err != nil {
+		return "", err
 	}
 	// Go insists that a function with a result ends in a terminating
 	// statement. Python would return None here, which breaks the annotation.
@@ -405,7 +438,7 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 			}
 			g.calls[fn.Name]["*"] = true
 		}
-	} else if g.callsUnknown {
+	} else if g.callsUnknown || mc != nil {
 		b.WriteString(g.rt("Enter") + "()\ndefer " + g.rt("Leave") + "()\n")
 	}
 	b.WriteString(body.String())
@@ -443,7 +476,7 @@ func (g *generator) funcDef(funcs, main *strings.Builder, fn *pyast.FunctionDef)
 		return err
 	}
 	params, result := g.goSignature(sig)
-	text, err := g.funcBody(fn, sig, fmt.Sprintf("func %s(%s)%s", sig.goName, params, result), nil, true)
+	text, err := g.funcBody(fn, sig, fmt.Sprintf("func %s(%s)%s", sig.goName, params, result), nil, true, nil)
 	if err != nil {
 		return err
 	}
@@ -536,7 +569,7 @@ func (g *generator) predeclareDefs(b *strings.Builder, stmts []pyast.Node) error
 		if g.fnName != "" {
 			qual = g.fnName + ".<locals>." + fn.Name
 		}
-		sig, err := buildSig(fn, qual, true)
+		sig, err := g.buildSig(fn, qual, true)
 		if err != nil {
 			return err
 		}
@@ -600,7 +633,7 @@ func (g *generator) nestedDef(b *strings.Builder, fn *pyast.FunctionDef) error {
 		return err
 	}
 	params, result := g.goSignature(sig)
-	lit, err := g.funcBody(fn, sig, fmt.Sprintf("func(%s)%s", params, result), g.env, false)
+	lit, err := g.funcBody(fn, sig, fmt.Sprintf("func(%s)%s", params, result), g.env, false, nil)
 	if err != nil {
 		return err
 	}
@@ -729,7 +762,11 @@ func (g *generator) adaptFunction(v value, want pyType) (value, bool) {
 			params = append(params, name+" "+g.goType(p.typ))
 			args = append(args, name)
 		} else if p.hasDefault {
-			args = append(args, p.defaultVar)
+			d, err := g.defaultArg(p)
+			if err != nil {
+				return value{}, false
+			}
+			args = append(args, d)
 		} else {
 			return value{}, false
 		}

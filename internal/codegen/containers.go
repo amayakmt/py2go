@@ -58,7 +58,7 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 			return value{}, unsupported("exception stored in a dict", kn.Line())
 		}
 		if key == "" {
-			if !k.typ.hashable() {
+			if !g.hashable(k.typ) {
 				return value{}, unsupported(fmt.Sprintf("dict key of type %s (not hashable)", k.typ), kn.Line())
 			}
 			key, val = k.typ, v.typ
@@ -112,7 +112,7 @@ func (g *generator) setLit(n *pyast.Set, want pyType) (value, error) {
 			return value{}, err
 		}
 		if i == 0 {
-			if !v.typ.hashable() {
+			if !g.hashable(v.typ) {
 				return value{}, unsupported(fmt.Sprintf("set element of type %s (not hashable)", v.typ), e.Line())
 			}
 			elem = v.typ
@@ -181,8 +181,8 @@ func (g *generator) emptyConstructor(n *pyast.Call, want pyType) (value, bool) {
 }
 
 // hashableOrError rejects a type that cannot be a dict key or set element.
-func hashableOrError(t pyType, what string, line int) error {
-	if t.hashable() {
+func (g *generator) hashableOrError(t pyType, what string, line int) error {
+	if g.hashable(t) {
 		return nil
 	}
 	return unsupported(fmt.Sprintf("%s of type %s (not hashable)", what, t), line)
@@ -191,6 +191,9 @@ func hashableOrError(t pyType, what string, line int) error {
 // iterableOf describes v as a runtime.Iterable: the Go expression and the
 // type of the items it yields. A str iterates as a list of its characters.
 func (g *generator) iterableOf(v value) (code string, elem pyType, ok bool) {
+	if v.typ.isClass() {
+		return g.userIterable(v)
+	}
 	elem, ok = v.typ.iterElem()
 	if !ok {
 		return "", "", false
