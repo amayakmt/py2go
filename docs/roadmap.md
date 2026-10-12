@@ -156,16 +156,16 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 > The pivot. CPython's `Lib/` has no type annotations, uses attributes added at run time, calls functions with whatever arguments arrive and builds classes with `type()`. To compile it, the runtime needs the universal Python object, and the type-hint requirement goes away. Annotated code keeps its fast typed path.
 
 1. Record the decision. "Code without type hints is rejected" and "inference is a separate project" are reversed in `docs/decisions.md` and the README. The typed subset remains as an optimization: where every type is known the generated Go is the same as before.
-2. Replace the dependency on a running CPython for parsing. Generate a Go parser from CPython's `Grammar/python.gram` (a PEG generator backend written in Go), checked against `ast.parse` on every file of `Lib/` and `Lib/test/`. The transpiler no longer shells out to `uv` and Python, and the same parser is used at run time by `eval`, `exec` and `compile`.
-3. Define `runtime.Object`, the universal value: ints (small and big), floats, strs, bools, `None`, lists, tuples, dicts, sets, functions, bound methods, classes, instances and modules. Every object has a type object, a `__dict__` where Python gives one, and an identity. Classes get a real `type` with `__mro__`, `__bases__`, `__dict__` and metaclass support.
+2. Replace the dependency on a running CPython for parsing. Generate a Go parser from CPython's `Grammar/python.gram` (a PEG generator backend written in Go), checked against `ast.parse` on every file of `Lib/` and `Lib/test/`. The transpiler no longer shells out to `uv` and Python, and the same parser is used at run time by `eval`, `exec` and `compile`. **Moved to phase 11**, where the import system needs a parser in the process.
+3. Define `runtime.Object`, the universal value: ints (small and big), floats, strs, bools, `None`, lists, tuples, dicts, sets, functions, bound methods, classes, instances and modules. Every object has a type object, a `__dict__` where Python gives one, and an identity. Classes get a real `type` with `__mro__`, `__bases__`, `__dict__` and metaclass support. **Done as `any`**: the Go value is the object, instances have a dictionary for undeclared attributes, and the dynamic operations of the runtime know every built-in type. Big ints come in phase 10; type objects with `__mro__`, `__dict__` and metaclasses move to phase 12 with step 6.
 4. Compile unannotated code. A local type inference pass types what it can from literals, annotations, return types of known functions and flow, and gives everything else `Object`. Statically typed and dynamic values mix: boxing and unboxing are inserted at the boundaries.
 5. Implement dynamic operations with CPython's rules and error messages: operators with reflected and in-place dispatch and `NotImplemented`, comparisons, truthiness, iteration, indexing and slicing, calls with any signature, attribute get, set and delete through the descriptor protocol and `__getattr__`, and `getattr`, `setattr`, `hasattr`, `delattr`, `vars`, `dir`, `id`, `hash`, `isinstance` with tuples and ABC hooks, `callable`.
-6. Implement the type system's dynamic side: three-argument `type()`, metaclasses and `__prepare__`, `__init_subclass__`, `__set_name__`, `__class_getitem__`, `__instancecheck__`, `__subclasshook__`, `__slots__` with real slot semantics, `__new__` and `__init__` ordering.
+6. Implement the type system's dynamic side: three-argument `type()`, metaclasses and `__prepare__`, `__init_subclass__`, `__set_name__`, `__class_getitem__`, `__instancecheck__`, `__subclasshook__`, `__slots__` with real slot semantics, `__new__` and `__init__` ordering. **Moved to phase 12**: `abc`, `enum` and `dataclasses` are the first programs that need it.
 7. Treat annotations as hints: `Any`, `Union`, `Literal` and friends are accepted, evaluated lazily where `from __future__ import annotations` applies, and stored in `__annotations__`.
-8. Add `eval`, `exec` and `compile` with an AST interpreter over the same object model, with `globals()`, `locals()`, `__builtins__` and `__name__` handled properly. Phase 18 replaces the interpreter with a real compiler and virtual machine for bytecode-level features; until then it covers the uses in `Lib/` such as `namedtuple` and `dataclasses`.
-9. Add real frames. `sys._getframe`, `sys.exc_info`, `sys.settrace` hooks at line level, `f_back`, `f_locals`, `f_lineno`, and `traceback` objects built from the `//line` mapping.
-10. Emulate the observable parts of reference counting. Go's collector does not run `__del__` at the moment the last reference disappears. Objects of classes that define `__del__`, hold weak references, or are `with`-less file objects use explicit reference counting inferred by escape analysis, so `__del__` and weakref callbacks fire when CPython would run them in the common cases. Document the cases that differ.
-11. Set a performance budget and measure it: annotated numeric code within 3x of hand-written Go, and dynamic code no slower than 2x CPython on a chosen subset of pyperformance. The numbers are tracked in `docs/benchmarks.md`.
+8. Add `eval`, `exec` and `compile` with an AST interpreter over the same object model, with `globals()`, `locals()`, `__builtins__` and `__name__` handled properly. Phase 18 replaces the interpreter with a real compiler and virtual machine for bytecode-level features; until then it covers the uses in `Lib/` such as `namedtuple` and `dataclasses`. **Moved to phase 11**, with the parser it needs.
+9. Add real frames. `sys._getframe`, `sys.exc_info`, `sys.settrace` hooks at line level, `f_back`, `f_locals`, `f_lineno`, and `traceback` objects built from the `//line` mapping. **Moved to phase 18**, introspection.
+10. Emulate the observable parts of reference counting. Go's collector does not run `__del__` at the moment the last reference disappears. Objects of classes that define `__del__`, hold weak references, or are `with`-less file objects use explicit reference counting inferred by escape analysis, so `__del__` and weakref callbacks fire when CPython would run them in the common cases. Document the cases that differ. **Moved to phase 12**, where `weakref` and `gc` arrive.
+11. Set a performance budget and measure it: annotated numeric code within 3x of hand-written Go, and dynamic code no slower than 2x CPython on a chosen subset of pyperformance. The numbers are tracked in `docs/benchmarks.md`. **Moved to phase 20**, performance.
 12. The exit test is that every differential test from phases 2 to 8 passes again with all annotations stripped from its input, in addition to the original runs. A script removes annotations mechanically; the expected output does not change.
 
 ### Phase 10: numbers, text and bytes in full
@@ -187,6 +187,8 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 ### Phase 11: modules, packages and the import system
 
 > Every real program is several files, and the standard library is hundreds. This phase turns `py2go file.py` into a build driver for projects.
+>
+> Carried over from phase 9: the Go parser generated from `Grammar/python.gram` (step 2), and `eval`, `exec` and `compile` over it (step 8). They belong with the import system, which is the first thing that needs a parser inside the generated program.
 
 1. Compile `import x`, `import x.y as z`, `from x import a, b as c`, `from x import *` with `__all__`, relative imports, `if __name__ == "__main__":`, and the module attributes `__name__`, `__file__`, `__package__`, `__spec__`, `__doc__`, `__all__`, `__path__`.
 2. Add a project mode. `py2go build <dir-or-file>` transpiles a package tree to one Go package per Python module and builds the binary. The import graph decides initialization order, and cycles behave as in CPython: a partially initialized module is visible in `sys.modules` while it runs. `py2go run` builds and runs.
@@ -201,6 +203,8 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 ### Phase 12: the standard library core, and CPython's test suite as the oracle
 
 > From here on a module is done when CPython's own tests for it pass. This phase builds the minimum to run those tests, then the modules the language itself depends on.
+>
+> Carried over from phase 9: type objects with `__mro__` and `__dict__`, three-argument `type()`, metaclasses, `__slots__` and the other class protocols (step 6), and the reference-count emulation for `__del__` and weak references (step 10).
 
 1. Create `stdlib/manifest.json`, one entry per module of `sys.stdlib_module_names` plus `test` and `msilib`, with its phase, kind (L, N or P), status and the list of expected failures. A script checks the manifest against the roadmap map below and against the running CPython, so no module can be forgotten.
 2. Write the native core in `runtime/`: `sys`, `builtins`, `gc`, `atexit`, `errno`, `_weakref`, `_warnings`, `_abc`, `_collections` (deque, defaultdict machinery), `_functools`, `_operator`, `itertools`, `math`, `marshal`, `_string`, `time`, `_signal`, `posix`, `_stat`, `_io` and `_locale`, `_sre`. Each matches CPython's behaviour and messages.
@@ -276,6 +280,8 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 ### Phase 18: introspection, the compiler and developer tools
 
 > `dis`, `inspect`, `pdb`, `trace` and `py_compile` do not look at source text. They look at code objects and bytecode, which the runtime so far does not have. This phase adds them for real.
+>
+> Carried over from phase 9: real frames, `sys._getframe`, `sys.settrace` and traceback objects (step 9).
 
 1. Port CPython 3.13's compiler to Go: the symbol table, the code generator, the flow graph optimizer and the assembler, so that `compile()` returns code objects holding genuine 3.13 bytecode, `co_*` attributes, line tables, exception tables and `co_consts`. The output is checked against CPython by comparing `marshal.dumps(compile(src, ...))` on all of `Lib/`.
 2. Port CPython's evaluation loop as the bytecode virtual machine behind `exec`, `eval` and `compile`, replacing the AST interpreter from phase 9. Generated Go code and VM-run code share the object model, so they call each other freely. `sys.settrace`, `sys.setprofile`, `sys.monitoring` and frame `f_trace` work in VM-run code, and generated code hooks the same events at calls and line changes.
@@ -299,6 +305,8 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 ### Phase 20: conformance, performance and release
 
 > The exit criteria for the whole project.
+>
+> Carried over from phase 9: the performance budget and `docs/benchmarks.md` (step 11).
 
 1. The manifest has no entry in a state other than `done` or `platform`. Every module of `sys.stdlib_module_names` for Python 3.13, plus `test`, imports and works. The platform-specific ones behave on each platform as CPython does there.
 2. `py2go check Lib/` accepts every file of CPython's `Lib/`, including `Lib/test/`, with zero rejections.

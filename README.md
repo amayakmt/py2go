@@ -22,11 +22,13 @@ Python 3.13 is resolved through `uv`.
 
     go test -count=1 ./...
 
-Each case under `testdata/phase2/` to `phase8/` runs under CPython 3.13 (committed
+Each case under `testdata/phase2/` to `phase9/` runs under CPython 3.13 (committed
 `expected.txt`) and as transpiled Go; stdout must match. Cases under
 `testdata/unsupported/` assert the exact error and line number.
 After adding a case, `scripts/regen_expected.sh testdata/phase2/<case>` records
-CPython's output.
+CPython's output. The phase 9 exit test, `TestPhase9Stripped`, runs the cases of
+phases 2 to 8 again with every type annotation removed
+(`scripts/strip_annotations.py`).
 
 ## Source language
 
@@ -35,5 +37,7 @@ Python 3.13 only. Pinned in .python-version.
 ## Scope
 
 - Standard library only
-- Type hints required
+- Type hints are optional. Annotated code compiles to typed Go and an annotation
+  is a contract (a value of the wrong type is a compile error); code without
+  annotations runs through the dynamic operations of the runtime
 - Unsupported syntax fails with a line number
