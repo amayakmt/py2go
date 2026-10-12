@@ -9,6 +9,10 @@ import (
 // methodCall generates "receiver.name(args)" for the str and list methods
 // the transpiler knows.
 func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error) {
+	// dict.fromkeys(keys, value) is called on the type itself.
+	if cls, ok := m.Value.(*pyast.Name); ok && cls.ID == "dict" && !g.isVariable("dict") {
+		return g.dictClassMethod(n, m)
+	}
 	recv, err := g.typedExpr(m.Value)
 	if err != nil {
 		return value{}, err
@@ -18,6 +22,10 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 		return g.strMethod(n, m, recv)
 	case recv.typ.isList():
 		return g.listMethod(n, m, recv)
+	case recv.typ.isDict():
+		return g.dictMethod(n, m, recv)
+	case recv.typ.isSet():
+		return g.setMethod(n, m, recv)
 	}
 	return value{}, unsupported(fmt.Sprintf("method '%s' on %s", m.Attr, recv.typ), n.Line())
 }
@@ -68,6 +76,9 @@ func (g *generator) strMethod(n *pyast.Call, m *pyast.Attribute, recv value) (va
 	overloads, ok := methods[m.Attr]
 	if !ok {
 		return value{}, unsupported(fmt.Sprintf("method '%s' on str", m.Attr), n.Line())
+	}
+	if m.Attr == "join" {
+		return g.strJoin(n, m, recv)
 	}
 
 	// join is called on the separator: sep.join(parts) is StrJoin(sep, parts).
@@ -141,4 +152,193 @@ func joinArgs(args []string) string {
 		out += a
 	}
 	return out
+}
+
+// strJoin is sep.join(iterable of str). The runtime joins a list, so another
+// iterable, such as a generator expression, is collected first.
+func (g *generator) strJoin(n *pyast.Call, m *pyast.Attribute, recv value) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) != 1 {
+		return value{}, unsupported(fmt.Sprintf("join() with %d arguments, expected 1", len(n.Args)), n.Line())
+	}
+	v, err := g.typedExpr(n.Args[0])
+	if err != nil {
+		return value{}, err
+	}
+	list, err := g.asList(v, "join()", n.Line())
+	if err != nil {
+		return value{}, err
+	}
+	if list.typ != listOf(tStr) {
+		return value{}, mismatch("argument 1 of join()", listOf(tStr), list.typ, n.Args[0].Line())
+	}
+	return value{code: call(g.rt("StrJoin"), recv.code, list.code), typ: tStr, prec: precAtom}, nil
+}
+
+// dictClassMethod is dict.fromkeys(keys, value).
+func (g *generator) dictClassMethod(n *pyast.Call, m *pyast.Attribute) (value, error) {
+	if m.Attr != "fromkeys" {
+		return value{}, unsupported(fmt.Sprintf("method '%s' of dict", m.Attr), n.Line())
+	}
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) != 2 {
+		return value{}, unsupported(fmt.Sprintf("dict.fromkeys() with %d arguments (the value is required)", len(n.Args)), n.Line())
+	}
+	keys, elem, err := g.iterableArg(n.Args[0], "dict.fromkeys()")
+	if err != nil {
+		return value{}, err
+	}
+	if err := hashableOrError(elem, "dict key", n.Line()); err != nil {
+		return value{}, err
+	}
+	val, err := g.typedExpr(n.Args[1])
+	if err != nil {
+		return value{}, err
+	}
+	t := dictOf(elem, val.typ)
+	return value{code: call(g.rt("FromKeys")+"["+g.dictGoArgs(t)+"]", keys, val.code), typ: t, prec: precAtom}, nil
+}
+
+func (g *generator) dictMethod(n *pyast.Call, m *pyast.Attribute, recv value) (value, error) {
+	k, v := recv.typ.keyType(), recv.typ.valType()
+	r := recv.at(precAtom)
+	method := func(name string, ret pyType, params ...pyType) (value, error) {
+		args, err := g.methodArgs(n, m, params...)
+		if err != nil {
+			return value{}, err
+		}
+		return value{code: r + "." + name + "(" + joinArgs(args) + ")", typ: ret, prec: precAtom}, nil
+	}
+
+	switch m.Attr {
+	case "get":
+		if len(n.Args) == 1 {
+			return value{}, unsupported("get() with one argument, which returns None when the key is missing", n.Line())
+		}
+		return method("GetDefault", v, k, v)
+	case "pop":
+		if len(n.Args) == 1 {
+			return method("Pop", v, k)
+		}
+		return method("PopDefault", v, k, v)
+	case "popitem":
+		return method("PopItem", tupleOf([]pyType{k, v}))
+	case "setdefault":
+		if len(n.Args) == 1 {
+			return value{}, unsupported("setdefault() with one argument, which stores None", n.Line())
+		}
+		return method("SetDefault", v, k, v)
+	case "clear":
+		return method("Clear", tNone)
+	case "copy":
+		return method("Copy", recv.typ)
+	case "keys":
+		return method("Keys", pyType("dict_keys["+string(k)+", "+string(v)+"]"))
+	case "values":
+		return method("Values", pyType("dict_values["+string(k)+", "+string(v)+"]"))
+	case "items":
+		return method("Items", pyType("dict_items["+string(k)+", "+string(v)+"]"))
+	case "update":
+		return g.dictUpdate(n, m, recv)
+	}
+	return value{}, unsupported(fmt.Sprintf("method '%s' on %s", m.Attr, recv.typ), n.Line())
+}
+
+// dictUpdate is d.update(other_dict) and d.update(iterable of pairs).
+func (g *generator) dictUpdate(n *pyast.Call, m *pyast.Attribute, recv value) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) != 1 {
+		return value{}, unsupported(fmt.Sprintf("update() with %d arguments, expected 1", len(n.Args)), n.Line())
+	}
+	arg, err := g.exprAs(n.Args[0], recv.typ)
+	if err != nil {
+		return value{}, err
+	}
+	r := recv.at(precAtom)
+	if arg.typ == recv.typ {
+		return value{code: r + ".Update(" + arg.code + ")", typ: tNone, prec: precAtom}, nil
+	}
+	pair := tupleOf([]pyType{recv.typ.keyType(), recv.typ.valType()})
+	if code, elem, ok := g.iterableOf(arg); ok && elem == pair {
+		return value{code: r + ".UpdatePairs(" + code + ")", typ: tNone, prec: precAtom}, nil
+	}
+	return value{}, mismatch("argument 1 of update()", recv.typ, arg.typ, n.Args[0].Line())
+}
+
+func (g *generator) setMethod(n *pyast.Call, m *pyast.Attribute, recv value) (value, error) {
+	elem := recv.typ.elem()
+	r := recv.at(precAtom)
+	method := func(name string, ret pyType, params ...pyType) (value, error) {
+		args, err := g.methodArgs(n, m, params...)
+		if err != nil {
+			return value{}, err
+		}
+		return value{code: r + "." + name + "(" + joinArgs(args) + ")", typ: ret, prec: precAtom}, nil
+	}
+	// The set-valued methods take any iterable of the element type.
+	others := func(name string, ret pyType, min, max int) (value, error) {
+		if n.HasKeywords {
+			return value{}, unsupported("keyword arguments", n.Line())
+		}
+		if len(n.Args) < min || len(n.Args) > max {
+			return value{}, unsupported(fmt.Sprintf("%s() with %d arguments", m.Attr, len(n.Args)), n.Line())
+		}
+		args := make([]string, len(n.Args))
+		for i, a := range n.Args {
+			v, err := g.exprAs(a, recv.typ)
+			if err != nil {
+				return value{}, err
+			}
+			code, e, ok := g.iterableOf(v)
+			if !ok || e != elem {
+				return value{}, mismatch(fmt.Sprintf("argument %d of %s()", i+1, m.Attr), recv.typ, v.typ, a.Line())
+			}
+			args[i] = code
+		}
+		return value{code: r + "." + name + "(" + joinArgs(args) + ")", typ: ret, prec: precAtom}, nil
+	}
+
+	switch m.Attr {
+	case "add":
+		return method("Add", tNone, elem)
+	case "remove":
+		return method("Remove", tNone, elem)
+	case "discard":
+		return method("Discard", tNone, elem)
+	case "pop":
+		return method("Pop", elem)
+	case "clear":
+		return method("Clear", tNone)
+	case "copy":
+		return method("Copy", recv.typ)
+	case "union":
+		return others("Union", recv.typ, 0, maxTupleArity*100)
+	case "intersection":
+		return others("Intersection", recv.typ, 0, maxTupleArity*100)
+	case "difference":
+		return others("Difference", recv.typ, 0, maxTupleArity*100)
+	case "symmetric_difference":
+		return others("SymmetricDifference", recv.typ, 1, 1)
+	case "update":
+		return others("Update", tNone, 0, maxTupleArity*100)
+	case "intersection_update":
+		return others("IntersectionUpdate", tNone, 0, maxTupleArity*100)
+	case "difference_update":
+		return others("DifferenceUpdate", tNone, 0, maxTupleArity*100)
+	case "symmetric_difference_update":
+		return others("SymmetricDifferenceUpdate", tNone, 1, 1)
+	case "issubset":
+		return others("IsSubset", tBool, 1, 1)
+	case "issuperset":
+		return others("IsSuperset", tBool, 1, 1)
+	case "isdisjoint":
+		return others("IsDisjoint", tBool, 1, 1)
+	}
+	return value{}, unsupported(fmt.Sprintf("method '%s' on %s", m.Attr, recv.typ), n.Line())
 }

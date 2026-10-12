@@ -1,1 +1,1 @@
-unsupported: Dict at line 1
+unsupported: variable 'x' expects int, got dict[int, int] at line 1

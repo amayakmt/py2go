@@ -31,7 +31,7 @@ func (g *generator) attribute(n *pyast.Attribute) (value, error) {
 // built-in exception class, rather than to a variable or a function that
 // happens to share its name.
 func (g *generator) isExceptionClass(name string) bool {
-	if _, isVar := g.env.lookup(name); isVar {
+	if g.isVariable(name) {
 		return false
 	}
 	if _, isFunc := g.sigs[name]; isFunc {
@@ -43,7 +43,7 @@ func (g *generator) isExceptionClass(name string) bool {
 // isUnknownName reports a name that is no variable, function or builtin
 // exception class. In a raise it is most likely a class the program defines.
 func (g *generator) isUnknownName(name string) bool {
-	if _, isVar := g.env.lookup(name); isVar {
+	if g.isVariable(name) {
 		return false
 	}
 	if _, isFunc := g.sigs[name]; isFunc {
@@ -411,7 +411,7 @@ func (g *generator) handlerBody(b *strings.Builder, h *pyast.ExceptHandler, exc 
 		if err := checkName(h.Name, h.Line()); err != nil {
 			return err
 		}
-		g.declare(b, h.Name, tExc, exc)
+		g.declareLocal(b, h.Name, tExc, exc)
 	}
 	for _, s := range h.Body {
 		if err := g.stmt(b, s); err != nil {

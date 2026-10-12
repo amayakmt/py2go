@@ -1,1 +1,0 @@
-unsupported: Global at line 2

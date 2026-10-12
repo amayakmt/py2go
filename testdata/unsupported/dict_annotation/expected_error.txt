@@ -1,1 +1,1 @@
-unsupported: type annotation 'dict[...]' at line 1
+unsupported: dict key type list[int] (not hashable) at line 1

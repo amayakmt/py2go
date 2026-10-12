@@ -84,7 +84,8 @@ func TestGenerateTypedOutput(t *testing.T) {
 	tests := []struct {
 		name, src, want string
 	}{
-		{"declaration", "x: int = 5\n", "var x int64 = 5\n\t_ = x\n"},
+		{"module variable", "x: int = 5\n", "var x int64\n"},
+		{"local variable", "def f() -> None:\n    x: int = 5\n", "var x int64 = 5\n\t_ = x\n"},
 		{"floor division", "print(-7 // 2)\n", "runtime.Print(runtime.FloorDiv(-7, 2))"},
 		{"modulo", "print(-7 % 3)\n", "runtime.Print(runtime.Mod(-7, 3))"},
 		{"true division of ints", "print(7 / 2)\n", "runtime.DivInt(7, 2)"},
@@ -117,7 +118,7 @@ func TestGenerateContainerOutput(t *testing.T) {
 	tests := []struct {
 		name, src, want string
 	}{
-		{"list literal", "xs: list[int] = [1, 2, 3]\n", "var xs *runtime.List[int64] = runtime.NewList[int64](1, 2, 3)"},
+		{"list literal", "xs: list[int] = [1, 2, 3]\n", "var xs *runtime.List[int64]\n"},
 		{"empty list takes its type", "xs: list[str] = []\n", "runtime.NewList[string]()"},
 		{"nested list", "g: list[list[int]] = [[1], []]\n", "runtime.NewList[*runtime.List[int64]](runtime.NewList[int64](1), runtime.NewList[int64]())"},
 		{"tuple literal", "t: tuple[int, str] = (1, 'a')\n", `runtime.Tup2[int64, string](1, "a")`},
@@ -131,14 +132,14 @@ func TestGenerateContainerOutput(t *testing.T) {
 		{"list in place", "a: list[int] = [1]\na += [2]\n", "a.Extend(runtime.NewList[int64](2))"},
 		{"membership", "a: list[int] = [1]\nprint(1 in a, 'x' in 'xy')\n", `a.Contains(1), runtime.StrContains("xy", "x")`},
 		{"swap is a parallel assignment", "a: int = 1\nb: int = 2\na, b = b, a\n", "a, b = b, a"},
-		{"unpack declares", "x, y = 1, 'a'\n", "var x int64 = _py1_0"},
+		{"unpack declares", "x, y = 1, 'a'\n", "var x int64\n"},
 		{"unpack a call", "u, v = divmod(7, 2)\n", "runtime.DivModInt(7, 2)"},
 		{"list unpack checks length", "xs: list[int] = [1, 2]\na, b = xs\n", "runtime.CheckUnpack(_py1_t.Len(), 2)"},
 		{"swap list items", "xs: list[int] = [1, 2]\nxs[0], xs[1] = xs[1], xs[0]\n", "xs.Set(0, _py1_0)"},
-		{"for over list", "for x in [1, 2]:\n    pass\n", "_py2_l.Len(); _py1_i++ {"},
+		{"for over list", "for x in [1, 2]:\n    pass\n", "var _py1_c runtime.Cursor[int64] = runtime.NewList[int64](1, 2).Iter()\n\tfor _py1_c.Next() {"},
 		{"for over string", "for c in 'ab':\n    pass\n", `runtime.Chars("ab")`},
-		{"enumerate", "for i, x in enumerate([1]):\n    pass\n", "i = _py1_i + 0"},
-		{"zip stops at the shortest", "for a, b in zip([1], [2]):\n    pass\n", "_py1_i < _py2_l.Len() && _py1_i < _py3_l.Len()"},
+		{"enumerate", "for i, x in enumerate([1]):\n    pass\n", "runtime.Enumerate[int64](runtime.NewList[int64](1), 0)"},
+		{"zip", "for a, b in zip([1], [2]):\n    pass\n", "runtime.Zip2[int64, int64](runtime.NewList[int64](1), runtime.NewList[int64](2))"},
 		{"power with literal exponent", "x: int = 3\nprint(x ** 2, x ** -1, 2.0 ** x)\n", "runtime.PowInt(x, 2), runtime.PowFloat(float64(x), float64(-1)), runtime.PowFloat(2.0, float64(x))"},
 		{"conversions", "s: str = '1'\nprint(int(s), float(s), str(1), bool(s))\n", `runtime.IntFromStr(s), runtime.FloatFromStr(s), runtime.Str(1), s != ""`},
 		{"min with a type argument", "print(min(1, 2), max([1]))\n", "runtime.Min[int64](1, 2), runtime.MaxList(runtime.NewList[int64](1))"},
@@ -198,6 +199,91 @@ func TestGenerateExceptionOutput(t *testing.T) {
 				t.Fatal(err)
 			}
 			got = strings.ReplaceAll(got, "\t", "") // compare without gofmt's indentation
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("output should contain %q\n%s", w, got)
+				}
+			}
+			for _, w := range tc.notWant {
+				if strings.Contains(got, w) {
+					t.Errorf("output should not contain %q\n%s", w, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateDictSetOutput(t *testing.T) {
+	tests := []struct {
+		name, src, want string
+	}{
+		{"dict literal", "d: dict[str, int] = {'a': 1, 'b': 2}\n", `d = runtime.NewDict[string, int64](runtime.KV[string, int64]{Key: "a", Val: 1}, runtime.KV[string, int64]{Key: "b", Val: 2})`},
+		{"empty dict takes its type", "d: dict[int, list[str]] = {}\n", "runtime.NewDict[int64, *runtime.List[string]]()"},
+		{"dict()", "d: dict[int, int] = dict()\n", "d = runtime.NewDict[int64, int64]()"},
+		{"dict item", "d: dict[str, int] = {}\nd['a'] = 1\nprint(d['a'])\n", `d.Set("a", 1)`},
+		{"dict augmented item", "d: dict[str, int] = {}\nd['a'] += 1\n", "d.Set(_py1_i, d.Get(_py1_i)+1)"},
+		{"del item", "d: dict[str, int] = {}\ndel d['a']\n", `d.Delete("a")`},
+		{"dict get", "d: dict[str, int] = {}\nprint(d.get('a', 0))\n", `d.GetDefault("a", 0)`},
+		{"dict views", "d: dict[str, int] = {}\nprint(d.keys(), d.values(), d.items())\n", "d.Keys(), d.Values(), d.Items()"},
+		{"dict loop", "d: dict[str, int] = {}\nfor k, v in d.items():\n    print(k, v)\n", "runtime.Cursor[runtime.Tuple2[string, int64]] = d.Items().Iter()"},
+		{"dict membership", "d: dict[str, int] = {}\nprint('a' in d, 'b' not in d)\n", `d.Has("a"), !d.Has("b")`},
+		{"dict merge", "a: dict[int, int] = {}\nb: dict[int, int] = {}\nprint(a | b)\na |= b\n", "a.Union(b)"},
+		{"dict in place merge", "a: dict[int, int] = {}\nb: dict[int, int] = {}\na |= b\n", "a.Update(b)"},
+		{"set literal", "s: set[int] = {3, 1}\n", "s = runtime.NewSet[int64](3, 1)"},
+		{"set operators", "a: set[int] = {1}\nb: set[int] = {2}\nprint(a | b, a & b, a - b, a ^ b)\n", "a.Union(b), a.Intersection(b), a.Difference(b), a.SymmetricDifference(b)"},
+		{"set in place", "a: set[int] = {1}\nb: set[int] = {2}\na |= b\na &= b\na -= b\na ^= b\n", "a.Update(b)\n\ta.IntersectionUpdate(b)\n\ta.DifferenceUpdate(b)\n\ta.SymmetricDifferenceUpdate(b)"},
+		{"set subset", "a: set[int] = {1}\nb: set[int] = {2}\nprint(a <= b, a < b)\n", "runtime.Le(a, b), runtime.Lt(a, b)"},
+		{"set methods", "a: set[int] = set()\na.add(1)\nprint(a.union([2], {3}), a.issubset([1]))\n", "a.Union(runtime.NewList[int64](2), runtime.NewSet[int64](3)), a.IsSubset(runtime.NewList[int64](1))"},
+		{"set from list", "print(set([1, 2]))\n", "runtime.SetFrom[int64](runtime.NewList[int64](1, 2))"},
+		{"range value", "r: range = range(2, 9, 3)\nprint(len(r), r[0], 4 in r)\n", "runtime.NewRange(2, 9, 3)"},
+		{"list of range", "print(list(range(3)))\n", "runtime.ListFrom[int64](runtime.NewRange(0, 3, 1))"},
+		{"list comprehension", "print([x * 2 for x in range(3) if x > 0])\n", "func() *runtime.List[int64] {"},
+		{"comprehension variables are local", "x: int = 7\nprint([x for x in range(2)], x)\n", "var x int64\n"},
+		{"dict comprehension", "print({x: str(x) for x in range(2)})\n", "runtime.NewDict[int64, string]()"},
+		{"set comprehension", "print({x % 2 for x in range(4)})\n", "runtime.NewSet[int64]()"},
+		{"generator expression is lazy", "print(any(x > 1 for x in range(3)))\n", "runtime.NewIterator(func() (bool, bool) {"},
+		{"any on a generator", "print(any(x > 1 for x in range(3)))\n", "runtime.Any[bool](func() *runtime.Iterator[bool]"},
+		{"sum of a generator", "print(sum(x for x in range(3)))\n", "runtime.SumInt(runtime.ListFrom[int64]("},
+		{"sorted dict", "d: dict[str, int] = {}\nprint(sorted(d))\n", "runtime.Sorted(runtime.ListFrom[string](d), false)"},
+		{"reversed", "print(list(reversed([1, 2])))\n", "runtime.Reversed[int64](runtime.NewList[int64](1, 2))"},
+		{"dict.fromkeys", "print(dict.fromkeys([1, 2], 0))\n", "runtime.FromKeys[int64, int64](runtime.NewList[int64](1, 2), 0)"},
+		{"dict from pairs", "print(dict(zip([1], ['a'])))\n", "runtime.DictFrom[int64, string](runtime.Zip2[int64, string]("},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := generate(t, tc.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("output should contain %q\n%s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestGenerateGlobals(t *testing.T) {
+	tests := []struct {
+		name, src string
+		want      []string
+		notWant   []string
+	}{
+		{"module variables are package variables", "LIMIT: int = 3\n\n\ndef f() -> int:\n    return LIMIT\n",
+			[]string{"var LIMIT int64\n", "var _pyg_LIMIT bool\n", `runtime.Bound(LIMIT, _pyg_LIMIT, "LIMIT")`, "LIMIT = 3\n\t_pyg_LIMIT = true"}, nil},
+		{"unread variables get no flag", "X: int = 1\nprint(X)\n", []string{"var X int64\n"}, []string{"_pyg_"}},
+		{"global assignment", "n: int = 0\n\n\ndef bump() -> None:\n    global n\n    n += 1\n", []string{"n += 1", "_pyg_n = true"}, nil},
+		{"names declared in a block are module variables", "if True:\n    y: int = 1\nprint(y)\n", []string{"var y int64\n"}, nil},
+		{"loop variables at module level", "for i in range(2):\n    pass\n", []string{"var i int64\n"}, nil},
+		{"a local hides the global", "x: int = 1\n\n\ndef f() -> int:\n    x: int = 2\n    return x\n", []string{"var x int64 = 2"}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := generate(t, tc.src)
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, w := range tc.want {
 				if !strings.Contains(got, w) {
 					t.Errorf("output should contain %q\n%s", w, got)

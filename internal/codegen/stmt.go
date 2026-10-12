@@ -37,6 +37,12 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 		return g.jump(b, "continue", n.Line())
 	case *pyast.Try:
 		return g.tryStmt(b, n)
+	case *pyast.Delete:
+		return g.deleteStmt(b, n)
+	case *pyast.Global:
+		return g.globalStmt(n)
+	case *compAction:
+		return n.run(b)
 	case *pyast.Pass:
 		return nil
 	case *pyast.FunctionDef:
@@ -81,10 +87,22 @@ func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
 	return nil
 }
 
-// declare introduces a variable in the current block and emits its Go
-// declaration. The "_ = x" keeps Go from rejecting a variable that is only
-// ever assigned, which Python allows.
+// declare introduces a variable and emits its Go declaration. At module
+// level it creates a module variable, which is a package-level Go variable
+// shared with functions and visible after the block it was declared in, as
+// Python's module scope is. Elsewhere it is local to the current block. The
+// "_ = x" keeps Go from rejecting a variable that is only ever assigned,
+// which Python allows.
 func (g *generator) declare(b *strings.Builder, name string, t pyType, init string) {
+	if g.atModuleLevel() {
+		g.declareGlobal(b, name, t, init)
+		return
+	}
+	g.declareLocal(b, name, t, init)
+}
+
+// declareLocal declares a variable in the current block, whatever the level.
+func (g *generator) declareLocal(b *strings.Builder, name string, t pyType, init string) {
 	g.env.declare(name, t)
 	if init == "" {
 		fmt.Fprintf(b, "var %s %s\n", name, g.goType(t))
@@ -122,7 +140,10 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 
 	// Python has one variable per name per function. A second annotation
 	// of the same name assigns to it, even inside a nested block.
-	if existing, declared := g.env.lookup(target.ID); declared {
+	if g.fnGlobals[target.ID] {
+		return unsupported(fmt.Sprintf("annotated name '%s' can't be global", target.ID), n.Line())
+	}
+	if existing, declared, _ := g.lookupBinding(target.ID); declared {
 		if existing != t {
 			return unsupported(fmt.Sprintf("redeclaration of '%s' as %s (was %s)", target.ID, t, existing), n.Line())
 		}
@@ -139,7 +160,7 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 	}
 	switch target := n.Targets[0].(type) {
 	case *pyast.Name:
-		t, declared := g.env.lookup(target.ID)
+		t, declared, global := g.lookupBinding(target.ID)
 		if !declared {
 			return unsupported(fmt.Sprintf("assignment to undeclared name '%s' (needs a type annotation)", target.ID), n.Line())
 		}
@@ -151,6 +172,7 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 			return mismatch(fmt.Sprintf("variable '%s'", target.ID), t, v.typ, n.Line())
 		}
 		fmt.Fprintf(b, "%s = %s\n", target.ID, v.code)
+		g.afterAssign(b, target.ID, global)
 		return nil
 	case *pyast.Subscript:
 		return g.assignItem(b, target, n.Value, n.Line())
@@ -167,19 +189,20 @@ func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valu
 	if err != nil {
 		return err
 	}
-	elem := base.typ.elem()
+	elem := itemType(base.typ)
 	v, err := g.exprAs(valueNode, elem)
 	if err != nil {
 		return err
 	}
 	if v.typ != elem {
-		return mismatch("list item", elem, v.typ, line)
+		return mismatch("item", elem, v.typ, line)
 	}
 	fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, v.code)
 	return nil
 }
 
-// itemTarget generates the list and index of an assignment to xs[i].
+// itemTarget generates the container and the index or key of an assignment
+// to xs[i] or d[k].
 func (g *generator) itemTarget(target *pyast.Subscript) (base, idx value, err error) {
 	if base, err = g.typedExpr(target.Value); err != nil {
 		return
@@ -189,20 +212,32 @@ func (g *generator) itemTarget(target *pyast.Subscript) (base, idx value, err er
 		return
 	}
 	switch {
-	case base.typ == tStr, base.typ.isTuple():
+	case base.typ.isList():
+		if idx, err = g.typedExpr(target.Index); err != nil {
+			return
+		}
+		if idx.typ != tInt {
+			err = unsupported(fmt.Sprintf("index of type %s", idx.typ), target.Line())
+		}
+	case base.typ.isDict():
+		if idx, err = g.exprAs(target.Index, base.typ.keyType()); err != nil {
+			return
+		}
+		if idx.typ != base.typ.keyType() {
+			err = mismatch("dict key", base.typ.keyType(), idx.typ, target.Line())
+		}
+	default:
 		err = unsupported(fmt.Sprintf("item assignment on %s", base.typ), target.Line())
-		return
-	case !base.typ.isList():
-		err = unsupported("item assignment on "+string(base.typ), target.Line())
-		return
-	}
-	if idx, err = g.typedExpr(target.Index); err != nil {
-		return
-	}
-	if idx.typ != tInt {
-		err = unsupported(fmt.Sprintf("index of type %s", idx.typ), target.Line())
 	}
 	return
+}
+
+// itemType is the type of xs[i] for a list and of d[k] for a dict.
+func itemType(container pyType) pyType {
+	if container.isDict() {
+		return container.valType()
+	}
+	return container.elem()
 }
 
 // temp declares a generated variable. It is always read once, but the
@@ -228,6 +263,14 @@ func unpackTypes(n int, t pyType, line int) ([]pyType, error) {
 		}
 		return types, nil
 	}
+	// Any other iterable is unpacked through a list of its items.
+	if elem, ok := t.iterElem(); ok && !t.isIter() {
+		types := make([]pyType, n)
+		for i := range types {
+			types[i] = elem
+		}
+		return types, nil
+	}
 	return nil, unsupported(fmt.Sprintf("unpacking a value of type %s", t), line)
 }
 
@@ -235,7 +278,7 @@ func unpackTypes(n int, t pyType, line int) ([]pyType, error) {
 // target is anything else. It lets an empty list on the right take its type.
 func (g *generator) targetType(n pyast.Node) pyType {
 	if name, ok := n.(*pyast.Name); ok {
-		t, _ := g.env.lookup(name.ID)
+		t, _, _ := g.lookupBinding(name.ID)
 		return t
 	}
 	return ""
@@ -270,7 +313,7 @@ func (g *generator) unpackAssign(b *strings.Builder, target *pyast.Tuple, valueN
 			if name.ID == "_" {
 				continue
 			}
-			if t, declared := g.env.lookup(name.ID); !declared || t != vals[i].typ {
+			if t, declared, global := g.lookupBinding(name.ID); !declared || global || t != vals[i].typ {
 				parallel = false
 				break
 			}
@@ -311,11 +354,12 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		if tg.ID == "_" {
 			return nil
 		}
-		if existing, declared := g.env.lookup(tg.ID); declared {
+		if existing, declared, global := g.lookupBinding(tg.ID); declared {
 			if existing != t {
 				return mismatch(fmt.Sprintf("variable '%s'", tg.ID), existing, t, line)
 			}
 			fmt.Fprintf(b, "%s = %s\n", tg.ID, src)
+			g.afterAssign(b, tg.ID, global)
 			return nil
 		}
 		if err := checkName(tg.ID, line); err != nil {
@@ -325,6 +369,16 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		return nil
 
 	case *pyast.Tuple:
+		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isIter() {
+			// A str, dict, set or range unpacks through a list of its items.
+			list, err := g.asList(value{code: src, typ: t, prec: precAtom}, "unpacking", line)
+			if err != nil {
+				return err
+			}
+			tmp := g.tmp("u")
+			g.temp(b, tmp, list.typ, list.code)
+			return g.assignTarget(b, target, tmp, list.typ, line)
+		}
 		types, err := unpackTypes(len(tg.Elts), t, line)
 		if err != nil {
 			return err
@@ -348,8 +402,8 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		if err != nil {
 			return err
 		}
-		if elem := base.typ.elem(); elem != t {
-			return mismatch("list item", elem, t, line)
+		if elem := itemType(base.typ); elem != t {
+			return mismatch("item", elem, t, line)
 		}
 		fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, src)
 		return nil
@@ -368,7 +422,7 @@ func (g *generator) augAssign(b *strings.Builder, n *pyast.AugAssign) error {
 }
 
 func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyast.Name) error {
-	t, declared := g.env.lookup(target.ID)
+	t, declared, global := g.lookupBinding(target.ID)
 	if !declared {
 		return unsupported(fmt.Sprintf("augmented assignment to undeclared name '%s'", target.ID), n.Line())
 	}
@@ -377,6 +431,9 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 		return err
 	}
 	cur := value{code: target.ID, typ: t, prec: precAtom}
+	if global {
+		cur, _ = g.readGlobal(target.ID)
+	}
 	res, err := g.binary(n.Op, cur, right, n.Line())
 	if err != nil {
 		return err
@@ -386,23 +443,41 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	}
 
 	// "xs += ys" on a list changes the list in place, so every name that
-	// shares it sees the change. "xs = xs + ys" would build a new one.
-	if t.isList() && n.Op == "Add" {
-		fmt.Fprintf(b, "%s.Extend(%s)\n", target.ID, right.code)
-		return nil
-	}
-	if t.isList() && n.Op == "Mult" {
-		fmt.Fprintf(b, "%s.RepeatInPlace(%s)\n", target.ID, right.code)
+	// shares it sees the change. "xs = xs + ys" would build a new one. The
+	// same goes for the operators |=, &=, -= and ^= on dicts and sets.
+	if method, inPlace := inPlaceMethod(t, n.Op); inPlace {
+		fmt.Fprintf(b, "%s.%s(%s)\n", target.ID, method, right.code)
 		return nil
 	}
 
 	// Plain "x += y" when both sides already have the same type.
-	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool {
+	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && !t.isSet() {
 		fmt.Fprintf(b, "%s %s= %s\n", target.ID, goOp, right.code)
+		g.afterAssign(b, target.ID, global)
 		return nil
 	}
 	fmt.Fprintf(b, "%s = %s\n", target.ID, res.code)
+	g.afterAssign(b, target.ID, global)
 	return nil
+}
+
+// inPlaceMethod names the runtime method that implements an augmented
+// assignment by changing the container itself, as Python does for lists,
+// dicts and sets.
+func inPlaceMethod(t pyType, op string) (string, bool) {
+	switch {
+	case t.isList() && op == "Add":
+		return "Extend", true
+	case t.isList() && op == "Mult":
+		return "RepeatInPlace", true
+	case t.isDict() && op == "BitOr":
+		return "Update", true
+	case t.isSet():
+		if m, ok := map[string]string{"BitOr": "Update", "BitAnd": "IntersectionUpdate", "Sub": "DifferenceUpdate", "BitXor": "SymmetricDifferenceUpdate"}[op]; ok {
+			return m, true
+		}
+	}
+	return "", false
 }
 
 var simpleOperand = regexp.MustCompile(`^(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)$`)
@@ -414,7 +489,7 @@ func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	if err != nil {
 		return err
 	}
-	elem := base.typ.elem()
+	elem := itemType(base.typ)
 	right, err := g.exprAs(n.Value, elem)
 	if err != nil {
 		return err
@@ -427,7 +502,7 @@ func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	}
 	if !simpleOperand.MatchString(index) {
 		index = g.tmp("i")
-		g.temp(b, index, tInt, idx.code)
+		g.temp(b, index, idx.typ, idx.code)
 	}
 	cur := value{code: fmt.Sprintf("%s.Get(%s)", list, index), typ: elem, prec: precAtom}
 	res, err := g.binary(n.Op, cur, right, n.Line())
@@ -435,7 +510,7 @@ func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyas
 		return err
 	}
 	if res.typ != elem {
-		return mismatch("list item", elem, res.typ, n.Line())
+		return mismatch("item", elem, res.typ, n.Line())
 	}
 	fmt.Fprintf(b, "%s.Set(%s, %s)\n", list, index, res.code)
 	return nil
@@ -647,7 +722,7 @@ func (g *generator) forRange(b *strings.Builder, n *pyast.For, call *pyast.Call)
 	// The loop variable lives in the enclosing block, because Python keeps
 	// it alive after the loop.
 	if !discard {
-		if t, declared := g.env.lookup(target.ID); declared {
+		if t, declared, _ := g.lookupBinding(target.ID); declared {
 			if t != tInt {
 				return mismatch(fmt.Sprintf("loop variable '%s'", target.ID), t, tInt, n.Line())
 			}
@@ -688,46 +763,6 @@ func targetKind(n pyast.Node) string {
 	return nodeName(n)
 }
 
-// iterSource is one sequence a for loop walks: how to read its length and
-// its item at an index, both Go expressions over variables the loop owns.
-type iterSource struct {
-	length string
-	item   func(i string) string
-	typ    pyType // type of one item
-}
-
-// iterSources evaluates a sequence once, into a temporary, and describes it.
-// Lists are read through Get and Len on every step, so appending to a list
-// while looping over it behaves as in Python. Strings are split into
-// characters up front, which is safe because they cannot change.
-func (g *generator) iterSource(b *strings.Builder, node pyast.Node) (iterSource, error) {
-	// enumerate(zip(a, b)) walks a zip as one sequence of tuples.
-	if c, ok := node.(*pyast.Call); ok {
-		if name, _ := callName(c); name == "zip" {
-			return g.zipSource(b, c)
-		}
-	}
-	v, err := g.typedExpr(node)
-	if err != nil {
-		return iterSource{}, err
-	}
-	switch {
-	case v.typ == tStr:
-		// A string iterates as a list of its characters.
-		v = value{code: call(g.rt("Chars"), v.code), typ: listOf(tStr), prec: precAtom}
-		fallthrough
-	case v.typ.isList():
-		name := g.tmp("l")
-		g.temp(b, name, v.typ, v.code)
-		return iterSource{
-			length: name + ".Len()",
-			item:   func(i string) string { return name + ".Get(" + i + ")" },
-			typ:    v.typ.elem(),
-		}, nil
-	}
-	return iterSource{}, unsupported(fmt.Sprintf("for loop over %s", v.typ), node.Line())
-}
-
 // leaf is one name a loop target binds, with the type it receives.
 type leaf struct {
 	name string
@@ -760,119 +795,31 @@ func leaves(target pyast.Node, t pyType, line int) ([]leaf, error) {
 	return nil, unsupported("for loop target of kind "+targetKind(target), line)
 }
 
-// forEach translates a for loop over a list or string, or over
-// enumerate(...) or zip(...) of those. All variants run one hidden counter:
+// forEach translates a for loop over anything iterable: a list, string,
+// dict, set, range, view or iterator, including zip(), enumerate() and
+// reversed(). The loop runs a cursor, which reads the container as it goes,
+// so appending to a list during the loop behaves as in Python and changing a
+// dict's size raises RuntimeError:
 //
-//	var _py1_l *runtime.List[int64] = xs
-//	for _py2_i := int64(0); _py2_i < _py1_l.Len(); _py2_i++ {
-//		x = _py1_l.Get(_py2_i)
+//	var _py1_c runtime.Cursor[int64] = xs.Iter()
+//	for _py1_c.Next() {
+//		x = _py1_c.Value()
 //		...
 //	}
 func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
-	// What one iteration produces: a single item, or the parts of the
-	// tuple that enumerate and zip would yield.
-	type part struct {
-		code string
-		typ  pyType
-	}
-	tupleValue := func(t pyType, ps []part) string {
-		codes := make([]string, len(ps))
-		for i, p := range ps {
-			codes[i] = p.code
-		}
-		return g.tupleCtor(t, codes)
-	}
-	id := g.tmp("")
-	counter := id + "i"
-
-	var sources []iterSource
-	var parts func() []part
-	multi := false
-
-	call, _ := n.Iter.(*pyast.Call)
-	name, _ := callName(call)
-	switch {
-	case call != nil && name == "enumerate":
-		if call.HasKeywords {
-			return unsupported("keyword arguments", call.Line())
-		}
-		if len(call.Args) < 1 || len(call.Args) > 2 {
-			return unsupported(fmt.Sprintf("enumerate() with %d arguments", len(call.Args)), call.Line())
-		}
-		src, err := g.iterSource(b, call.Args[0])
-		if err != nil {
-			return err
-		}
-		start := "0"
-		if len(call.Args) == 2 {
-			v, err := g.typedExpr(call.Args[1])
-			if err != nil {
-				return err
-			}
-			if v.typ != tInt {
-				return mismatch("enumerate() start", tInt, v.typ, call.Args[1].Line())
-			}
-			start = id + "start"
-			g.temp(b, start, tInt, v.code)
-		}
-		sources, multi = []iterSource{src}, true
-		parts = func() []part {
-			return []part{{counter + " + " + start, tInt}, {src.item(counter), src.typ}}
-		}
-
-	case call != nil && name == "zip":
-		if call.HasKeywords {
-			return unsupported("keyword arguments", call.Line())
-		}
-		if len(call.Args) < 1 || len(call.Args) > maxTupleArity {
-			return unsupported(fmt.Sprintf("zip() with %d arguments", len(call.Args)), call.Line())
-		}
-		for _, a := range call.Args {
-			src, err := g.iterSource(b, a)
-			if err != nil {
-				return err
-			}
-			sources = append(sources, src)
-		}
-		multi = true
-		parts = func() []part {
-			out := make([]part, len(sources))
-			for i, s := range sources {
-				out[i] = part{s.item(counter), s.typ}
-			}
-			return out
-		}
-
-	default:
-		src, err := g.iterSource(b, n.Iter)
-		if err != nil {
-			return err
-		}
-		sources = []iterSource{src}
-		parts = func() []part { return []part{{src.item(counter), src.typ}} }
-	}
-
-	types := func() []pyType {
-		ps := parts()
-		out := make([]pyType, len(ps))
-		for i, p := range ps {
-			out[i] = p.typ
-		}
-		return out
-	}()
-	elemType := types[0]
-	if multi {
-		elemType = tupleOf(types)
+	src, err := g.iterOf(n.Iter)
+	if err != nil {
+		return err
 	}
 
 	// Bind the loop variables in the enclosing block before the loop,
 	// because Python keeps them alive afterwards.
-	bound, err := leaves(n.Target, elemType, n.Line())
+	bound, err := leaves(n.Target, src.typ, n.Line())
 	if err != nil {
 		return err
 	}
 	for _, l := range bound {
-		if existing, declared := g.env.lookup(l.name); declared {
+		if existing, declared, _ := g.lookupBinding(l.name); declared {
 			if existing != l.typ {
 				return mismatch(fmt.Sprintf("loop variable '%s'", l.name), existing, l.typ, n.Line())
 			}
@@ -884,41 +831,19 @@ func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
 		g.declare(b, l.name, l.typ, "")
 	}
 
-	conds := make([]string, len(sources))
-	for i, s := range sources {
-		conds[i] = counter + " < " + s.length
-	}
-	fmt.Fprintf(b, "for %s := int64(0); %s; %s++ {\n", counter, strings.Join(conds, " && "), counter)
-
-	ps := parts()
+	cur := g.tmp("c")
+	fmt.Fprintf(b, "var %s %s[%s] = %s\nfor %s.Next() {\n", cur, g.rt("Cursor"), g.goType(src.typ), src.cursor, cur)
+	item := cur + ".Value()"
 	switch tg := n.Target.(type) {
 	case *pyast.Name:
-		// One name receives the item, or the whole tuple.
-		code := ps[0].code
-		if multi {
-			code = tupleValue(elemType, ps)
-		}
-		if err := g.assignTarget(b, tg, code, elemType, n.Line()); err != nil {
+		if err := g.assignTarget(b, tg, item, src.typ, n.Line()); err != nil {
 			return err
 		}
 	case *pyast.Tuple:
-		if multi && len(tg.Elts) == len(ps) {
-			// "for i, x in enumerate(xs)": assign the parts directly.
-			for i, elt := range tg.Elts {
-				if err := g.assignTarget(b, elt, ps[i].code, ps[i].typ, n.Line()); err != nil {
-					return err
-				}
-			}
-		} else {
-			code := ps[0].code
-			if multi {
-				code = tupleValue(elemType, ps)
-			}
-			tmp := g.tmp("e")
-			g.temp(b, tmp, elemType, code)
-			if err := g.assignTarget(b, tg, tmp, elemType, n.Line()); err != nil {
-				return err
-			}
+		tmp := g.tmp("e")
+		g.temp(b, tmp, src.typ, item)
+		if err := g.assignTarget(b, tg, tmp, src.typ, n.Line()); err != nil {
+			return err
 		}
 	}
 
@@ -931,38 +856,61 @@ func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
 	return nil
 }
 
-// zipSource describes zip(a, b, ...) as a single source of tuples.
-func (g *generator) zipSource(b *strings.Builder, c *pyast.Call) (iterSource, error) {
-	if c.HasKeywords {
-		return iterSource{}, unsupported("keyword arguments", c.Line())
-	}
-	if len(c.Args) < 1 || len(c.Args) > maxTupleArity {
-		return iterSource{}, unsupported(fmt.Sprintf("zip() with %d arguments", len(c.Args)), c.Line())
-	}
-	parts := make([]iterSource, len(c.Args))
-	lengths := make([]string, len(c.Args))
-	types := make([]pyType, len(c.Args))
-	for i, a := range c.Args {
-		src, err := g.iterSource(b, a)
-		if err != nil {
-			return iterSource{}, err
-		}
-		parts[i], lengths[i], types[i] = src, src.length, src.typ
-	}
-	t := tupleOf(types)
-	length := lengths[0]
-	if len(lengths) > 1 {
-		length = g.rt("Min") + "[int64](" + strings.Join(lengths, ", ") + ")"
-	}
-	return iterSource{
-		length: length,
-		item: func(i string) string {
-			codes := make([]string, len(parts))
-			for k, p := range parts {
-				codes[k] = p.item(i)
+// deleteStmt is "del xs[i]", "del xs[a:b]" and "del d[k]".
+func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
+	for _, target := range n.Targets {
+		sub, ok := target.(*pyast.Subscript)
+		if !ok {
+			if _, isName := target.(*pyast.Name); isName {
+				return unsupported("del of a variable", n.Line())
 			}
-			return g.tupleCtor(t, codes)
-		},
-		typ: t,
-	}, nil
+			return unsupported("del of "+targetKind(target), n.Line())
+		}
+		base, err := g.typedExpr(sub.Value)
+		if err != nil {
+			return err
+		}
+		if sl, isSlice := sub.Index.(*pyast.Slice); isSlice {
+			if !base.typ.isList() {
+				return unsupported(fmt.Sprintf("del of a slice of %s", base.typ), n.Line())
+			}
+			bounds, err := g.bounds(sl)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(b, "%s.DelSlice(%s)\n", base.at(precAtom), bounds)
+			continue
+		}
+		switch {
+		case base.typ.isList():
+			idx, err := g.typedExpr(sub.Index)
+			if err != nil {
+				return err
+			}
+			if idx.typ != tInt {
+				return unsupported(fmt.Sprintf("index of type %s", idx.typ), n.Line())
+			}
+			fmt.Fprintf(b, "%s.DelAt(%s)\n", base.at(precAtom), idx.code)
+		case base.typ.isDict():
+			key, err := g.exprAs(sub.Index, base.typ.keyType())
+			if err != nil {
+				return err
+			}
+			if key.typ != base.typ.keyType() {
+				return mismatch("dict key", base.typ.keyType(), key.typ, n.Line())
+			}
+			fmt.Fprintf(b, "%s.Delete(%s)\n", base.at(precAtom), key.code)
+		default:
+			return unsupported(fmt.Sprintf("del of an item of %s", base.typ), n.Line())
+		}
+	}
+	return nil
 }
+
+// compAction is a statement that runs generated code. Comprehensions are
+// translated into ordinary for and if statements around one of these.
+type compAction struct {
+	run func(b *strings.Builder) error
+}
+
+func (a *compAction) Line() int { return 0 }

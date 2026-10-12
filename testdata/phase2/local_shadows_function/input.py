@@ -3,10 +3,9 @@ def total() -> int:
 
 
 def use() -> int:
-    value: int = total()
-    return value + 1
+    total: int = 100
+    return total + 1
 
 
 print(use())
-total: int = 10
-print(total)
+print(total())

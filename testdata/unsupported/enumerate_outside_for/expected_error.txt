@@ -1,1 +1,0 @@
-unsupported: enumerate() outside a for loop at line 1

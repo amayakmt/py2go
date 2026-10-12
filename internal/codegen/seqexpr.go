@@ -96,6 +96,9 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	}
 
 	if sl, ok := n.Index.(*pyast.Slice); ok {
+		if base.typ != tStr && !base.typ.isList() {
+			return value{}, unsupported("slice of "+string(base.typ), n.Line())
+		}
 		bounds, err := g.bounds(sl)
 		if err != nil {
 			return value{}, err
@@ -109,6 +112,16 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 		return value{}, unsupported("slice of "+string(base.typ), n.Line())
 	}
 
+	if base.typ.isDict() {
+		key, err := g.exprAs(n.Index, base.typ.keyType())
+		if err != nil {
+			return value{}, err
+		}
+		if key.typ != base.typ.keyType() {
+			return value{}, mismatch("dict key", base.typ.keyType(), key.typ, n.Index.Line())
+		}
+		return value{code: base.at(precAtom) + ".Get(" + key.code + ")", typ: base.typ.valType(), prec: precAtom}, nil
+	}
 	idx, err := g.typedExpr(n.Index)
 	if err != nil {
 		return value{}, err
@@ -123,6 +136,8 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 		return value{code: base.at(precAtom) + ".Get(" + idx.code + ")", typ: base.typ.elem(), prec: precAtom}, nil
 	case base.typ.isTuple():
 		return g.tupleIndex(n, base, idx)
+	case base.typ == tRange:
+		return value{code: base.at(precAtom) + ".Get(" + idx.code + ")", typ: tInt, prec: precAtom}, nil
 	}
 	return value{}, unsupported("subscript of "+string(base.typ), n.Line())
 }

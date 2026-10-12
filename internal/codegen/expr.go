@@ -97,6 +97,18 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 		return g.listLit(n, "")
 	case *pyast.Tuple:
 		return g.tupleLit(n, "")
+	case *pyast.Dict:
+		return g.dictLit(n, "")
+	case *pyast.Set:
+		return g.setLit(n, "")
+	case *pyast.ListComp:
+		return g.listComp(n, "")
+	case *pyast.SetComp:
+		return g.setComp(n, "")
+	case *pyast.DictComp:
+		return g.dictComp(n, "")
+	case *pyast.GeneratorExp:
+		return g.genExp(n)
 	case *pyast.Subscript:
 		return g.subscript(n)
 	case *pyast.JoinedStr:
@@ -125,6 +137,21 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 		v, err = g.listLit(n, want)
 	case *pyast.Tuple:
 		v, err = g.tupleLit(n, want)
+	case *pyast.Dict:
+		v, err = g.dictLit(n, want)
+	case *pyast.Set:
+		v, err = g.setLit(n, want)
+	case *pyast.ListComp:
+		v, err = g.listComp(n, want)
+	case *pyast.SetComp:
+		v, err = g.setComp(n, want)
+	case *pyast.DictComp:
+		v, err = g.dictComp(n, want)
+	case *pyast.Call:
+		if ev, ok := g.emptyConstructor(n, want); ok {
+			return ev, nil
+		}
+		v, err = g.expr(n)
 	default:
 		v, err = g.expr(n)
 	}
@@ -166,17 +193,28 @@ func floatLiteral(f float64) string {
 	return s
 }
 
+// isVariable reports whether name is a variable in the current scopes or,
+// inside a function, a module variable.
+func (g *generator) isVariable(name string) bool {
+	if _, ok := g.env.lookup(name); ok {
+		return true
+	}
+	if g.fnName != "" {
+		_, ok := g.globalTypes[name]
+		return ok
+	}
+	return false
+}
+
 func (g *generator) name(n *pyast.Name) (value, error) {
 	if t, ok := g.env.lookup(n.ID); ok {
 		return value{code: n.ID, typ: t, prec: precAtom}, nil
 	}
+	if v, ok := g.readGlobal(n.ID); ok {
+		return v, nil
+	}
 	if _, isFunc := g.sigs[n.ID]; isFunc {
 		return value{}, unsupported(fmt.Sprintf("function '%s' used as a value", n.ID), n.Line())
-	}
-	if g.fnName != "" {
-		if _, ok := g.mainEnv.lookup(n.ID); ok {
-			return value{}, unsupported(fmt.Sprintf("module-level variable '%s' used inside a function", n.ID), n.Line())
-		}
 	}
 	return value{}, unsupported(fmt.Sprintf("undefined name '%s'", n.ID), n.Line())
 }
@@ -193,7 +231,7 @@ func (g *generator) call(n *pyast.Call) (value, error) {
 
 func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	// A local variable hides the function of the same name.
-	if _, isVar := g.env.lookup(callee.ID); isVar {
+	if g.isVariable(callee.ID) {
 		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", callee.ID), n.Line())
 	}
 	// A function the program defines hides a builtin of the same name.
@@ -268,6 +306,10 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 		return value{}, unsupported("operator "+opSymbols[op], line)
 	}
 
+	if v, ok := g.setBinary(op, l, r); ok {
+		return v, nil
+	}
+
 	// str and list operands: concatenation and repetition.
 	if l.typ == tStr || r.typ == tStr || l.typ.isList() || r.typ.isList() {
 		if v, ok := g.sequenceBinary(op, l, r); ok {
@@ -327,6 +369,31 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 		}
 	}
 	return value{}, unsupported("operator "+op, line)
+}
+
+// setBinary handles the operators of sets, dicts and keys views: |, &, - and ^
+// on sets and keys views, and | on dicts.
+func (g *generator) setBinary(op string, l, r value) (value, bool) {
+	if l.typ.isDict() && l.typ == r.typ && op == "BitOr" {
+		return value{code: l.at(precAtom) + ".Union(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	}
+	method := map[string]string{"BitOr": "Union", "BitAnd": "Intersection", "Sub": "Difference", "BitXor": "SymmetricDifference"}[op]
+	if method == "" {
+		return value{}, false
+	}
+	switch {
+	case l.typ.isSet() && l.typ == r.typ:
+		return value{code: l.at(precAtom) + "." + method + "(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	case l.typ.isKeysView():
+		// d.keys() | other works on a set made from the keys.
+		viewMethod := map[string]string{"BitOr": "Or", "BitAnd": "And", "Sub": "Sub", "BitXor": "Xor"}[op]
+		code, elem, ok := g.iterableOf(r)
+		if !ok || elem != l.typ.keyType() || r.typ.isTuple() {
+			return value{}, false
+		}
+		return value{code: l.at(precAtom) + "." + viewMethod + "(" + code + ")", typ: setOf(elem), prec: precAtom}, true
+	}
+	return value{}, false
 }
 
 // sequenceBinary handles the operators that accept a str or list:
@@ -440,8 +507,11 @@ func truth(v value) value {
 	case tStr:
 		return value{code: v.at(precCmp+1) + ` != ""`, typ: tBool, prec: precCmp, konst: v.konst}
 	}
-	if v.typ.isList() || v.typ.isTuple() {
+	if v.typ.isList() || v.typ.isTuple() || v.typ.isDict() || v.typ.isSet() || v.typ.isView() || v.typ == tRange {
 		return value{code: v.at(precAtom) + ".Len() != 0", typ: tBool, prec: precCmp}
+	}
+	if v.typ.isIter() {
+		return value{code: "true", typ: tBool, prec: precAtom} // an iterator is always truthy
 	}
 	if v.typ == tExc {
 		return value{code: "true", typ: tBool, prec: precAtom} // exceptions are always truthy
@@ -455,7 +525,7 @@ func truth(v value) value {
 func (g *generator) operandPair(left, right pyast.Node) (l, r value, err error) {
 	isLiteral := func(n pyast.Node) bool {
 		switch n.(type) {
-		case *pyast.List, *pyast.Tuple:
+		case *pyast.List, *pyast.Tuple, *pyast.Dict, *pyast.Set:
 			return true
 		}
 		return false
@@ -496,6 +566,15 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 		return value{}, unsupported("comparison of exceptions", n.Line())
 	}
 
+	// A keys view equals a set (or another keys view) with the same items.
+	if (op == "Eq" || op == "NotEq") && keysViewAndSet(l.typ, r.typ) {
+		code := g.rt("Eq") + "(" + l.code + ", " + r.code + ")"
+		if op == "NotEq" {
+			return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
+		}
+		return value{code: code, typ: tBool, prec: precAtom}, nil
+	}
+
 	// An int compared with a float converts to float, as in Python.
 	// Anything else must match exactly: Python allows 1 == "a" or True < 2,
 	// but those are almost always mistakes.
@@ -506,8 +585,19 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("comparison of %s with %s", l.typ, r.typ), n.Line())
 	case l.typ == tBool && op != "Eq" && op != "NotEq":
 		return value{}, unsupported("ordering comparison of bool values", n.Line())
-	case l.typ.isList() || l.typ.isTuple():
-		// Containers compare element by element in the runtime.
+	case l.typ.isDict() || l.typ == tRange || l.typ.isView() || l.typ.isIter():
+		// These compare for equality only.
+		if op != "Eq" && op != "NotEq" {
+			return value{}, unsupported(fmt.Sprintf("ordering comparison of %s", l.typ), n.Line())
+		}
+		code := g.rt("Eq") + "(" + l.code + ", " + r.code + ")"
+		if op == "NotEq" {
+			return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
+		}
+		return value{code: code, typ: tBool, prec: precAtom}, nil
+	case l.typ.isList() || l.typ.isTuple() || l.typ.isSet():
+		// Containers compare element by element in the runtime. For sets,
+		// the ordering operators mean "is a subset".
 		fn := map[string]string{"Eq": "Eq", "NotEq": "Eq", "Lt": "Lt", "LtE": "Le", "Gt": "Gt", "GtE": "Ge"}[op]
 		code := g.rt(fn) + "(" + l.code + ", " + r.code + ")"
 		if op == "NotEq" {
@@ -535,8 +625,13 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 		return value{}, err
 	}
 	var want pyType
-	if r.typ.isList() {
+	switch {
+	case r.typ.isList() || r.typ.isSet():
 		want = r.typ.elem()
+	case r.typ.isDict() || r.typ.isKeysView():
+		want = r.typ.keyType()
+	case r.typ.isValuesView():
+		want = r.typ.valType()
 	}
 	l, err := g.exprAs(n.Left, want)
 	if err != nil {
@@ -549,6 +644,11 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 		code = g.rt("StrContains") + "(" + r.code + ", " + l.code + ")"
 	case r.typ.isList() && l.typ == r.typ.elem():
 		code = r.at(precAtom) + ".Contains(" + l.code + ")"
+	case (r.typ.isSet() && l.typ == r.typ.elem()), (r.typ.isDict() && l.typ == r.typ.keyType()),
+		(r.typ.isKeysView() && l.typ == r.typ.keyType()), (r.typ.isValuesView() && l.typ == r.typ.valType()),
+		(r.typ.isItemsView() && l.typ == tupleOf([]pyType{r.typ.keyType(), r.typ.valType()})),
+		(r.typ == tRange && l.typ == tInt):
+		code = r.at(precAtom) + ".Has(" + l.code + ")"
 	case r.typ.isTuple() && allEqual(r.typ.elems(), l.typ):
 		// The item is boxed as an interface, so give a constant its Go type.
 		code = g.rt("SeqContains") + "(" + r.code + ", " + l.typ.goType() + "(" + l.code + "))"
@@ -598,4 +698,21 @@ func (g *generator) boolOp(n *pyast.BoolOp) (value, error) {
 		parts = append(parts, v.at(prec))
 	}
 	return value{code: strings.Join(parts, " "+goOp+" "), typ: tBool, prec: prec, konst: konst}, nil
+}
+
+// keysViewAndSet is whether a and b are a keys view and a set, or two keys
+// views, over the same item type.
+func keysViewAndSet(a, b pyType) bool {
+	item := func(t pyType) (pyType, bool) {
+		switch {
+		case t.isKeysView():
+			return t.keyType(), true
+		case t.isSet():
+			return t.elem(), true
+		}
+		return "", false
+	}
+	ea, oka := item(a)
+	eb, okb := item(b)
+	return oka && okb && ea == eb && (a.isKeysView() || b.isKeysView())
 }

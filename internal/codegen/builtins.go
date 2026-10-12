@@ -15,10 +15,22 @@ func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error
 	switch name {
 	case "print":
 		return g.printCall(n)
-	case "range", "enumerate", "zip":
-		return value{}, unsupported(name+"() outside a for loop", n.Line())
 	case "sorted":
 		return g.sortedCall(n)
+	case "range":
+		return g.rangeCall(n)
+	case "enumerate":
+		return g.enumerateCall(n)
+	case "zip":
+		return g.zipCall(n)
+	case "reversed":
+		return g.reversedCall(n)
+	case "list", "set", "dict":
+		return g.convertCall(name, n)
+	case "any", "all":
+		return g.anyAllCall(name, n)
+	case "tuple":
+		return value{}, unsupported("tuple() of a sequence, which has no fixed length (variable-length tuples arrive in phase 6)", n.Line())
 	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod", "min", "max":
 		if n.HasKeywords {
 			return value{}, unsupported("keyword arguments", n.Line())
@@ -63,7 +75,7 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		switch {
 		case a.typ == tStr:
 			return atom(call(g.rt("StrLen"), a.code), tInt)
-		case a.typ.isList() || a.typ.isTuple():
+		case a.typ.isList() || a.typ.isTuple() || a.typ.isDict() || a.typ.isSet() || a.typ.isView() || a.typ == tRange:
 			return atom(a.at(precAtom)+".Len()", tInt)
 		}
 		return badArg(a)
@@ -173,13 +185,17 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		if err := arity(name, n, 1, 1); err != nil {
 			return value{}, err
 		}
-		switch a := args[0]; a.typ {
+		a, err := g.asList(args[0], "sum()", n.Line())
+		if err != nil {
+			return value{}, err
+		}
+		switch a.typ {
 		case listOf(tInt):
 			return atom(call(g.rt("SumInt"), a.code), tInt)
 		case listOf(tFloat):
 			return atom(call(g.rt("SumFloat"), a.code), tFloat)
 		default:
-			return badArg(a)
+			return badArg(args[0])
 		}
 
 	case "min", "max":
@@ -196,9 +212,12 @@ func (g *generator) minMax(name string, n *pyast.Call, args []value) (value, err
 	ordered := func(t pyType) bool { return t == tInt || t == tFloat || t == tStr }
 
 	if len(args) == 1 {
-		a := args[0]
-		if !a.typ.isList() || !ordered(a.typ.elem()) {
-			return value{}, unsupported(fmt.Sprintf("%s() of %s", name, a.typ), n.Line())
+		a, err := g.asList(args[0], name+"()", n.Line())
+		if err != nil {
+			return value{}, err
+		}
+		if !ordered(a.typ.elem()) {
+			return value{}, unsupported(fmt.Sprintf("%s() of %s", name, args[0].typ), n.Line())
 		}
 		return value{code: call(g.rt(title+"List"), a.code), typ: a.typ.elem(), prec: precAtom}, nil
 	}
@@ -245,14 +264,15 @@ func (g *generator) sortedCall(n *pyast.Call) (value, error) {
 	if err != nil {
 		return value{}, err
 	}
-	if !a.typ.isList() {
-		return value{}, unsupported(fmt.Sprintf("sorted() of %s", a.typ), n.Line())
+	list, err := g.asList(a, "sorted()", n.Line())
+	if err != nil {
+		return value{}, err
 	}
 	rev, err := g.reverseKeyword(n, "sorted")
 	if err != nil {
 		return value{}, err
 	}
-	return value{code: call(g.rt("Sorted"), a.code, rev), typ: a.typ, prec: precAtom}, nil
+	return value{code: call(g.rt("Sorted"), list.code, rev), typ: list.typ, prec: precAtom}, nil
 }
 
 // printCall is print(*args, sep=..., end=...).
@@ -294,4 +314,218 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 		fn = "PrintOpts"
 	}
 	return value{code: call(g.rt(fn), args...), typ: tNone, prec: precAtom}, nil
+}
+
+// rangeCall is range(stop), range(start, stop) and range(start, stop, step)
+// as a value. A for loop over a literal range() call does not come here.
+func (g *generator) rangeCall(n *pyast.Call) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if err := arity("range", n, 1, 3); err != nil {
+		return value{}, err
+	}
+	args := make([]string, len(n.Args))
+	for i, a := range n.Args {
+		v, err := g.typedExpr(a)
+		if err != nil {
+			return value{}, err
+		}
+		if v.typ != tInt {
+			return value{}, mismatch("range() argument", tInt, v.typ, a.Line())
+		}
+		args[i] = v.code
+	}
+	switch len(args) {
+	case 1:
+		args = []string{"0", args[0], "1"}
+	case 2:
+		args = append(args, "1")
+	}
+	return value{code: call(g.rt("NewRange"), args...), typ: tRange, prec: precAtom}, nil
+}
+
+// iterableArg generates an argument that must be iterable and returns it as a
+// runtime.Iterable together with its item type.
+func (g *generator) iterableArg(node pyast.Node, what string) (code string, elem pyType, err error) {
+	v, err := g.typedExpr(node)
+	if err != nil {
+		return "", "", err
+	}
+	code, elem, ok := g.iterableOf(v)
+	if !ok {
+		return "", "", unsupported(fmt.Sprintf("%s of %s", what, v.typ), node.Line())
+	}
+	return code, elem, nil
+}
+
+// enumerateCall is enumerate(iterable) and enumerate(iterable, start).
+func (g *generator) enumerateCall(n *pyast.Call) (value, error) {
+	start := "0"
+	args := n.Args
+	for _, kw := range n.Keywords {
+		if kw.Arg != "start" || len(args) != 1 {
+			return value{}, unsupported(fmt.Sprintf("keyword argument '%s' of enumerate()", kw.Arg), kw.Line())
+		}
+		args = append(append([]pyast.Node{}, args...), kw.Value)
+	}
+	if len(args) < 1 || len(args) > 2 {
+		return value{}, unsupported(fmt.Sprintf("enumerate() with %d arguments", len(args)), n.Line())
+	}
+	code, elem, err := g.iterableArg(args[0], "enumerate()")
+	if err != nil {
+		return value{}, err
+	}
+	if len(args) == 2 {
+		v, err := g.typedExpr(args[1])
+		if err != nil {
+			return value{}, err
+		}
+		if v.typ != tInt {
+			return value{}, mismatch("enumerate() start", tInt, v.typ, args[1].Line())
+		}
+		start = v.code
+	}
+	t := iterOf(tupleOf([]pyType{tInt, elem}))
+	return value{code: call(g.rt("Enumerate")+"["+g.goType(elem)+"]", code, start), typ: t, prec: precAtom}, nil
+}
+
+// zipCall is zip(a, b, ...) with one to six inputs.
+func (g *generator) zipCall(n *pyast.Call) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) < 1 || len(n.Args) > maxTupleArity {
+		return value{}, unsupported(fmt.Sprintf("zip() with %d arguments", len(n.Args)), n.Line())
+	}
+	codes := make([]string, len(n.Args))
+	elems := make([]pyType, len(n.Args))
+	goElems := make([]string, len(n.Args))
+	for i, a := range n.Args {
+		code, elem, err := g.iterableArg(a, "zip()")
+		if err != nil {
+			return value{}, err
+		}
+		codes[i], elems[i], goElems[i] = code, elem, g.goType(elem)
+	}
+	fn := fmt.Sprintf("%s%d[%s]", g.rt("Zip"), len(codes), strings.Join(goElems, ", "))
+	return value{code: call(fn, codes...), typ: iterOf(tupleOf(elems)), prec: precAtom}, nil
+}
+
+// reversedCall is reversed(x) for a list, str, range or dict.
+func (g *generator) reversedCall(n *pyast.Call) (value, error) {
+	if err := arity("reversed", n, 1, 1); err != nil {
+		return value{}, err
+	}
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	v, err := g.typedExpr(n.Args[0])
+	if err != nil {
+		return value{}, err
+	}
+	switch {
+	case v.typ.isList():
+		return value{code: call(g.rt("Reversed")+"["+g.goType(v.typ.elem())+"]", v.code), typ: iterOf(v.typ.elem()), prec: precAtom}, nil
+	case v.typ == tStr:
+		return value{code: call(g.rt("ReversedStr"), v.code), typ: iterOf(tStr), prec: precAtom}, nil
+	case v.typ == tRange:
+		return value{code: call(g.rt("ReversedRange"), v.code), typ: tRange, prec: precAtom}, nil
+	case v.typ.isDict():
+		keys := call(g.rt("ListFrom")+"["+g.goType(v.typ.keyType())+"]", v.code)
+		return value{code: call(g.rt("Reversed")+"["+g.goType(v.typ.keyType())+"]", keys), typ: iterOf(v.typ.keyType()), prec: precAtom}, nil
+	}
+	return value{}, unsupported(fmt.Sprintf("reversed() of %s", v.typ), n.Line())
+}
+
+// anyAllCall is any(iterable) and all(iterable). It hands the iterable to the
+// runtime as it is, so a generator behind it is advanced only as far as needed.
+func (g *generator) anyAllCall(name string, n *pyast.Call) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if err := arity(name, n, 1, 1); err != nil {
+		return value{}, err
+	}
+	code, elem, err := g.iterableArg(n.Args[0], name+"()")
+	if err != nil {
+		return value{}, err
+	}
+	fn := map[string]string{"any": "Any", "all": "All"}[name]
+	return value{code: call(g.rt(fn)+"["+g.goType(elem)+"]", code), typ: tBool, prec: precAtom}, nil
+}
+
+// convertCall is list(x), set(x) and dict(x).
+func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
+	if name == "dict" && n.HasKeywords {
+		return g.dictFromKeywords(n)
+	}
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) == 0 {
+		return value{}, unsupported(fmt.Sprintf("empty %s without a type annotation", name), n.Line())
+	}
+	if len(n.Args) != 1 {
+		return value{}, unsupported(fmt.Sprintf("%s() with %d arguments", name, len(n.Args)), n.Line())
+	}
+	v, err := g.typedExpr(n.Args[0])
+	if err != nil {
+		return value{}, err
+	}
+	code, elem, ok := g.iterableOf(v)
+	if !ok {
+		return value{}, unsupported(fmt.Sprintf("%s() of %s", name, v.typ), n.Line())
+	}
+	switch name {
+	case "list":
+		if v.typ.isList() {
+			return value{code: v.at(precAtom) + ".Copy()", typ: v.typ, prec: precAtom}, nil
+		}
+		return value{code: call(g.rt("ListFrom")+"["+g.goType(elem)+"]", code), typ: listOf(elem), prec: precAtom}, nil
+	case "set":
+		if err := hashableOrError(elem, "set element", n.Line()); err != nil {
+			return value{}, err
+		}
+		return value{code: call(g.rt("SetFrom")+"["+g.goType(elem)+"]", code), typ: setOf(elem), prec: precAtom}, nil
+	}
+	// dict
+	if v.typ.isDict() {
+		return value{code: v.at(precAtom) + ".Copy()", typ: v.typ, prec: precAtom}, nil
+	}
+	if !elem.isTuple() || len(elem.elems()) != 2 {
+		return value{}, unsupported(fmt.Sprintf("dict() of %s (needs pairs)", v.typ), n.Line())
+	}
+	k, val := elem.elems()[0], elem.elems()[1]
+	if err := hashableOrError(k, "dict key", n.Line()); err != nil {
+		return value{}, err
+	}
+	t := dictOf(k, val)
+	return value{code: call(g.rt("DictFrom")+"["+g.dictGoArgs(t)+"]", code), typ: t, prec: precAtom}, nil
+}
+
+// dictFromKeywords is dict(a=1, b=2), a dict with str keys.
+func (g *generator) dictFromKeywords(n *pyast.Call) (value, error) {
+	if len(n.Args) != 0 {
+		return value{}, unsupported("dict() with positional and keyword arguments", n.Line())
+	}
+	var val pyType
+	pairs := make([]string, len(n.Keywords))
+	for i, kw := range n.Keywords {
+		if kw.Arg == "" {
+			return value{}, unsupported("dict(**mapping)", kw.Line())
+		}
+		v, err := g.typedExpr(kw.Value)
+		if err != nil {
+			return value{}, err
+		}
+		if i == 0 {
+			val = v.typ
+		} else if v.typ != val {
+			return value{}, unsupported(fmt.Sprintf("dict() keywords mix value types (%s and %s)", val, v.typ), kw.Line())
+		}
+		pairs[i] = fmt.Sprintf("%s[string, %s]{Key: %s, Val: %s}", g.rt("KV"), g.goType(val), strconv.Quote(kw.Arg), v.code)
+	}
+	t := dictOf(tStr, val)
+	return value{code: g.rt("NewDict") + "[string, " + g.goType(val) + "](" + strings.Join(pairs, ", ") + ")", typ: t, prec: precAtom}, nil
 }

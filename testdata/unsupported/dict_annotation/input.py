@@ -1,2 +1,2 @@
-def f(a: dict[int, int]) -> None:
+def f(a: dict[list[int], int]) -> None:
     pass

@@ -1,1 +1,1 @@
-unsupported: Set at line 1
+unsupported: variable 'x' expects int, got set[int] at line 1

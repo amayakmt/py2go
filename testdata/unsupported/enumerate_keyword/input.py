@@ -1,2 +1,2 @@
-for i, x in enumerate([1], start=1):
+for i, x in enumerate([1], stop=1):
     pass

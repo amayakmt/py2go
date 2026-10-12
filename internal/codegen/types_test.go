@@ -42,8 +42,20 @@ func TestAnnotationType(t *testing.T) {
 			"unsupported: empty tuple annotation at line 6"},
 		{"tuple of seven", sub("tuple", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("int"), name("int"), name("int"), name("int"), name("int"), name("int")}}), false, "",
 			"unsupported: tuple with more than 6 elements at line 6"},
-		{"dict[int, int]", sub("dict", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("int")}}), false, "",
-			"unsupported: type annotation 'dict[...]' at line 6"},
+		{"frozenset[int]", sub("frozenset", name("int")), false, "",
+			"unsupported: type annotation 'frozenset[...]' at line 6"},
+		{"dict[str, list[int]]", sub("dict", &pyast.Tuple{Elts: []pyast.Node{name("str"), sub("list", name("int"))}}), false,
+			dictOf(tStr, listOf(tInt)), ""},
+		{"dict[list[int], int]", sub("dict", &pyast.Tuple{Elts: []pyast.Node{sub("list", name("int")), name("int")}}), false, "",
+			"unsupported: dict key type list[int] (not hashable) at line 6"},
+		{"dict[int]", sub("dict", name("int")), false, "",
+			"unsupported: dict[...] with 1 type arguments at line 6"},
+		{"set[int]", sub("set", name("int")), false, setOf(tInt), ""},
+		{"set[list[int]]", sub("set", sub("list", name("int"))), false, "",
+			"unsupported: set element type list[int] (not hashable) at line 6"},
+		{"set[tuple[int, str]]", sub("set", sub("tuple", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("str")}})), false,
+			setOf(tupleOf([]pyType{tInt, tStr})), ""},
+		{"range", name("range"), false, tRange, ""},
 		{"list[None]", sub("list", &pyast.Constant{PyType: "none", Lineno: 6}), false, "",
 			"unsupported: type annotation None at line 6"},
 		{"list[float]", sub("list", name("float")), true, listOf(tFloat), ""},
@@ -68,7 +80,35 @@ func TestAnnotationType(t *testing.T) {
 }
 
 func TestGoType(t *testing.T) {
-	want := map[pyType]string{tInt: "int64", tFloat: "float64", tBool: "bool", tStr: "string"}
+	if d := dictOf(tStr, listOf(tInt)); d.keyType() != tStr || d.valType() != listOf(tInt) {
+		t.Errorf("dict parameters: %s", d)
+	}
+	if k, ok := dictOf(tInt, tStr).iterElem(); !ok || k != tInt {
+		t.Error("a dict iterates over its keys")
+	}
+	if it, ok := pyType("dict_items[int, str]").iterElem(); !ok || it != tupleOf([]pyType{tInt, tStr}) {
+		t.Errorf("dict items iterate as tuples, got %s", it)
+	}
+	if _, ok := tupleOf([]pyType{tInt, tInt}).iterElem(); ok {
+		t.Error("a tuple cannot be iterated: its items have different types")
+	}
+	for _, c := range []struct {
+		t  pyType
+		ok bool
+	}{{tInt, true}, {tStr, true}, {tFloat, false}, {listOf(tInt), false}, {dictOf(tInt, tInt), false},
+		{tupleOf([]pyType{tInt, tStr}), true}, {tupleOf([]pyType{tInt, listOf(tInt)}), false}} {
+		if c.t.hashable() != c.ok {
+			t.Errorf("hashable(%s) = %v", c.t, !c.ok)
+		}
+	}
+	want := map[pyType]string{
+		dictOf(tStr, listOf(tInt)):      "*runtime.Dict[string, *runtime.List[int64]]",
+		setOf(tInt):                     "*runtime.Set[int64]",
+		tRange:                          "*runtime.Range",
+		iterOf(tStr):                    "*runtime.Iterator[string]",
+		pyType("dict_keys[int, str]"):   "*runtime.KeysView[int64, string]",
+		pyType("dict_values[int, str]"): "*runtime.ValuesView[int64, string]",
+		pyType("dict_items[int, str]"):  "*runtime.ItemsView[int64, string]", tInt: "int64", tFloat: "float64", tBool: "bool", tStr: "string"}
 	for pt, goType := range want {
 		if got := pt.goType(); got != goType {
 			t.Errorf("%v: want %s, got %s", pt, goType, got)

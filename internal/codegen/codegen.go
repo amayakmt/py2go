@@ -31,6 +31,16 @@ type generator struct {
 	nextID    int      // counter for generated names
 	handlers  []string // Go variables of the exceptions being handled, innermost last
 	flow      *flowCtx // the closure being generated for a try body, or nil
+
+	// Module-level variables. They are package-level Go variables, so that
+	// functions can read them and, after "global", assign them.
+	globalTypes map[string]pyType // annotated module-level names found before generation
+	globalLines map[string]int    // where each was first annotated
+	globalDecl  map[string]pyType // those declared so far, in declaration order
+	globalOrder []string
+	globalReads map[string]bool // read by some function: they need a "was it set" flag
+	fnGlobals   map[string]bool // names the current function declared global
+	compRoot    *scope          // the scope of the comprehension being generated, or nil
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -45,8 +55,17 @@ func Generate(root pyast.Node) ([]byte, error) {
 		sigErrs: map[string]error{},
 		defined: map[string]bool{},
 		calls:   map[string]map[string]bool{},
+
+		globalTypes: map[string]pyType{},
+		globalLines: map[string]int{},
+		globalDecl:  map[string]pyType{},
+		globalReads: map[string]bool{},
+		fnGlobals:   map[string]bool{},
 	}
 	g.collectSignatures(mod)
+	if err := g.collectGlobals(mod); err != nil {
+		return nil, err
+	}
 
 	g.mainEnv = newScope(nil)
 	g.env = g.mainEnv
@@ -67,12 +86,15 @@ func Generate(root pyast.Node) ([]byte, error) {
 	}
 
 	funcText := g.placeRecursionGuards(funcs.String())
+	funcText, bodyText := g.placeGlobalFlags(funcText), g.placeGlobalFlags(body.String())
+	globals := g.globalDeclarations()
 
 	var out strings.Builder
 	out.WriteString("package main\n\n")
 	if g.usesRuntime {
 		fmt.Fprintf(&out, "import %q\n\n", runtimeImport)
 	}
+	out.WriteString(globals)
 	out.WriteString(funcText)
 	out.WriteString("func main() {\n")
 	if g.usesRuntime {
@@ -80,7 +102,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 		// does: a message on stderr and exit status 1.
 		out.WriteString("defer " + g.rt("Report") + "()\n")
 	}
-	out.WriteString(body.String())
+	out.WriteString(bodyText)
 	out.WriteString("}\n")
 
 	// go/format fixes indentation and fails on invalid syntax,
@@ -240,7 +262,11 @@ func (g *generator) funcDef(b *strings.Builder, fn *pyast.FunctionDef) error {
 	g.env = newScope(nil)
 	g.fnName, g.ret = fn.Name, sig.ret
 	g.flow, g.handlers = nil, nil
-	defer func() { g.env, g.fnName, g.ret = g.mainEnv, "", "" }()
+	g.fnGlobals = map[string]bool{}
+	defer func() {
+		g.env, g.fnName, g.ret = g.mainEnv, "", ""
+		g.fnGlobals = map[string]bool{}
+	}()
 
 	params := make([]string, 0, len(sig.params))
 	for i, p := range fn.Args.Positional() {
