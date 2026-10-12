@@ -14,8 +14,9 @@ type FunctionDef struct {
 	Args          *Arguments
 	Body          []Node
 	Returns       Node
+	Decorators    []Node
 	HasParams     bool
-	HasDecorators bool
+	HasDecorators bool // len(Decorators) > 0
 	HasTypeParams bool // PEP 695: def f[T](x: T)
 	Lineno        int
 }
@@ -29,7 +30,7 @@ type Arguments struct {
 	Kwonly     []*Arg
 	Kwarg      *Arg
 	Defaults   []Node // defaults of positional parameters
-	KwDefaults []Node // defaults of keyword-only parameters, nil entries dropped
+	KwDefaults []Node // one entry per keyword-only parameter, nil if it has no default
 }
 
 type Arg struct {
@@ -302,6 +303,45 @@ type Global struct {
 	Lineno int
 }
 
+// Lambda is "lambda args: body". Its parameters have no annotations.
+type Lambda struct {
+	Args   *Arguments
+	Body   Node
+	Lineno int
+}
+
+// Starred is "*value", in a call, a display or an assignment target.
+type Starred struct {
+	Value  Node
+	Lineno int
+}
+
+// Nonlocal is "nonlocal a, b".
+type Nonlocal struct {
+	Names  []string
+	Lineno int
+}
+
+// Alias is one imported name, "name as asname".
+type Alias struct {
+	Name   string
+	AsName string
+}
+
+// Import is "import a, b as c".
+type Import struct {
+	Names  []Alias
+	Lineno int
+}
+
+// ImportFrom is "from module import a, b as c". Level counts leading dots.
+type ImportFrom struct {
+	Module string
+	Names  []Alias
+	Level  int
+	Lineno int
+}
+
 // Unsupported holds any node type we haven't implemented.
 type Unsupported struct {
 	Type   string
@@ -352,3 +392,8 @@ func (n *DictComp) Line() int       { return n.Lineno }
 func (n *GeneratorExp) Line() int   { return n.Lineno }
 func (n *Delete) Line() int         { return n.Lineno }
 func (n *Global) Line() int         { return n.Lineno }
+func (n *Lambda) Line() int         { return n.Lineno }
+func (n *Starred) Line() int        { return n.Lineno }
+func (n *Nonlocal) Line() int       { return n.Lineno }
+func (n *Import) Line() int         { return n.Lineno }
+func (n *ImportFrom) Line() int     { return n.Lineno }

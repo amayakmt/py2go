@@ -305,3 +305,54 @@ func TestDecodeContainers(t *testing.T) {
 		t.Errorf("global: got %+v", g.Names)
 	}
 }
+
+func TestDecodeFunctions(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/functions.py")
+
+	fn := as[*FunctionDef](t, mod.Body[0])
+	if len(fn.Decorators) != 2 || !fn.HasDecorators {
+		t.Fatalf("decorators: got %d", len(fn.Decorators))
+	}
+	if as[*Name](t, fn.Decorators[0]).ID != "dec" {
+		t.Errorf("first decorator: got %+v", fn.Decorators[0])
+	}
+	if call := as[*Call](t, fn.Decorators[1]); as[*Name](t, call.Func).ID != "dec2" || len(call.Args) != 1 {
+		t.Errorf("decorator with arguments: got %+v", call)
+	}
+	a := fn.Args
+	if len(a.PosOnly) != 1 || a.PosOnly[0].Name != "a" || len(a.Args) != 1 || a.Args[0].Name != "b" {
+		t.Errorf("positional parameters: %+v %+v", a.PosOnly, a.Args)
+	}
+	if len(a.Defaults) != 1 {
+		t.Errorf("defaults: want 1, got %d", len(a.Defaults))
+	}
+	if len(a.Kwonly) != 2 || len(a.KwDefaults) != 2 || a.KwDefaults[0] != nil || a.KwDefaults[1] == nil {
+		t.Errorf("keyword-only defaults must stay aligned with the parameters: %+v", a.KwDefaults)
+	}
+	if a.Vararg == nil || a.Vararg.Name != "args" || a.Kwarg == nil || a.Kwarg.Name != "kw" {
+		t.Errorf("*args and **kw: %+v %+v", a.Vararg, a.Kwarg)
+	}
+
+	outer := as[*FunctionDef](t, mod.Body[1])
+	inner := as[*FunctionDef](t, outer.Body[1])
+	nl := as[*Nonlocal](t, inner.Body[0])
+	if len(nl.Names) != 1 || nl.Names[0] != "n" {
+		t.Errorf("nonlocal: %+v", nl)
+	}
+	lam := as[*Lambda](t, as[*Return](t, outer.Body[2]).Value)
+	if len(lam.Args.Args) != 2 || len(lam.Args.Defaults) != 1 {
+		t.Errorf("lambda parameters: %+v", lam.Args)
+	}
+	as[*BinOp](t, lam.Body)
+
+	call := as[*Call](t, as[*Expr](t, mod.Body[2]).Value)
+	if len(call.Args) != 3 {
+		t.Fatalf("call args: got %d", len(call.Args))
+	}
+	as[*Starred](t, call.Args[0])
+	as[*Constant](t, call.Args[1])
+	as[*Starred](t, call.Args[2])
+	if len(call.Keywords) != 2 || call.Keywords[0].Arg != "key" || call.Keywords[1].Arg != "" {
+		t.Errorf("keywords: a '**mapping' has an empty name, got %+v", call.Keywords)
+	}
+}

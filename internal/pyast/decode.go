@@ -62,10 +62,15 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		hasParams := len(args.PosOnly)+len(args.Args)+len(args.Kwonly) > 0 ||
 			args.Vararg != nil || args.Kwarg != nil
+		decorators, err := decodeList(aux.DecoratorList)
+		if err != nil {
+			return nil, err
+		}
 		return &FunctionDef{
 			Name: aux.Name, Args: args, Body: body, Returns: returns,
 			HasParams:     hasParams,
-			HasDecorators: len(aux.DecoratorList) > 0,
+			Decorators:    decorators,
+			HasDecorators: len(decorators) > 0,
 			HasTypeParams: len(aux.TypeParams) > 0,
 			Lineno:        head.Lineno,
 		}, nil
@@ -639,6 +644,67 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return &Global{Names: aux.Names, Lineno: head.Lineno}, nil
 
+	case "Lambda":
+		var aux struct {
+			Args json.RawMessage `json:"args"`
+			Body json.RawMessage `json:"body"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		args, err := decodeArguments(aux.Args)
+		if err != nil {
+			return nil, err
+		}
+		body, err := decodeNode(aux.Body)
+		if err != nil {
+			return nil, err
+		}
+		return &Lambda{Args: args, Body: body, Lineno: head.Lineno}, nil
+
+	case "Starred":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		value, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &Starred{Value: value, Lineno: head.Lineno}, nil
+
+	case "Nonlocal":
+		var aux struct {
+			Names []string `json:"names"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		return &Nonlocal{Names: aux.Names, Lineno: head.Lineno}, nil
+
+	case "Import", "ImportFrom":
+		var aux struct {
+			Module string `json:"module"`
+			Names  []struct {
+				Name   string `json:"name"`
+				AsName string `json:"asname"`
+			} `json:"names"`
+			Level int `json:"level"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		names := make([]Alias, len(aux.Names))
+		for i, a := range aux.Names {
+			names[i] = Alias{Name: a.Name, AsName: a.AsName}
+		}
+		if head.Type == "Import" {
+			return &Import{Names: names, Lineno: head.Lineno}, nil
+		}
+		return &ImportFrom{Module: aux.Module, Names: names, Level: aux.Level, Lineno: head.Lineno}, nil
+
 	default:
 		return &Unsupported{Type: head.Type, Lineno: head.Lineno}, nil
 	}
@@ -732,12 +798,10 @@ func decodeArguments(raw json.RawMessage) (*Arguments, error) {
 	if a.Defaults, err = decodeList(aux.Defaults); err != nil {
 		return nil, err
 	}
-	// kw_defaults has a null for each keyword-only parameter without a default.
+	// kw_defaults has one entry per keyword-only parameter, null where it has
+	// no default, so the entries stay aligned with Kwonly.
 	for _, r := range aux.KwDefaults {
-		if !present(r) {
-			continue
-		}
-		n, err := decodeNode(r)
+		n, err := decodeOptional(r)
 		if err != nil {
 			return nil, err
 		}
