@@ -58,8 +58,30 @@ type generator struct {
 	specialRet        bool            // the method returns (result, implemented)
 	infer             bool            // classes are being scanned for their instance attributes
 	inferGrew         bool
-	pendingNarrow     *narrowing
-	buildingMethod    bool // method names are not Go identifiers, so any name will do
+	pendingNarrow     []*narrowing
+	noneFields        map[string]bool // attributes that some code sets to None
+
+	// Generics.
+	tsubst         map[string]pyType // the type parameters of the instantiation being compiled
+	typeVars       map[string]typeVarInfo
+	typeAliases    map[string]*typeAlias
+	genericFns     map[string]*genericFn
+	genericClasses map[string]*genericClass
+	genericInst    map[string]*classInfo
+	fnInst         map[string]*funcSig
+	usedNames      map[string]bool
+	lateFuncs      strings.Builder
+	lateInit       map[string]*strings.Builder
+	pendingGen     []*classInfo
+	incomplete     []*classInfo
+	phase          int // 0 reading classes, 1 classes read, 2 generating
+	callWant       pyType
+	tempGenerators bool
+	elseFlags      []string         // per enclosing loop: the flag a break sets, if it has an else
+	gen            *genInfo         // the generator function being compiled
+	genNone        bool             // ... and it returns None
+	hoist          *strings.Builder // declarations an expression needs before its statement
+	buildingMethod bool             // method names are not Go identifiers, so any name will do
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -85,7 +107,19 @@ func Generate(root pyast.Node) ([]byte, error) {
 		classes:     map[string]*classInfo{},
 		builtinCls:  map[string]*classInfo{},
 		storedAttrs: map[string]bool{},
+		noneFields:  map[string]bool{},
+
+		typeVars:       map[string]typeVarInfo{},
+		typeAliases:    map[string]*typeAlias{},
+		genericFns:     map[string]*genericFn{},
+		genericClasses: map[string]*genericClass{},
+		genericInst:    map[string]*classInfo{},
+		fnInst:         map[string]*funcSig{},
+		usedNames:      map[string]bool{},
+		lateInit:       map[string]*strings.Builder{},
+		tempGenerators: true,
 	}
+	g.scanTypeVars(mod)
 	if err := g.registerClassNames(mod); err != nil {
 		return nil, err
 	}
@@ -113,7 +147,11 @@ func Generate(root pyast.Node) ([]byte, error) {
 		if fn, ok := stmt.(*pyast.FunctionDef); ok {
 			err = g.funcDef(&funcs, &body, fn)
 		} else if cd, ok := stmt.(*pyast.ClassDef); ok {
-			err = g.classDecl(&funcs, &body, g.classes[cd.Name])
+			if g.genericClasses[cd.Name] != nil {
+				body.WriteString(lateMarker(cd.Name) + "\n")
+			} else {
+				err = g.classDecl(&funcs, &body, g.classes[cd.Name])
+			}
 		} else {
 			err = g.stmt(&body, stmt)
 		}
@@ -122,8 +160,16 @@ func Generate(root pyast.Node) ([]byte, error) {
 		}
 	}
 
+	if err := g.emitGenerics(); err != nil {
+		return nil, err
+	}
+	funcs.WriteString(g.lateFuncs.String())
+	bodyStr := body.String()
+	for name, init := range g.lateInit {
+		bodyStr = strings.Replace(bodyStr, lateMarker(name), init.String(), 1)
+	}
 	funcText := g.placeRecursionGuards(funcs.String())
-	funcText, bodyText := g.placeGlobalFlags(funcText), g.placeGlobalFlags(body.String())
+	funcText, bodyText := g.placeGlobalFlags(funcText), g.placeGlobalFlags(bodyStr)
 	globals := g.globalDeclarations()
 
 	var out strings.Builder

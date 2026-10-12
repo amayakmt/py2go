@@ -13,6 +13,10 @@ import (
 func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	name := callee.ID
 	switch name {
+	case "next":
+		return g.nextCall(n)
+	case "iter":
+		return g.iterCall(n)
 	case "isinstance":
 		return g.isinstanceCall(n)
 	case "issubclass":

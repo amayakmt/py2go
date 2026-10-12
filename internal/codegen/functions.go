@@ -43,6 +43,11 @@ type funcSig struct {
 	// does not write: the self of a bound method.
 	implicit int
 	selfName string // the name the method gives its first parameter
+	// display is the name error messages use when it differs from name.
+	display string
+	// gen is set for a generator function, whose ret is the type of the
+	// generator object it makes.
+	gen *genInfo
 	// leadArg is code the call passes before the real arguments: the number
 	// of positional arguments an exception class was called with.
 	leadArg string
@@ -226,6 +231,20 @@ func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool
 		return nil, err
 	}
 	sig.ret = ret
+	if isGeneratorBody(fn.Body) {
+		switch {
+		case ret.isIter():
+			sig.gen = &genInfo{yield: ret.elem(), send: tNoneType, ret: tNoneType, iterator: true}
+		case ret.isIterable():
+			sig.gen = &genInfo{yield: ret.elem(), send: tNoneType, ret: tNoneType, iterator: true}
+			sig.ret = iterOf(ret.elem())
+		case ret.isGen():
+			a := ret.typeArgs()
+			sig.gen = &genInfo{yield: a[0], send: a[1], ret: a[2]}
+		default:
+			return nil, unsupported(fmt.Sprintf("generator function annotated %s (use Iterator[T], Iterable[T] or Generator[Y, S, R])", ret), fn.Line())
+		}
+	}
 	sig.valueType = sig.goFuncType()
 	return sig, nil
 }
@@ -261,6 +280,22 @@ func (g *generator) collectSignatures(mod *pyast.Module) {
 			continue
 		}
 		if _, dup := g.sigErrs[fn.Name]; dup {
+			continue
+		}
+		if g.genericFns[fn.Name] != nil {
+			continue
+		}
+		params, perr := g.functionTypeParams(fn)
+		if perr != nil {
+			g.sigErrs[fn.Name] = perr
+			continue
+		}
+		if len(params) > 0 {
+			if len(fn.Decorators) > 0 {
+				g.sigErrs[fn.Name] = unsupported("decorator on a generic function", fn.Line())
+				continue
+			}
+			g.genericFns[fn.Name] = &genericFn{name: fn.Name, node: fn, params: params}
 			continue
 		}
 		sig, err := g.buildSig(fn, fn.Name, false)
@@ -349,6 +384,8 @@ func (g *generator) typeOfDecorator(n pyast.Node) (pyType, error) {
 
 // functionState is what changes when code generation enters a function.
 type functionState struct {
+	gen          *genInfo
+	genNone      bool
 	method       *methodCtx
 	specialRet   bool
 	env          *scope
@@ -364,11 +401,12 @@ type functionState struct {
 }
 
 func (g *generator) saveFunctionState() functionState {
-	return functionState{g.method, g.specialRet, g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
+	return functionState{g.gen, g.genNone, g.method, g.specialRet, g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
 		g.loopDepth, g.compRoot, g.callsUnknown}
 }
 
 func (g *generator) restoreFunctionState(s functionState) {
+	g.gen, g.genNone = s.gen, s.genNone
 	g.method, g.specialRet = s.method, s.specialRet
 	g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers = s.env, s.fnName, s.top, s.ret, s.flow, s.handlers
 	g.fnGlobals, g.fnNonlocals, g.loopDepth, g.compRoot, g.callsUnknown = s.fnGlobals, s.fnNonlocals, s.loopDepth, s.compRoot, s.callsUnknown
@@ -392,6 +430,13 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 		g.topFn = fn.Name
 	}
 	g.specialRet = false
+	g.gen, g.genNone = sig.gen, false
+	if sig.gen != nil {
+		g.ret = sig.gen.ret
+		if g.ret == tNoneType {
+			g.ret, g.genNone = tNone, true
+		}
+	}
 	if mc != nil {
 		mc.selfVar = sig.selfName
 		g.method = mc
@@ -423,7 +468,17 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 	// Go insists that a function with a result ends in a terminating
 	// statement. Python would return None here, which breaks the annotation.
 	if len(stmts) == 0 || func() bool { _, ok := stmts[len(stmts)-1].(*pyast.Return); return !ok }() {
-		if sig.ret != tNone {
+		switch {
+		case sig.gen != nil:
+			// A generator that runs off its end returns None.
+			if g.genNone {
+				body.WriteString("return " + g.rt("NoneV") + "\n")
+			} else {
+				fmt.Fprintf(&body, "return %s\n", zeroValue(g, sig.gen.ret))
+			}
+		case sig.ret.isOptional():
+			fmt.Fprintf(&body, "return %s[%s]()\n", g.rt("NoneOf"), g.goType(sig.ret.optElem()))
+		case sig.ret != tNone:
 			fmt.Fprintf(&body, "panic(%s(%q))\n", g.rt("MissingReturn"), fn.Name)
 		}
 	}
@@ -440,6 +495,16 @@ func (g *generator) funcBody(fn *pyast.FunctionDef, sig *funcSig, header string,
 		}
 	} else if g.callsUnknown || mc != nil {
 		b.WriteString(g.rt("Enter") + "()\ndefer " + g.rt("Leave") + "()\n")
+	}
+	if sig.gen != nil {
+		gi := sig.gen
+		fmt.Fprintf(&b, "return %s[%s, %s, %s](func(%s *%s[%s, %s]) %s {\n%s})", g.rt("NewGen"),
+			g.goType(gi.yield), g.goType(gi.send), g.goType(gi.ret), yielderVar, g.rt("Yielder"), g.goType(gi.yield), g.goType(gi.send), g.goType(gi.ret), body.String())
+		if gi.iterator {
+			b.WriteString(".Iterator()")
+		}
+		b.WriteString("\n}")
+		return b.String(), nil
 	}
 	b.WriteString(body.String())
 	b.WriteString("}")
@@ -463,6 +528,12 @@ func (g *generator) goSignature(sig *funcSig) (params, result string) {
 // its defaults are evaluated where the def stands in the module, and its
 // decorators run there.
 func (g *generator) funcDef(funcs, main *strings.Builder, fn *pyast.FunctionDef) error {
+	if g.genericFns[fn.Name] != nil {
+		// The instantiations are written later; their defaults are
+		// evaluated here.
+		main.WriteString(lateMarker(fn.Name) + "\n")
+		return nil
+	}
 	if g.defined[fn.Name] {
 		return unsupported(fmt.Sprintf("redefinition of function '%s'", fn.Name), fn.Line())
 	}
@@ -688,7 +759,7 @@ func (g *generator) lambda(n *pyast.Lambda, params []pyType, ret pyType) (value,
 
 	var body value
 	var err error
-	if ret == tNone {
+	if ret == tNone || ret == "" {
 		body, err = g.expr(n.Body)
 	} else {
 		body, err = g.exprAs(n.Body, ret)
@@ -727,6 +798,15 @@ func (g *generator) lambda(n *pyast.Lambda, params []pyType, ret pyType) (value,
 func (g *generator) coerce(v value, want pyType, dest string, line int) (value, error) {
 	if v.typ == want {
 		return v, nil
+	}
+	if g.isSubtype(v.typ, want) {
+		return g.relabel(v, want), nil
+	}
+	if v.typ.isOptional() && g.isSubtype(v.typ.optElem(), want) && !want.isOptional() {
+		// A variable that might be None goes where a value is needed, as in
+		// Python: it fails when it is None, not when it is declared.
+		inner := value{code: v.at(precAtom) + ".Unwrap(\"TypeError\", \"NoneType where a value is required\")", typ: v.typ.optElem(), prec: precAtom}
+		return g.coerce(inner, want, dest, line)
 	}
 	if want.isIterable() {
 		if code, elem, ok := g.iterableOf(v); ok && elem == want.elem() {
@@ -798,7 +878,7 @@ func (g *generator) adaptFunction(v value, want pyType) (value, bool) {
 var builtinFunctions = map[string]bool{
 	"len": true, "abs": true, "str": true, "int": true, "float": true, "bool": true, "repr": true,
 	"round": true, "sum": true, "min": true, "max": true, "sorted": true, "list": true, "set": true,
-	"tuple": true, "any": true, "all": true, "reversed": true, "dict": true,
+	"tuple": true, "any": true, "all": true, "reversed": true, "dict": true, "print": true,
 }
 
 // builtinAsLambda returns "lambda a1, ..., an: name(a1, ..., an)" for a name

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/amayakmt/py2go/internal/pyast"
+	"github.com/amayakmt/py2go/runtime"
 )
 
 // pyType is the static type of an expression or variable. It is a string
@@ -25,6 +26,10 @@ const (
 
 	// tObject is the annotation "object": anything, held as a Go any.
 	tObject pyType = "object"
+
+	// tNoneType is the type of the value None itself, before any Optional
+	// gives it a home.
+	tNoneType pyType = "NoneType"
 
 	// tOptExc is the type of e.__cause__ and e.__context__: an exception, or
 	// None, which is a nil pointer. It can be tested with "is None", printed,
@@ -134,7 +139,7 @@ func (t pyType) isVarTuple() bool {
 // pyType is the class name, and the Go type an interface of the same name.
 func (t pyType) isClass() bool {
 	switch t {
-	case "", tInt, tFloat, tBool, tStr, tRange, tNone, tExc, tObject, tOptExc:
+	case "", tInt, tFloat, tBool, tStr, tRange, tNone, tNoneType, tExc, tObject, tOptExc:
 		return false
 	}
 	return !strings.ContainsAny(string(t), "[,|")
@@ -147,6 +152,24 @@ func (t pyType) isClassRef() bool   { return t.head() == "type" && strings.Conta
 func (t pyType) classRefName() string {
 	return strings.TrimSuffix(strings.TrimPrefix(string(t), "type["), "]")
 }
+
+func optionalOf(elem pyType) pyType {
+	if elem.isOptional() {
+		return elem
+	}
+	return pyType("optional[" + string(elem) + "]")
+}
+
+// isOptional is Optional[T], which is T or None.
+func (t pyType) isOptional() bool { return t.head() == "optional" }
+func (t pyType) optElem() pyType  { return t.typeArgs()[0] }
+
+// genOf is a generator that yields y, is sent s and returns r.
+func genOf(y, s, r pyType) pyType {
+	return pyType("gen[" + string(y) + ", " + string(s) + ", " + string(r) + "]")
+}
+
+func (t pyType) isGen() bool { return t.head() == "gen" }
 
 func (t pyType) isFunc() bool       { return t.head() == "func" }
 func (t pyType) isIterable() bool   { return t.head() == "iterable" }
@@ -179,7 +202,7 @@ func (t pyType) iterElem() (pyType, bool) {
 		return tStr, true
 	case t == tRange:
 		return tInt, true
-	case t.isList(), t.isSet(), t.isIter(), t.isVarTuple(), t.isIterable():
+	case t.isList(), t.isSet(), t.isIter(), t.isVarTuple(), t.isIterable(), t.isGen():
 		return t.elem(), true
 	case t.isDict(), t.isKeysView():
 		return t.keyType(), true
@@ -225,10 +248,17 @@ func (t pyType) goType() string {
 		return "*runtime.PyError"
 	case t == tObject:
 		return "any"
+	case t == tNoneType:
+		return "runtime.NoneT"
+	case t.isOptional():
+		return "runtime.Opt[" + t.optElem().goType() + "]"
 	case t.isClass():
 		return string(t)
 	case t.isClassRef():
 		return "*runtime.ClassRef"
+	case t.isGen():
+		a := t.typeArgs()
+		return "*runtime.Gen[" + a[0].goType() + ", " + a[1].goType() + ", " + a[2].goType() + "]"
 	case t == tRange:
 		return "*runtime.Range"
 	case t.isFunc():
@@ -292,11 +322,31 @@ func annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 func (g *generator) annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 	switch n := n.(type) {
 	case *pyast.Name:
+		if t, ok := g.tsubst[n.ID]; ok {
+			return t, nil
+		}
+		if _, free := g.typeVars[n.ID]; free {
+			return "", unsupported("type variable '"+n.ID+"' used outside of a generic definition", n.Line())
+		}
+		if al := g.typeAliases[n.ID]; al != nil {
+			if len(al.params) > 0 {
+				return "", unsupported("generic type alias '"+n.ID+"' needs type arguments", n.Line())
+			}
+			var t pyType
+			err := g.withSubst(nil, func() (e error) { t, e = g.annotationType(al.value, allowNone); return })
+			return t, err
+		}
+		if gc := g.genericClasses[n.ID]; gc != nil {
+			return "", unsupported("generic class '"+n.ID+"' needs type arguments: "+n.ID+"[...]", n.Line())
+		}
 		if t, ok := typeTable[n.ID]; ok {
 			return t, nil
 		}
 		if n.ID == "object" {
 			return tObject, nil
+		}
+		if _, user := g.classes[n.ID]; !user && runtime.IsExceptionClass(n.ID) {
+			return tExc, nil
 		}
 		if _, ok := g.classes[n.ID]; ok {
 			return pyType(n.ID), nil
@@ -307,19 +357,25 @@ func (g *generator) annotationType(n pyast.Node, allowNone bool) (pyType, error)
 		return "", unsupported("type annotation '"+n.ID+"'", n.Line())
 	case *pyast.Subscript:
 		return g.containerType(n)
+	case *pyast.BinOp:
+		if n.Op == "BitOr" {
+			return g.unionType([]pyast.Node{n.Left, n.Right}, n.Line())
+		}
+		return "", unsupported("type annotation of kind BinOp", n.Line())
 	case *pyast.Constant:
 		if n.PyType == "none" && allowNone {
 			return tNone, nil
 		}
 		if s, ok := n.Value.(string); ok && n.PyType == "str" {
-			// A forward reference: "Node".
-			if _, ok := g.classes[s]; ok {
+			// A forward reference: "Node", or "list[Node] | None".
+			if _, ok := g.classes[s]; ok && g.tsubst[s] == "" {
 				return pyType(s), nil
 			}
-			if _, ok := typeTable[s]; ok {
-				return typeTable[s], nil
+			parsed, err := parseAnnotation(s, n.Line())
+			if err != nil {
+				return "", err
 			}
-			return "", unsupported("type annotation '"+s+"'", n.Line())
+			return g.annotationType(parsed, allowNone)
 		}
 		return "", unsupported("type annotation "+constantText(n), n.Line())
 	case *pyast.Unsupported:
@@ -342,27 +398,26 @@ var typingAliases = map[string]string{
 // typingNames are typing names that exist, but need something the typed
 // subset does not have yet.
 var typingNames = map[string]string{
-	"Optional":  "needs None as a value, which arrives in phase 8",
-	"Union":     "needs union types, which arrive in phase 8",
-	"Any":       "needs the dynamic object model of phase 9",
-	"Literal":   "needs literal types",
-	"Callable":  "write the parameters: Callable[[int], int]",
-	"Sequence":  "use list[...]; sequences are not a type of their own",
-	"Iterable":  "write the item type: Iterable[int]",
-	"Generic":   "needs generic classes, which arrive in phase 8",
-	"TypeVar":   "needs generics, which arrive in phase 8",
-	"List":      "write the item type: list[int]",
-	"Dict":      "write the key and value types: dict[str, int]",
-	"Set":       "write the item type: set[int]",
-	"Tuple":     "write the item types: tuple[int, str]",
-	"Type":      "needs classes, which arrive in phase 7",
-	"Iterator":  "needs generators, which arrive in phase 8",
-	"Generator": "needs generators, which arrive in phase 8",
+	"Any":      "needs the dynamic object model of phase 9",
+	"Literal":  "needs literal types",
+	"Callable": "write the parameters: Callable[[int], int]",
+	"Sequence": "use list[...]; sequences are not a type of their own",
+	"Iterable": "write the item type: Iterable[int]",
+	"Generic":  "needs generic classes, which arrive in phase 8",
+	"TypeVar":  "needs generics, which arrive in phase 8",
+	"List":     "write the item type: list[int]",
+	"Dict":     "write the key and value types: dict[str, int]",
+	"Set":      "write the item type: set[int]",
+	"Tuple":    "write the item types: tuple[int, str]",
+	"Type":     "needs classes, which arrive in phase 7",
 }
 
 // containerType resolves list[T], set[T], dict[K, V], tuple[A, B, ...],
 // tuple[T, ...], Iterable[T] and Callable[[A, B], R].
 func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
+	if t, handled, err := g.genericSubscript(n); handled {
+		return t, err
+	}
 	head, ok := n.Value.(*pyast.Name)
 	if !ok {
 		return "", unsupported("type annotation of kind Subscript", n.Line())
@@ -380,6 +435,32 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 	switch name {
 	case "Callable":
 		return g.callableType(n, args)
+	case "Iterator":
+		if len(args) != 1 {
+			return "", unsupported(fmt.Sprintf("Iterator[...] with %d type arguments", len(args)), n.Line())
+		}
+		elem, err := resolve(args[0])
+		if err != nil {
+			return "", err
+		}
+		return iterOf(elem), nil
+	case "Generator":
+		if len(args) < 1 || len(args) > 3 {
+			return "", unsupported(fmt.Sprintf("Generator[...] with %d type arguments", len(args)), n.Line())
+		}
+		parts := []pyType{"", tNoneType, tNoneType}
+		for i, a := range args {
+			if c, ok := a.(*pyast.Constant); ok && c.PyType == "none" {
+				parts[i] = tNoneType
+				continue
+			}
+			t, err := resolve(a)
+			if err != nil {
+				return "", err
+			}
+			parts[i] = t
+		}
+		return genOf(parts[0], parts[1], parts[2]), nil
 	case "Iterable":
 		if len(args) != 1 {
 			return "", unsupported(fmt.Sprintf("Iterable[...] with %d type arguments", len(args)), n.Line())
@@ -391,7 +472,14 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		return iterableOfType(elem), nil
 	case "ClassVar":
 		return "", unsupported("ClassVar outside a class body", n.Line())
-	case "Optional", "Union", "Literal", "Type", "Sequence":
+	case "Optional":
+		if len(args) != 1 {
+			return "", unsupported(fmt.Sprintf("Optional[...] with %d type arguments", len(args)), n.Line())
+		}
+		return g.unionType(append(args, &pyast.Constant{PyType: "none", Lineno: n.Line()}), n.Line())
+	case "Union":
+		return g.unionType(args, n.Line())
+	case "Literal", "Type", "Sequence":
 		return "", unsupported("type annotation '"+head.ID+"[...]' ("+typingNames[head.ID]+")", n.Line())
 	}
 
@@ -494,4 +582,44 @@ func (g *generator) callableType(n *pyast.Subscript, args []pyast.Node) (pyType,
 		return "", err
 	}
 	return funcOf(params, ret), nil
+}
+
+// unionType resolves Optional[T], T | None and Union[T, None]. A union of
+// several types needs the dynamic object model of phase 9.
+func (g *generator) unionType(parts []pyast.Node, line int) (pyType, error) {
+	var members []pyType
+	hasNone := false
+	var flatten func(n pyast.Node) error
+	flatten = func(n pyast.Node) error {
+		if b, ok := n.(*pyast.BinOp); ok && b.Op == "BitOr" {
+			if err := flatten(b.Left); err != nil {
+				return err
+			}
+			return flatten(b.Right)
+		}
+		if c, ok := n.(*pyast.Constant); ok && c.PyType == "none" {
+			hasNone = true
+			return nil
+		}
+		t, err := g.annotationType(n, false)
+		if err != nil {
+			return err
+		}
+		members = append(members, t)
+		return nil
+	}
+	for _, p := range parts {
+		if err := flatten(p); err != nil {
+			return "", err
+		}
+	}
+	switch {
+	case len(members) == 0:
+		return "", unsupported("the type None where a type is needed", line)
+	case len(members) > 1:
+		return "", unsupported("union of several types (arrives with the dynamic object model in phase 9)", line)
+	case !hasNone:
+		return members[0], nil
+	}
+	return optionalOf(members[0]), nil
 }

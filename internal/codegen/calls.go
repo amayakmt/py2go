@@ -25,7 +25,11 @@ func (g *generator) userCall(n *pyast.Call, sig *funcSig) (value, error) {
 		}
 		g.calls[g.topFn][sig.name] = true
 	}
-	return g.bindCall(n, sig, sig.goName, sig.name)
+	fname := sig.name
+	if sig.display != "" {
+		fname = sig.display
+	}
+	return g.bindCall(n, sig, sig.goName, fname)
 }
 
 // callValue generates a call of an expression whose type is a Callable.
@@ -319,6 +323,21 @@ func isMonotone[T any](xs []T, key func(T) int) bool {
 // for a count or a key that does not fit. The unpacked items must share one
 // type, which every parameter they can reach must have too.
 func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname string) (value, error) {
+	// f(*a, 1, *b): everything from the first star on is one list.
+	if first := starIndex(n.Args); first >= 0 {
+		merge := false
+		for _, a := range n.Args[first:] {
+			if _, ok := a.(*pyast.Starred); !ok {
+				merge = true
+			}
+		}
+		if merge {
+			cp := *n
+			cp.Args = append(append([]pyast.Node{}, n.Args[:first]...),
+				&pyast.Starred{Value: &pyast.List{Elts: n.Args[first:], Lineno: n.Line()}, Lineno: n.Line()})
+			n = &cp
+		}
+	}
 	var static []pyast.Node
 	var stars []*pyast.Starred
 	for _, a := range n.Args {

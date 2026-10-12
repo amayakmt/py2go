@@ -24,6 +24,9 @@ func (g *generator) isSubtype(got, want pyType) bool {
 	if got == want {
 		return true
 	}
+	if want.isOptional() {
+		return got == tNoneType || g.isSubtype(got, want.optElem())
+	}
 	if want == tObject {
 		return got != tNone && got != "" && !got.isClassRef() && got != tExc
 	}
@@ -37,6 +40,14 @@ func (g *generator) isSubtype(got, want pyType) bool {
 func (g *generator) relabel(v value, want pyType) value {
 	if want == "" || v.typ == want || !g.isSubtype(v.typ, want) {
 		return v
+	}
+	if want.isOptional() {
+		goElem := g.goType(want.optElem())
+		if v.typ == tNoneType {
+			return value{code: g.rt("NoneOf") + "[" + goElem + "]()", typ: want, prec: precAtom}
+		}
+		inner := g.relabel(v, want.optElem())
+		return value{code: g.rt("Some") + "[" + goElem + "](" + inner.typed().code + ")", typ: want, prec: precAtom}
 	}
 	if want == tObject {
 		v = v.typed()
@@ -79,13 +90,21 @@ func (g *generator) classRefValue(code string, t pyType) value {
 
 // recvExpr generates the receiver of an attribute access or method call,
 // which may be a class.
-func (g *generator) recvExpr(n pyast.Node) (value, error) {
+func (g *generator) recvExpr(n pyast.Node, attr ...string) (value, error) {
 	v, err := g.expr(n)
 	if err != nil {
 		return v, err
 	}
 	if v.typ == tNone {
 		return v, unsupported("use of a None value", n.Line())
+	}
+	if v.typ.isOptional() {
+		// Using None as an object fails when it runs.
+		code := v.at(precAtom) + ".Unwrap(\"TypeError\", \"'NoneType' object is not callable\")"
+		if len(attr) > 0 {
+			code = v.at(precAtom) + ".UnwrapAttr(" + strconv.Quote(attr[0]) + ")"
+		}
+		v = value{code: code, typ: v.typ.optElem(), prec: precAtom}
 	}
 	return v, nil
 }
@@ -209,7 +228,7 @@ func (g *generator) classAttrRead(c *classInfo, attr string, exactRef bool, line
 	name := g.mangled(attr)
 	switch attr {
 	case "__name__", "__qualname__":
-		return value{code: strconv.Quote(c.name), typ: tStr, prec: precAtom}, nil
+		return value{code: strconv.Quote(c.pyName()), typ: tStr, prec: precAtom}, nil
 	case "__doc__":
 		if c.hasDoc {
 			return value{code: strconv.Quote(c.doc), typ: tStr, prec: precAtom}, nil
@@ -279,7 +298,7 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 			return v, true, err
 		}
 	}
-	recv, err := g.recvExpr(recvNode)
+	recv, err := g.recvExpr(recvNode, n.Attr)
 	if err != nil {
 		return value{}, true, err
 	}
@@ -331,6 +350,12 @@ func pythonTypeName(t pyType) string {
 // excAttr reads an attribute of a caught exception.
 func (g *generator) excAttr(recv value, attr string, line int) (value, error) {
 	switch attr {
+	case "exceptions":
+		return value{code: g.rt("GroupExceptions") + "(" + recv.code + ")", typ: varTupleOf(tExc), prec: precAtom}, nil
+	case "message":
+		return value{code: g.rt("GroupMessage") + "(" + recv.code + ")", typ: tStr, prec: precAtom}, nil
+	case "value":
+		return value{code: g.rt("StopValue") + "(" + recv.at(precAtom) + ")", typ: tObject, prec: precAtom}, nil
 	case "args":
 		return value{code: g.rt("NewVarTuple") + "[any](" + recv.at(precAtom) + ".Args...)", typ: varTupleOf(tObject), prec: precAtom}, nil
 	case "__cause__":
@@ -605,7 +630,7 @@ func (g *generator) resolveStore(b *strings.Builder, target *pyast.Attribute) (*
 		_ = sup
 		return nil, unsupported("assignment through super()", line)
 	}
-	recv, err := g.recvExpr(target.Value)
+	recv, err := g.recvExpr(target.Value, target.Attr)
 	if err != nil {
 		return nil, err
 	}
@@ -687,8 +712,22 @@ func (g *generator) classStore(c *classInfo, attr string, line int) (*attrStore,
 func (g *generator) registerField(attr string, t pyType, line int) {
 	c := g.method.definer
 	name := g.mangled(attr)
-	if c.lookup(name) != nil {
+	key := c.name + "." + name
+	if t == tNoneType {
+		// self.x = None: x may hold something else too, and then it is
+		// Optional. It is declared once an assignment gives it a type.
+		g.noneFields[key] = true
+		if m := c.lookup(name); m != nil && m.kind == mField && !m.typ.isOptional() {
+			m.typ = optionalOf(m.typ)
+			g.inferGrew = true
+		}
 		return
+	}
+	if m := c.lookup(name); m != nil {
+		return
+	}
+	if g.noneFields[key] {
+		t = optionalOf(t)
 	}
 	c.addMember(&member{kind: mField, name: name, owner: c, typ: t, line: line})
 	g.inferGrew = true
@@ -839,7 +878,7 @@ var _ = runtime.IsExceptionClass
 
 // isExcSlot reports the attributes every exception has.
 func isExcSlot(attr string) bool {
-	return attr == "args" || attr == "__cause__" || attr == "__context__" || attr == "__suppress_context__"
+	return attr == "exceptions" || attr == "message" || attr == "value" || attr == "args" || attr == "__cause__" || attr == "__context__" || attr == "__suppress_context__"
 }
 
 // commonClass is the nearest class both a and b derive from.
@@ -858,7 +897,7 @@ func (g *generator) commonClass(a, b pyType) (pyType, bool) {
 
 // classObject is a class used as a value, as a runtime.ClassRef.
 func (g *generator) classObject(v value) value {
-	code := g.rt("ClassOf") + "(" + strconv.Quote(v.classRef.name) + ")"
+	code := g.rt("ClassOf") + "(" + strconv.Quote(v.classRef.pyName()) + ")"
 	if v.dynamicRef {
 		code = g.rt("ClassOf") + "(" + v.at(precAtom) + ".PyClassName())"
 	}

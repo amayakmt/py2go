@@ -85,14 +85,32 @@ type classInfo struct {
 	unhashable bool // __hash__ = None
 	dc         *dcInfo
 
-	exc     bool   // derives from a built-in exception class
-	excRoot string // the nearest built-in exception class in the MRO
+	matchArgs []string // __match_args__, for class patterns
+	exc       bool     // derives from a built-in exception class
+	excRoot   string   // the nearest built-in exception class in the MRO
 
 	// The constructor: the __init__ in effect and where it is defined.
 	ctorSig   *funcSig
 	ctorOwner *classInfo
 
 	emitted bool
+
+	// Instantiations of a generic class: the name Python shows, the type
+	// arguments, and the template they come from.
+	display   string
+	tsubst    map[string]pyType
+	generic   *genericClass
+	targs     []pyType
+	completed bool
+}
+
+// pyName is the name of the class in Python, which an instantiation of a
+// generic class shares with its template.
+func (c *classInfo) pyName() string {
+	if c.display != "" {
+		return c.display
+	}
+	return c.name
 }
 
 func (c *classInfo) goStruct() string { return "_pyc_" + c.name }
@@ -237,14 +255,19 @@ func (g *generator) registerClassNames(mod *pyast.Module) error {
 		if g.reservedClassName(cd.Name) {
 			return unsupported(fmt.Sprintf("class named '%s' (a built-in name)", cd.Name), cd.Line())
 		}
-		if _, dup := g.classes[cd.Name]; dup {
+		if _, dup := g.classes[cd.Name]; dup || g.genericClasses[cd.Name] != nil {
 			return unsupported(fmt.Sprintf("redefinition of class '%s'", cd.Name), cd.Line())
-		}
-		if cd.HasTypeParams {
-			return unsupported("generic classes (PEP 695)", cd.Line())
 		}
 		if len(cd.Keywords) > 0 {
 			return unsupported("class keyword '"+cd.Keywords[0].Arg+"=' (metaclasses arrive in phase 9)", cd.Line())
+		}
+		params, err := g.classTypeParams(cd)
+		if err != nil {
+			return err
+		}
+		if len(params) > 0 {
+			g.genericClasses[cd.Name] = &genericClass{name: cd.Name, node: cd, params: params, index: i}
+			continue
 		}
 		c := &classInfo{name: cd.Name, node: cd, line: cd.Line(), index: i, members: map[string]*member{}}
 		g.classes[cd.Name] = c
@@ -264,22 +287,29 @@ func (g *generator) collectClasses(mod *pyast.Module) error {
 			return unsupported(fmt.Sprintf("'%s' is both a function and a class", c.name), c.line)
 		}
 	}
+	var plain []*classInfo
 	for _, c := range g.classOrder {
+		if c.generic == nil {
+			plain = append(plain, c)
+		}
+	}
+	for _, c := range plain {
 		if err := g.classBases(c); err != nil {
 			return err
 		}
 	}
-	for _, c := range g.classOrder {
+	for _, c := range plain {
 		if err := g.classBody(c); err != nil {
 			return err
 		}
 	}
-	for _, c := range g.classOrder {
+	for _, c := range plain {
 		if err := g.finishClass(c); err != nil {
 			return err
 		}
 	}
-	return nil
+	g.phase = 1
+	return g.completeInstances()
 }
 
 // classBases resolves the base classes and computes the MRO. A base has to
@@ -287,14 +317,37 @@ func (g *generator) collectClasses(mod *pyast.Module) error {
 func (g *generator) classBases(c *classInfo) error {
 	cd := c.node
 	for _, b := range cd.Bases {
+		if sub, ok := b.(*pyast.Subscript); ok {
+			head, isName := sub.Value.(*pyast.Name)
+			if isName && head.ID == "Generic" {
+				continue
+			}
+			if isName && g.genericClasses[head.ID] != nil {
+				t, err := g.annotationType(sub, false)
+				if err != nil {
+					return err
+				}
+				base := g.classes[string(t)]
+				if base.mro == nil {
+					if err := g.completeInstance(base); err != nil {
+						return err
+					}
+				}
+				c.bases = append(c.bases, base)
+				continue
+			}
+		}
 		name, ok := b.(*pyast.Name)
 		if !ok {
 			return unsupported("base class that is not a plain name", b.Line())
 		}
+		if gc := g.genericClasses[name.ID]; gc != nil {
+			return unsupported(fmt.Sprintf("generic class '%s' as a base without type arguments", name.ID), b.Line())
+		}
 		switch {
 		case g.classes[name.ID] != nil:
 			base := g.classes[name.ID]
-			if base.index >= c.index {
+			if base.index >= c.index && c.generic == nil {
 				return unsupported(fmt.Sprintf("base class '%s' used before its definition", name.ID), b.Line())
 			}
 			if base == c {
@@ -452,7 +505,7 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 	if err != nil {
 		return err
 	}
-	qual := c.name + "." + fn.Name
+	qual := c.pyName() + "." + fn.Name
 	sig.qualname = qual
 
 	if setterOf != "" {
@@ -514,7 +567,7 @@ func (g *generator) methodSig(c *classInfo, fn *pyast.FunctionDef, kind memberKi
 	}
 	cp.Decorators = nil
 	g.buildingMethod = true
-	sig, err := g.buildSig(&cp, c.name+"."+fn.Name, true)
+	sig, err := g.buildSig(&cp, c.pyName()+"."+fn.Name, true)
 	g.buildingMethod = false
 	if err != nil {
 		return nil, err
@@ -596,7 +649,21 @@ func (g *generator) classAssign(c *classInfo, n *pyast.Assign) error {
 	}
 	name := target.ID
 	switch name {
-	case "__slots__", "__match_args__", "__annotations__":
+	case "__match_args__":
+		tup, ok := n.Value.(*pyast.Tuple)
+		if !ok {
+			return unsupported("__match_args__ that is not a tuple of names", n.Line())
+		}
+		c.matchArgs = []string{}
+		for _, e := range tup.Elts {
+			s, ok := e.(*pyast.Constant)
+			if !ok || s.PyType != "str" {
+				return unsupported("__match_args__ that is not a tuple of names", n.Line())
+			}
+			c.matchArgs = append(c.matchArgs, s.Value.(string))
+		}
+		return nil
+	case "__slots__", "__annotations__":
 		return nil
 	case "__hash__":
 		if k, ok := n.Value.(*pyast.Constant); ok && k.PyType == "none" {

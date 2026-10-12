@@ -1,1 +1,1 @@
-unsupported: call to undefined function 'ValueError' at line 1
+unsupported: variable 'x' expects int, got exception at line 1

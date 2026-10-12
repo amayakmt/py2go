@@ -1,1 +1,1 @@
-unsupported: With at line 1
+unsupported: call to undefined function 'open' at line 1

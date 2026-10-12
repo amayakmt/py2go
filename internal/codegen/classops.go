@@ -135,7 +135,17 @@ func (g *generator) classUnary(op string, v value, line int) (value, error) {
 }
 
 // truth is a value's truth test as a Go bool.
+func (g *generator) truthOptional(v value) value {
+	return value{code: g.rt("OptTruth") + "(" + v.code + ")", typ: tBool, prec: precAtom}
+}
+
 func (g *generator) truth(v value) value {
+	if v.typ.isOptional() {
+		return g.truthOptional(v)
+	}
+	if v.typ == tNoneType {
+		return value{code: "false", typ: tBool, prec: precAtom}
+	}
 	if c := g.classOf(v.typ); c != nil {
 		if m := c.lookup("__bool__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 0 {
 			return value{code: v.at(precAtom) + ".M___bool__()", typ: tBool, prec: precAtom}
@@ -357,6 +367,9 @@ func (g *generator) userIterable(v value) (code string, elem pyType, ok bool) {
 	iter := c.lookup("__iter__")
 	if iter == nil || iter.kind != mMethod || len(iter.sig.pos) != 0 {
 		return "", "", false
+	}
+	if r := iter.sig.ret; r.isIter() || r.isGen() {
+		return v.at(precAtom) + ".M___iter__()", r.elem(), true
 	}
 	ic := g.classOf(iter.sig.ret)
 	if ic == nil {
@@ -583,7 +596,7 @@ func (g *generator) typeOperand(n pyast.Node) (code string, ok bool, err error) 
 			if x.dynamicRef {
 				return x.at(precAtom) + ".PyClassName()", true, nil
 			}
-			return strconv.Quote(x.classRef.name), true, nil
+			return strconv.Quote(x.classRef.pyName()), true, nil
 		}
 	case *pyast.Attribute:
 		if n.Attr == "__class__" {
@@ -600,7 +613,7 @@ func (g *generator) typeOperand(n pyast.Node) (code string, ok bool, err error) 
 			return "", false, nil
 		}
 		if c := g.classes[n.ID]; c != nil {
-			return strconv.Quote(c.name), true, nil
+			return strconv.Quote(c.pyName()), true, nil
 		}
 		switch n.ID {
 		case "int", "str", "float", "bool":
@@ -769,14 +782,31 @@ func (g *generator) noneCompare(n *pyast.Compare) (value, bool, error) {
 	if err != nil {
 		return value{}, true, err
 	}
-	if v.typ != tOptExc {
-		return value{}, true, unsupported("comparison with None (None as a value arrives in phase 8)", n.Line())
+	negate := op == "IsNot" || op == "NotEq"
+	switch {
+	case v.typ.isOptional():
+		code := "!" + v.at(precAtom) + ".IsSome()"
+		if negate {
+			code = v.at(precAtom) + ".IsSome()"
+		}
+		return value{code: code, typ: tBool, prec: precUnary}, true, nil
+	case v.typ == tOptExc:
+		code := v.at(precCmp+1) + " == nil"
+		if negate {
+			code = v.at(precCmp+1) + " != nil"
+		}
+		return value{code: code, typ: tBool, prec: precCmp}, true, nil
 	}
-	code := v.at(precCmp+1) + " == nil"
-	if op == "IsNot" || op == "NotEq" {
-		code = v.at(precCmp+1) + " != nil"
+	// Nothing else is None: the answer is known, and the operand still runs.
+	answer := v.typ == tNoneType
+	if negate {
+		answer = !answer
 	}
-	return value{code: code, typ: tBool, prec: precCmp}, true, nil
+	code := strconv.FormatBool(answer)
+	if !simpleOperand.MatchString(v.code) && !v.konst {
+		code = "func() bool {\n_ = " + v.code + "\nreturn " + code + "\n}()"
+	}
+	return value{code: code, typ: tBool, prec: precAtom}, true, nil
 }
 
 // hashable reports whether a value of type t can be a dict key or set

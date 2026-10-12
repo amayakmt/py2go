@@ -54,8 +54,8 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
-		if k.typ == tExc || v.typ == tExc {
-			return value{}, unsupported("exception stored in a dict", kn.Line())
+		if k.typ == tExc {
+			return value{}, unsupported("exception used as a dict key", kn.Line())
 		}
 		if key == "" {
 			if !g.hashable(k.typ) {
@@ -103,6 +103,9 @@ func (g *generator) setLit(n *pyast.Set, want pyType) (value, error) {
 	var elemWant pyType
 	if want.isSet() {
 		elemWant = want.elem()
+	}
+	if starIndex(n.Elts) >= 0 {
+		return g.starredDisplay(n.Elts, elemWant, "set", n.Line())
 	}
 	var elem pyType
 	codes := make([]string, len(n.Elts))
@@ -191,6 +194,9 @@ func (g *generator) hashableOrError(t pyType, what string, line int) error {
 // iterableOf describes v as a runtime.Iterable: the Go expression and the
 // type of the items it yields. A str iterates as a list of its characters.
 func (g *generator) iterableOf(v value) (code string, elem pyType, ok bool) {
+	if v.typ.isOptional() {
+		v = value{code: v.at(precAtom) + ".Unwrap(\"TypeError\", \"'NoneType' object is not iterable\")", typ: v.typ.optElem(), prec: precAtom}
+	}
 	if v.typ.isClass() {
 		return g.userIterable(v)
 	}

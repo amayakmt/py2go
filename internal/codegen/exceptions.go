@@ -121,6 +121,26 @@ func (g *generator) excValue(n pyast.Node) (string, error) {
 		if n.HasKeywords {
 			return "", unsupported("keyword arguments", n.Line())
 		}
+		if name == "ExceptionGroup" || name == "BaseExceptionGroup" {
+			if len(n.Args) != 2 {
+				return "", unsupported(name+"() needs a message and a list of exceptions", n.Line())
+			}
+			msg, err := g.exprAs(n.Args[0], tStr)
+			if err != nil {
+				return "", err
+			}
+			if msg.typ != tStr {
+				return "", mismatch("message of "+name, tStr, msg.typ, n.Line())
+			}
+			list, err := g.exprAs(n.Args[1], listOf(tExc))
+			if err != nil {
+				return "", err
+			}
+			if list.typ != listOf(tExc) {
+				return "", mismatch("exceptions of "+name, listOf(tExc), list.typ, n.Line())
+			}
+			return call(g.rt("NewGroup"), strconv.Quote(name), msg.code, list.at(precAtom)+".Items()"), nil
+		}
 		args := []string{strconv.Quote(name)}
 		for _, a := range n.Args {
 			v, err := g.typedExpr(a)
@@ -133,6 +153,18 @@ func (g *generator) excValue(n pyast.Node) (string, error) {
 			args = append(args, v.code)
 		}
 		return call(g.rt("NewError"), args...), nil
+	}
+	// Any other expression whose value is an exception.
+	switch n.(type) {
+	case *pyast.Subscript, *pyast.Attribute, *pyast.Call:
+		if v, err := g.typedExpr(n); err == nil {
+			switch {
+			case v.typ == tExc:
+				return v.code, nil
+			case v.typ.isClass() && g.classOf(v.typ).exc:
+				return v.at(precAtom) + ".PyExc()", nil
+			}
+		}
 	}
 	return "", unsupported("raise of something that is not an exception", n.Line())
 }
@@ -272,6 +304,11 @@ func (g *generator) dispatchFlow(b *strings.Builder, ctx *flowCtx) error {
 // jump is break or continue.
 func (g *generator) jump(b *strings.Builder, kind string, line int) error {
 	if g.loopDepth > 0 {
+		if kind == "break" && len(g.elseFlags) > 0 {
+			if flag := g.elseFlags[len(g.elseFlags)-1]; flag != "" {
+				b.WriteString(flag + " = true\n")
+			}
+		}
 		b.WriteString(kind + "\n")
 		return nil
 	}
@@ -295,6 +332,8 @@ func (g *generator) jump(b *strings.Builder, kind string, line int) error {
 func (g *generator) emitReturn(b *strings.Builder, value string) {
 	if g.flow == nil {
 		switch {
+		case value == "" && g.genNone:
+			b.WriteString("return " + g.rt("NoneV") + "\n")
 		case value == "":
 			b.WriteString("return\n")
 		case g.specialRet:
@@ -374,6 +413,9 @@ func (g *generator) tryFinally(b *strings.Builder, n *pyast.Try) error {
 
 // tryExcept generates try/except/else.
 func (g *generator) tryExcept(b *strings.Builder, n *pyast.Try) error {
+	if n.Star {
+		return g.tryExceptStar(b, n)
+	}
 	for i, h := range n.Handlers {
 		if h.Type == nil && i != len(n.Handlers)-1 {
 			return unsupported("'except:' that is not last", h.Line())

@@ -1,1 +1,0 @@
-unsupported: a positional argument after a *iterable argument at line 6

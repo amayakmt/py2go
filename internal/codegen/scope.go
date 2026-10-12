@@ -15,6 +15,7 @@ type scope struct {
 	// enclosing function, whose variables the function can read, and assign
 	// only after "nonlocal".
 	boundary bool
+	aliases  map[string]aliasInfo // names narrowed in this scope, see narrow.go
 }
 
 func newScope(parent *scope) *scope {

@@ -73,9 +73,6 @@ func (g *generator) listComp(n *pyast.ListComp, want pyType) (value, error) {
 		if err != nil {
 			return err
 		}
-		if v.typ == tExc {
-			return unsupported("exception stored in a list", n.Elt.Line())
-		}
 		elem = v.typ
 		fmt.Fprintf(b, "%s.Append(%s)\n", out, v.code)
 		return nil
@@ -131,9 +128,6 @@ func (g *generator) dictComp(n *pyast.DictComp, want pyType) (value, error) {
 		}
 		if err := g.hashableOrError(k.typ, "dict key", n.Key.Line()); err != nil {
 			return err
-		}
-		if v.typ == tExc {
-			return unsupported("exception stored in a dict", n.Value.Line())
 		}
 		key, val = k.typ, v.typ
 		fmt.Fprintf(b, "%s.Set(%s, %s)\n", out, k.code, v.code)

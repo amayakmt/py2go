@@ -180,6 +180,7 @@ func (g *generator) lookupBinding(name string) (t pyType, found, global bool) {
 // afterAssign records, for an assignment inside a function to a variable it
 // declared global, that the variable now has a value.
 func (g *generator) afterAssign(b *strings.Builder, name string, global bool) {
+	g.env.dropAlias(name)
 	if global {
 		g.markGlobalSet(b, name)
 	}

@@ -16,6 +16,9 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 	if want.isList() {
 		elemWant = want.elem()
 	}
+	if starIndex(n.Elts) >= 0 {
+		return g.starredDisplay(n.Elts, elemWant, "list", n.Line())
+	}
 	if len(n.Elts) == 0 {
 		if !want.isList() {
 			return value{}, unsupported("empty list without a type annotation", n.Line())
@@ -24,25 +27,29 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 	}
 
 	codes := make([]string, len(n.Elts))
+	vals := make([]value, len(n.Elts))
 	var elem pyType
 	for i, e := range n.Elts {
 		v, err := g.exprAs(e, elemWant)
 		if err != nil {
 			return value{}, err
 		}
-		if v.typ == tExc {
-			return value{}, unsupported("exception stored in a list", e.Line())
-		}
+		vals[i] = v
 		if i == 0 {
 			elem = v.typ
 		} else if v.typ != elem {
-			common, ok := g.commonClass(elem, v.typ)
+			common, ok := g.joinTypes(elem, v.typ)
 			if !ok {
 				return value{}, unsupported(fmt.Sprintf("list with mixed element types (%s and %s)", elem, v.typ), e.Line())
 			}
 			elem = common
 		}
-		codes[i] = v.code
+	}
+	if elem == tNoneType {
+		return value{}, unsupported("list of None without a type annotation", n.Line())
+	}
+	for i, v := range vals {
+		codes[i] = g.relabel(v, elem).code
 	}
 	return value{
 		code: g.rt("NewList") + "[" + g.goType(elem) + "](" + strings.Join(codes, ", ") + ")",
@@ -52,6 +59,13 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 
 // tupleLit generates (a, b). Tuples keep the type of each position.
 func (g *generator) tupleLit(n *pyast.Tuple, want pyType) (value, error) {
+	if starIndex(n.Elts) >= 0 {
+		var elemWant pyType
+		if want.isVarTuple() {
+			elemWant = want.elem()
+		}
+		return g.starredDisplay(n.Elts, elemWant, "tuple", n.Line())
+	}
 	if want.isVarTuple() {
 		// A tuple display where tuple[T, ...] is expected.
 		codes := make([]string, len(n.Elts))
@@ -90,9 +104,6 @@ func (g *generator) tupleLit(n *pyast.Tuple, want pyType) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
-		if v.typ == tExc {
-			return value{}, unsupported("exception stored in a tuple", e.Line())
-		}
 		types[i], codes[i] = v.typ, v.code
 	}
 	t := tupleOf(types)
@@ -110,9 +121,21 @@ func (g *generator) tupleCtor(t pyType, codes []string) string {
 
 // subscript generates x[i] and x[a:b:c] on str, list and tuple.
 func (g *generator) subscript(n *pyast.Subscript) (value, error) {
+	// Box[int] names a class: Box[int].create().
+	if head, ok := n.Value.(*pyast.Name); ok && !g.isVariable(head.ID) && g.genericClasses[head.ID] != nil {
+		t, err := g.annotationType(n, false)
+		if err != nil {
+			return value{}, err
+		}
+		c := g.classes[string(t)]
+		return value{typ: classRefOf(c.name), prec: precAtom, classRef: c}, nil
+	}
 	base, err := g.typedExpr(n.Value)
 	if err != nil {
 		return value{}, err
+	}
+	if base.typ.isOptional() {
+		base = value{code: base.at(precAtom) + ".Unwrap(\"TypeError\", \"'NoneType' object is not subscriptable\")", typ: base.typ.optElem(), prec: precAtom}
 	}
 	if base.typ.isClass() {
 		return g.classGetItem(n, base)
@@ -234,23 +257,40 @@ func (g *generator) fstring(n *pyast.JoinedStr) (value, error) {
 
 func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 	spec := ""
+	dynamic := ""
 	if f.FormatSpec != nil {
 		js, ok := f.FormatSpec.(*pyast.JoinedStr)
-		if !ok || len(js.Values) > 1 {
-			return "", unsupported("replacement field inside a format spec", f.Line())
+		if !ok {
+			return "", unsupported("format spec of kind "+nodeName(f.FormatSpec), f.Line())
 		}
-		if len(js.Values) == 1 {
-			c, ok := js.Values[0].(*pyast.Constant)
-			if !ok {
-				return "", unsupported("replacement field inside a format spec", f.Line())
+		static := true
+		for _, part := range js.Values {
+			if _, isConst := part.(*pyast.Constant); !isConst {
+				static = false
 			}
-			spec, _ = c.Value.(string)
+		}
+		if static {
+			for _, part := range js.Values {
+				text, _ := part.(*pyast.Constant).Value.(string)
+				spec += text
+			}
+		} else {
+			// Replacement fields inside the spec: it is built when the
+			// f-string runs.
+			sv, err := g.fstring(js)
+			if err != nil {
+				return "", err
+			}
+			dynamic = sv.code
 		}
 	}
 
 	v, err := g.typedExpr(f.Value)
 	if err != nil {
 		return "", err
+	}
+	if dynamic != "" {
+		return g.formatDynamic(f, v, dynamic)
 	}
 
 	// !s and !r convert first, then format the resulting string.
@@ -315,4 +355,33 @@ func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 		return "", unsupported(fmt.Sprintf("format spec '%s' for %s", spec, v.typ), f.Line())
 	}
 	return call(g.rt("Str"), v.code), nil
+}
+
+// formatDynamic formats a value with a spec that is only known when the
+// f-string runs, so the checks the compiler makes for a literal spec happen
+// at run time.
+func (g *generator) formatDynamic(f *pyast.FormattedValue, v value, spec string) (string, error) {
+	switch f.Conversion {
+	case 's':
+		v = value{code: call(g.rt("Str"), v.code), typ: tStr, prec: precAtom}
+	case 'r':
+		v = value{code: call(g.rt("Repr"), v.code), typ: tStr, prec: precAtom}
+	case -1:
+	default:
+		return "", unsupported("!a conversion in an f-string", f.Line())
+	}
+	if c := g.classOf(v.typ); c != nil {
+		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && m.sig.pos[0].typ == tStr && m.sig.ret == tStr {
+			return v.at(precAtom) + ".M___format__(" + spec + ")", nil
+		}
+	}
+	switch v.typ {
+	case tStr:
+		return call(g.rt("FormatStr"), v.code, spec), nil
+	case tInt:
+		return call(g.rt("FormatIntDyn"), v.code, spec), nil
+	case tFloat:
+		return call(g.rt("FormatFloat"), v.code, spec), nil
+	}
+	return call(g.rt("FormatOther"), g.relabel(v, tObject).code, spec), nil
 }

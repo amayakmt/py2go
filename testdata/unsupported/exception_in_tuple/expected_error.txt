@@ -1,1 +1,1 @@
-unsupported: exception stored in a tuple at line 4
+unsupported: variable 't' expects tuple[int, int], got tuple[int, exception] at line 4

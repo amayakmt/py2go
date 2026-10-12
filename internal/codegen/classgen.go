@@ -440,7 +440,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 			fmt.Fprintf(out, "func %s Is_%s() {}\n", recv, k.name)
 		}
 	}
-	fmt.Fprintf(out, "func %s PyClassName() string { return %q }\n", recv, c.name)
+	fmt.Fprintf(out, "func %s PyClassName() string { return %q }\n", recv, c.pyName())
 
 	switch m := c.lookup("__repr__"); {
 	case m != nil:
@@ -448,7 +448,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 	case c.exc:
 		fmt.Fprintf(out, "func %s PyRepr() string { return self.E.BaseRepr() }\n", recv)
 	default:
-		fmt.Fprintf(out, "func %s PyRepr() string { return %s(%q, self) }\n", recv, g.rt("DefaultRepr"), c.name)
+		fmt.Fprintf(out, "func %s PyRepr() string { return %s(%q, self) }\n", recv, g.rt("DefaultRepr"), c.pyName())
 	}
 	switch m := c.lookup("__str__"); {
 	case m != nil:
@@ -547,7 +547,7 @@ func (g *generator) emitSynth(out *strings.Builder, c, x *classInfo, m *member, 
 				parts = append(parts, fmt.Sprintf("%q + %s(%s.%s)", f.name+"=", g.rt("Repr"), selfName, fieldName(f.name)))
 			}
 		}
-		body := strconv.Quote(c.name+"(") + " + "
+		body := strconv.Quote(c.pyName()+"(") + " + "
 		if len(parts) > 0 {
 			body += strings.Join(parts, " + \", \" + ") + " + "
 		}

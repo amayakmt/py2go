@@ -11,6 +11,12 @@ import (
 
 // walk calls f on n and on every node below it.
 func walk(n pyast.Node, f func(pyast.Node)) {
+	walkPrune(n, func(x pyast.Node) bool { f(x); return true })
+}
+
+// walkPrune is walk, except that it does not go below a node for which f
+// returns false.
+func walkPrune(n pyast.Node, f func(pyast.Node) bool) {
 	var visit func(v reflect.Value)
 	nodeType := reflect.TypeOf((*pyast.Node)(nil)).Elem()
 	visit = func(v reflect.Value) {
@@ -24,7 +30,9 @@ func walk(n pyast.Node, f func(pyast.Node)) {
 				return
 			}
 			if v.Type().Implements(nodeType) {
-				f(v.Interface().(pyast.Node))
+				if !f(v.Interface().(pyast.Node)) {
+					return
+				}
 			}
 			visit(v.Elem())
 		case reflect.Struct:
@@ -95,6 +103,19 @@ func (g *generator) prescan(mod *pyast.Module) {
 // method can depend on the attributes of another class.
 func (g *generator) inferClasses() error {
 	for _, c := range g.classOrder {
+		if err := g.inferClassAttrs(c); err != nil {
+			return err
+		}
+	}
+	g.inferRounds(g.classOrder)
+	g.phase = 2
+	return nil
+}
+
+// inferClassAttrs types the class attributes that have no annotation, and
+// marks the ones that instances assign.
+func (g *generator) inferClassAttrs(c *classInfo) error {
+	return g.withSubst(c.tsubst, func() error {
 		for _, name := range c.order {
 			m := c.members[name]
 			if m.kind != mClassAttr {
@@ -114,26 +135,35 @@ func (g *generator) inferClasses() error {
 				m.shadow = true
 			}
 		}
-	}
+		return nil
+	})
+}
 
+// inferRounds compiles the methods of the classes until no attribute is new.
+func (g *generator) inferRounds(classes []*classInfo) {
 	usesRuntime := g.usesRuntime
+	savedInfer, savedGrew := g.infer, g.inferGrew
 	g.infer = true
 	for round := 0; round < 8; round++ {
 		g.inferGrew = false
-		for _, c := range g.classOrder {
-			g.inferClass(c)
+		for _, c := range classes {
+			if c.completed || c.generic == nil {
+				g.inferClass(c)
+			}
 		}
 		if !g.inferGrew {
 			break
 		}
 	}
-	g.infer = false
+	g.infer, g.inferGrew = savedInfer, savedGrew
 	g.usesRuntime = usesRuntime
-	return nil
 }
 
 // inferClass compiles the methods of a class, discarding the result.
 func (g *generator) inferClass(c *classInfo) {
+	saved := g.tsubst
+	g.tsubst = c.tsubst
+	defer func() { g.tsubst = saved }()
 	for _, name := range append([]string{}, c.order...) {
 		m := c.members[name]
 		if m == nil || m.node == nil {
@@ -174,11 +204,11 @@ func (g *generator) stmtList(b *strings.Builder, stmts []pyast.Node) error {
 			}
 			return err
 		}
-		if nar := g.earlyExitNarrowing(s); nar != nil {
+		if nars := g.earlyExitNarrowing(s); len(nars) > 0 {
 			outer := g.env
 			g.env = newScope(outer)
 			b.WriteString("{\n")
-			g.declareLocal(b, nar.name, nar.to, nar.expr)
+			g.bindNarrow(b, nars)
 			err := g.stmtList(b, stmts[i+1:])
 			g.env = outer
 			b.WriteString("}\n")
@@ -186,87 +216,6 @@ func (g *generator) stmtList(b *strings.Builder, stmts []pyast.Node) error {
 		}
 	}
 	return nil
-}
-
-// narrowing is a variable whose type is narrowed by an isinstance test.
-type narrowing struct {
-	name string
-	to   pyType
-	expr string // Go code of the narrowed value
-}
-
-// narrowOf reads "isinstance(x, C)" and says how x is narrowed to C.
-func (g *generator) narrowOf(test pyast.Node) *narrowing {
-	call, ok := test.(*pyast.Call)
-	if !ok || call.HasKeywords || len(call.Args) != 2 {
-		return nil
-	}
-	if name, _ := callName(call); name != "isinstance" || g.isVariable("isinstance") {
-		return nil
-	}
-	arg, ok := call.Args[0].(*pyast.Name)
-	if !ok {
-		return nil
-	}
-	spec, ok := call.Args[1].(*pyast.Name)
-	if !ok || g.isVariable(spec.ID) {
-		return nil
-	}
-	cur, found := g.env.lookup(arg.ID)
-	src := arg.ID
-	if !found {
-		v, ok := g.readGlobal(arg.ID)
-		if !ok {
-			return nil
-		}
-		cur, src = v.typ, v.code
-	}
-	if g.compRoot != nil || g.fnGlobals[arg.ID] {
-		return nil
-	}
-	if k := g.classes[spec.ID]; k != nil {
-		switch {
-		case cur == tObject:
-			return &narrowing{arg.ID, k.typ(), src + ".(" + k.name + ")"}
-		case cur.isClass() && g.classOf(cur) != k && k.isSubclassOf(g.classOf(cur)):
-			return &narrowing{arg.ID, k.typ(), src + ".(" + k.name + ")"}
-		case cur == tExc && k.exc:
-			return &narrowing{arg.ID, k.typ(), src + ".Obj.(" + k.name + ")"}
-		}
-		return nil
-	}
-	if cur == tObject {
-		switch spec.ID {
-		case "int":
-			return &narrowing{arg.ID, tInt, g.rt("AsInt") + "(" + src + ")"}
-		case "str":
-			return &narrowing{arg.ID, tStr, src + ".(string)"}
-		case "float":
-			return &narrowing{arg.ID, tFloat, src + ".(float64)"}
-		case "bool":
-			return &narrowing{arg.ID, tBool, src + ".(bool)"}
-		}
-	}
-	return nil
-}
-
-// earlyExitNarrowing recognises "if not isinstance(x, C): <leave>" without
-// an else, after which x is a C.
-func (g *generator) earlyExitNarrowing(s pyast.Node) *narrowing {
-	n, ok := s.(*pyast.If)
-	if !ok || len(n.Orelse) > 0 || len(n.Body) == 0 {
-		return nil
-	}
-	not, ok := n.Test.(*pyast.UnaryOp)
-	if !ok || not.Op != "Not" {
-		return nil
-	}
-	switch n.Body[len(n.Body)-1].(type) {
-	case *pyast.Return, *pyast.Raise, *pyast.Continue, *pyast.Break:
-	default:
-		return nil
-	}
-	return g.narrowOf(not.Operand)
 }
 
 // isExceptionName reports whether name is an exception class of the program

@@ -29,17 +29,23 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 			return g.superBuiltin(&rest, sup, m.Attr)
 		}
 	}
-	recv, err := g.recvExpr(m.Value)
+	recv, err := g.recvExpr(m.Value, m.Attr)
 	if err != nil {
 		return value{}, err
 	}
 	switch {
+	case recv.typ.isGen():
+		return g.genMethod(n, m, recv)
+	case recv.typ.isIter():
+		return g.iterGenMethod(n, m, recv)
 	case recv.typ.isClassRef():
 		return g.classLevelCall(n, m, recv)
 	case recv.typ.isClass():
 		return g.instanceCall(n, m, recv)
 	case recv.typ == tObject:
 		return value{}, unsupported(fmt.Sprintf("method '%s' on a value of type object (test it with isinstance first)", m.Attr), n.Line())
+	case recv.typ == tExc:
+		return g.excMethod(n, m, recv)
 	case recv.typ == tStr:
 		return g.strMethod(n, m, recv)
 	case recv.typ.isList():
@@ -250,7 +256,14 @@ func (g *generator) dictMethod(n *pyast.Call, m *pyast.Attribute, recv value) (v
 	switch m.Attr {
 	case "get":
 		if len(n.Args) == 1 {
-			return value{}, unsupported("get() with one argument, which returns None when the key is missing", n.Line())
+			return method("GetOpt", optionalOf(v), k)
+		}
+		if c, ok := n.Args[1].(*pyast.Constant); ok && c.PyType == "none" {
+			args, err := g.methodArgs(&pyast.Call{Func: n.Func, Args: n.Args[:1], Lineno: n.Line()}, m, k)
+			if err != nil {
+				return value{}, err
+			}
+			return value{code: r + ".GetOpt(" + joinArgs(args) + ")", typ: optionalOf(v), prec: precAtom}, nil
 		}
 		return method("GetDefault", v, k, v)
 	case "pop":

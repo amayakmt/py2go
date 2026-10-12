@@ -9,7 +9,21 @@ import (
 	"github.com/amayakmt/py2go/internal/pyast"
 )
 
+// stmt generates one statement. A walrus inside it declares its variable
+// before the statement, so declarations the expression makes are collected in
+// g.hoist and written first.
 func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
+	saved := g.hoist
+	var hoisted, body strings.Builder
+	g.hoist = &hoisted
+	err := g.stmtInner(&body, n)
+	g.hoist = saved
+	b.WriteString(hoisted.String())
+	b.WriteString(body.String())
+	return err
+}
+
+func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	switch n := n.(type) {
 	case *pyast.Expr:
 		return g.exprStmt(b, n)
@@ -49,6 +63,12 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 		return g.nestedDef(b, n)
 	case *pyast.ClassDef:
 		return unsupported("class defined inside a function or a block", n.Line())
+	case *pyast.With:
+		return g.withStmt(b, n)
+	case *pyast.Match:
+		return g.matchStmt(b, n)
+	case *pyast.TypeAlias:
+		return nil
 	case *pyast.Nonlocal:
 		return g.nonlocalStmt(n)
 	case *pyast.ImportFrom:
@@ -68,9 +88,9 @@ func (g *generator) block(b *strings.Builder, stmts []pyast.Node) error {
 	outer := g.env
 	g.env = newScope(outer)
 	defer func() { g.env = outer }()
-	if nar := g.pendingNarrow; nar != nil {
+	if nars := g.pendingNarrow; nars != nil {
 		g.pendingNarrow = nil
-		g.declareLocal(b, nar.name, nar.to, nar.expr)
+		g.bindNarrow(b, nars)
 	}
 	if err := g.predeclareDefs(b, stmts); err != nil {
 		return err
@@ -84,6 +104,13 @@ func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
 	// A literal on its own does nothing: a docstring, or the "..." that
 	// stands for a body not written yet.
 	switch c := n.Value.(type) {
+	case *pyast.Yield, *pyast.YieldFrom:
+		v, err := g.expr(n.Value)
+		if err != nil {
+			return err
+		}
+		b.WriteString(v.code + "\n")
+		return nil
 	case *pyast.Constant:
 		return nil
 	case *pyast.Unsupported:
@@ -179,6 +206,14 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 }
 
 func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
+	// T = TypeVar("T") only declares a type variable.
+	if len(n.Targets) == 1 {
+		if name, ok := n.Targets[0].(*pyast.Name); ok {
+			if _, isVar := g.typeVars[name.ID]; isVar {
+				return nil
+			}
+		}
+	}
 	if len(n.Targets) != 1 {
 		return unsupported("chained assignment", n.Line())
 	}
@@ -319,7 +354,7 @@ func (g *generator) targetType(n pyast.Node) pyType {
 func (g *generator) unpackAssign(b *strings.Builder, target *pyast.Tuple, valueNode pyast.Node, line int) error {
 	// A tuple on the right with matching arity needs no tuple object:
 	// every element is evaluated first, then assigned in order.
-	if lit, ok := valueNode.(*pyast.Tuple); ok && len(lit.Elts) == len(target.Elts) {
+	if lit, ok := valueNode.(*pyast.Tuple); ok && len(lit.Elts) == len(target.Elts) && starIndex(target.Elts) < 0 && starIndex(lit.Elts) < 0 {
 		vals := make([]value, len(lit.Elts))
 		for i, e := range lit.Elts {
 			v, err := g.exprAs(e, g.targetType(target.Elts[i]))
@@ -400,6 +435,9 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		return nil
 
 	case *pyast.Tuple:
+		if star := starIndex(tg.Elts); star >= 0 {
+			return g.starUnpack(b, tg, star, src, t, line)
+		}
 		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isVarTuple() && !t.isIter() {
 			// A str, dict, set or range unpacks through a list of its items.
 			list, err := g.asList(value{code: src, typ: t, prec: precAtom}, "unpacking", line)
@@ -466,13 +504,16 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	if !declared {
 		return unsupported(fmt.Sprintf("augmented assignment to undeclared name '%s'", target.ID), n.Line())
 	}
-	right, err := g.exprAs(n.Value, t)
+	right, err := g.exprAs(n.Value, strip(t))
 	if err != nil {
 		return err
 	}
 	cur := value{code: target.ID, typ: t, prec: precAtom}
 	if global {
 		cur, _ = g.readGlobal(target.ID)
+	}
+	if a, ok := g.env.lookupAlias(target.ID); ok {
+		cur = value{code: a.code, typ: a.typ, prec: precAtom}
 	}
 	res, err := g.augmented(n.Op, cur, right, n.Line())
 	if err != nil {
@@ -573,6 +614,10 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 		bare = true
 	}
 	if bare {
+		if g.ret.isOptional() {
+			g.emitReturn(b, g.rt("NoneOf")+"["+g.goType(g.ret.optElem())+"]()")
+			return nil
+		}
 		if g.ret != tNone {
 			return mismatch(dest, g.ret, tNone, n.Line())
 		}
@@ -613,10 +658,19 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 	for {
 		cond, err := g.condition(n.Test)
 		if err != nil {
+			if g.infer {
+				// While classes are inferred, the branches still say what
+				// attributes exist, whatever the test was.
+				var scratch strings.Builder
+				_ = g.block(&scratch, n.Body)
+				_ = g.block(&scratch, n.Orelse)
+				return nil
+			}
 			return err
 		}
 		b.WriteString(cond.code + " {\n")
-		g.pendingNarrow = g.narrowOf(n.Test)
+		pos, neg := g.narrowTest(n.Test)
+		g.pendingNarrow = pos
 		err = g.block(b, n.Body)
 		g.pendingNarrow = nil
 		if err != nil {
@@ -628,14 +682,18 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 			b.WriteString("\n")
 			return nil
 		}
-		// An elif is an If alone in the else branch.
-		if next, ok := n.Orelse[0].(*pyast.If); ok && len(n.Orelse) == 1 {
+		// An elif is an If alone in the else branch. When the test taught
+		// something about the else branch, the elif is a block of its own.
+		if next, ok := n.Orelse[0].(*pyast.If); ok && len(n.Orelse) == 1 && len(neg) == 0 {
 			b.WriteString(" else if ")
 			n = next
 			continue
 		}
 		b.WriteString(" else {\n")
-		if err := g.block(b, n.Orelse); err != nil {
+		g.pendingNarrow = neg
+		err = g.block(b, n.Orelse)
+		g.pendingNarrow = nil
+		if err != nil {
 			return err
 		}
 		b.WriteString("}\n")
@@ -644,11 +702,27 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 }
 
 func (g *generator) whileStmt(b *strings.Builder, n *pyast.While) error {
-	if len(n.Orelse) > 0 {
-		return unsupported("loop else clause", n.Line())
+	flag := g.enterLoopElse(b, len(n.Orelse) > 0)
+	cp := *n
+	cp.Orelse = nil
+	err := g.whileStmtBody(b, &cp)
+	g.elseFlags = g.elseFlags[:len(g.elseFlags)-1]
+	if err != nil {
+		return err
 	}
+	return g.leaveLoopElse(b, flag, n.Orelse)
+}
+
+func (g *generator) whileStmtBody(b *strings.Builder, n *pyast.While) error {
 	cond, err := g.condition(n.Test)
 	if err != nil {
+		if g.infer {
+			var scratch strings.Builder
+			g.loopDepth++
+			_ = g.block(&scratch, n.Body)
+			g.loopDepth--
+			return nil
+		}
 		return err
 	}
 	// "for {" lets Go see that the loop only ends through break or return.
@@ -659,7 +733,10 @@ func (g *generator) whileStmt(b *strings.Builder, n *pyast.While) error {
 	}
 	g.loopDepth++
 	defer func() { g.loopDepth-- }()
-	if err := g.block(b, n.Body); err != nil {
+	g.pendingNarrow, _ = g.narrowTest(n.Test)
+	err = g.block(b, n.Body)
+	g.pendingNarrow = nil
+	if err != nil {
 		return err
 	}
 	b.WriteString("}\n")
@@ -690,15 +767,82 @@ func intLiteral(n pyast.Node) (int64, bool) {
 //		...
 //	}
 func (g *generator) forStmt(b *strings.Builder, n *pyast.For) error {
-	if len(n.Orelse) > 0 {
-		return unsupported("loop else clause", n.Line())
+	flag := g.enterLoopElse(b, len(n.Orelse) > 0)
+	cp := *n
+	cp.Orelse = nil
+	err := g.forStmtBody(b, &cp)
+	g.elseFlags = g.elseFlags[:len(g.elseFlags)-1]
+	if err != nil {
+		return err
 	}
+	return g.leaveLoopElse(b, flag, n.Orelse)
+}
+
+// enterLoopElse starts a loop. A loop with an else clause gets a flag that a
+// break sets, since the else runs only when the loop ended without one.
+func (g *generator) enterLoopElse(b *strings.Builder, hasElse bool) string {
+	flag := ""
+	if hasElse {
+		flag = g.tmp("broke")
+		fmt.Fprintf(b, "{\nvar %s bool\n_ = %s\n", flag, flag)
+	}
+	g.elseFlags = append(g.elseFlags, flag)
+	return flag
+}
+
+func (g *generator) leaveLoopElse(b *strings.Builder, flag string, orelse []pyast.Node) error {
+	if flag == "" {
+		return nil
+	}
+	fmt.Fprintf(b, "if !%s {\n", flag)
+	if err := g.block(b, orelse); err != nil {
+		return err
+	}
+	b.WriteString("}\n}\n")
+	return nil
+}
+
+func (g *generator) forStmtBody(b *strings.Builder, n *pyast.For) error {
 	if call, ok := n.Iter.(*pyast.Call); ok {
 		if name, isName := callName(call); isName && name == "range" {
 			return g.forRange(b, n, call)
 		}
 	}
+	if call, ok := n.Iter.(*pyast.Call); ok {
+		if g.callsGenerator(call) {
+			v, err := g.typedExpr(call)
+			if err != nil {
+				return err
+			}
+			return g.forTempGenerator(b, n, v)
+		}
+	}
 	return g.forEach(b, n)
+}
+
+// forTempGenerator is a for loop over a generator that nothing else refers
+// to. CPython drops it when the loop ends, however it ends, and a dropped
+// generator is closed, so its finally blocks run. The loop is therefore
+// wrapped like the body of a try/finally that closes it.
+func (g *generator) forTempGenerator(b *strings.Builder, n *pyast.For, v value) error {
+	b.WriteString("{\n")
+	id := g.tmp("gen")
+	g.temp(b, id, v.typ, v.code)
+	g.env.declare(id, v.typ)
+	cp := *n
+	cp.Iter = &pyast.Name{ID: id, Lineno: n.Line()}
+	code, ctx, err := g.withFlow(func(cb *strings.Builder) error { return g.forEach(cb, &cp) })
+	if err != nil {
+		return err
+	}
+	pending := g.tmp("pending")
+	g.declareFlow(b, ctx)
+	fmt.Fprintf(b, "%s := %s(func() {\n%s})\n%s.Close()\nif %s != nil {\npanic(%s)\n}\n", pending, g.rt("Catch"), code, id, pending, pending)
+	if err := g.dispatchFlow(b, ctx); err != nil {
+		return err
+	}
+	b.WriteString("}\n")
+	return nil
 }
 
 func (g *generator) forRange(b *strings.Builder, n *pyast.For, call *pyast.Call) error {
@@ -833,7 +977,28 @@ func leaves(target pyast.Node, t pyType, line int) ([]leaf, error) {
 			return nil, nil
 		}
 		return []leaf{{tg.ID, t}}, nil
+	case *pyast.Starred:
+		return leaves(tg.Value, listOf(t), line)
 	case *pyast.Tuple:
+		if star := starIndex(tg.Elts); star >= 0 {
+			elem, ok := t.iterElem()
+			if !ok || t.isTuple() {
+				return nil, unsupported(fmt.Sprintf("starred loop target for %s", t), line)
+			}
+			var out []leaf
+			for i, elt := range tg.Elts {
+				et := elem
+				if i == star {
+					et = elem // Starred adds the list
+				}
+				l, err := leaves(elt, et, line)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, l...)
+			}
+			return out, nil
+		}
 		types, err := unpackTypes(len(tg.Elts), t, line)
 		if err != nil {
 			return nil, err
@@ -1038,4 +1203,4 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 
 // typingKnown are the other names of typing and collections.abc that are
 // harmless to import.
-var typingKnown = map[string]bool{"ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}
+var typingKnown = map[string]bool{"Iterator": true, "Generator": true, "Optional": true, "Union": true, "ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}

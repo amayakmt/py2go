@@ -174,6 +174,14 @@ func (g *generator) dataclassMembers(c *classInfo) error {
 		add(f)
 	}
 	dc.fields = fields
+	if c.matchArgs == nil {
+		c.matchArgs = []string{}
+		for _, f := range fields {
+			if f.init {
+				c.matchArgs = append(c.matchArgs, f.name)
+			}
+		}
+	}
 
 	seenDefault := false
 	for _, f := range fields {
