@@ -1,6 +1,7 @@
 package pyast
 
 import (
+	"math"
 	"os"
 	"testing"
 )
@@ -103,5 +104,63 @@ func TestDecodeUnsupported(t *testing.T) {
 func TestDecodeMalformed(t *testing.T) {
 	if _, err := Decode([]byte(`{not json`)); err == nil {
 		t.Fatal("expected an error on malformed JSON")
+	}
+}
+
+func TestDecodeConstants(t *testing.T) {
+	tests := []struct {
+		name   string
+		json   string
+		pytype string
+		want   any
+	}{
+		{"int", `{"_type":"Constant","value":1,"pytype":"int","lineno":1}`, "int", int64(1)},
+		{"float with integral value", `{"_type":"Constant","value":1.0,"pytype":"float","lineno":1}`, "float", float64(1)},
+		{"float exponent", `{"_type":"Constant","value":1e-05,"pytype":"float","lineno":1}`, "float", 1e-5},
+		{"inf", `{"_type":"Constant","value":"inf","pytype":"float","lineno":1}`, "float", math.Inf(1)},
+		{"bool", `{"_type":"Constant","value":true,"pytype":"bool","lineno":1}`, "bool", true},
+		{"str", `{"_type":"Constant","value":"hi","pytype":"str","lineno":1}`, "str", "hi"},
+		{"none", `{"_type":"Constant","value":null,"pytype":"none","lineno":1}`, "none", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			n, err := Decode([]byte(tc.json))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := as[*Constant](t, n)
+			if c.PyType != tc.pytype {
+				t.Errorf("pytype: want %q, got %q", tc.pytype, c.PyType)
+			}
+			if c.Value != tc.want {
+				t.Errorf("value: want %#v, got %#v", tc.want, c.Value)
+			}
+		})
+	}
+}
+
+func TestDecodeConstantUnsupported(t *testing.T) {
+	tests := []struct{ name, json, want string }{
+		{"bytes", `{"_type":"Constant","value":"b'x'","pytype":"bytes","lineno":4}`, "bytes constant"},
+		{"complex", `{"_type":"Constant","value":"1j","pytype":"complex","lineno":4}`, "complex constant"},
+		{"huge int", `{"_type":"Constant","value":123456789012345678901234567890,"pytype":"int","lineno":4}`, "integer literal out of int64 range"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			n, err := Decode([]byte(tc.json))
+			if err != nil {
+				t.Fatal(err)
+			}
+			u := as[*Unsupported](t, n)
+			if u.Type != tc.want || u.Line() != 4 {
+				t.Errorf("want %q at line 4, got %q at line %d", tc.want, u.Type, u.Line())
+			}
+		})
+	}
+}
+
+func TestDecodeConstantWithoutPytype(t *testing.T) {
+	if _, err := Decode([]byte(`{"_type":"Constant","value":1,"lineno":1}`)); err == nil {
+		t.Fatal("a Constant without pytype must be a decode error")
 	}
 }

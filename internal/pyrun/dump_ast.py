@@ -1,5 +1,6 @@
 import ast
 import json
+import math
 import sys
 
 # Version guard. AST node shapes change between Python minor versions.
@@ -7,6 +8,27 @@ import sys
 # Exit if the Python version is not 3.13.
 if sys.version_info[:2] != (3, 13):
     sys.exit(f"py2go requires Python 3.13, got {sys.version_info.major}.{sys.version_info.minor}")
+
+
+PYTYPES = ("int", "float", "str", "bool", "none")
+
+
+def pytype_of(value):
+    """
+    Name the Python type of a Constant's value.
+
+    bool is checked before int because bool is a subclass of int.
+    Anything outside PYTYPES (bytes, complex, Ellipsis) is tagged with its
+    own type name so the Go side can report it by name.
+    """
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "bool"
+    for name, cls in (("int", int), ("float", float), ("str", str)):
+        if isinstance(value, cls):
+            return name
+    return type(value).__name__.lower()
 
 
 def to_dict(node):
@@ -34,6 +56,15 @@ def to_dict(node):
         # getattr(..., None) guards against a field that isn't set.
         for field in node._fields:
             d[field] = to_dict(getattr(node, field, None))
+
+        # Constants get a "pytype" tag. JSON has one number type, so without
+        # it the Go decoder can't tell 1 from 1.0, or True from 1.
+        if isinstance(node, ast.Constant):
+            d["pytype"] = pytype_of(node.value)
+            if d["pytype"] == "float" and not math.isfinite(node.value):
+                d["value"] = repr(node.value)  # JSON has no inf or nan
+            elif d["pytype"] not in PYTYPES:
+                d["value"] = repr(node.value)
 
         # Position info is stored in attributes, not _fields, so it needs
         # separate handling. Only some nodes have it (Module doesn't).

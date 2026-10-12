@@ -33,6 +33,7 @@
                 "_type": "Constant",
                 "value": "hello",
                 "kind": null,
+                "pytype": "str",
                 "lineno": 2,
                 "col_offset": 10
               }
@@ -50,6 +51,7 @@
         "_type": "Constant",
         "value": null,
         "kind": null,
+        "pytype": "none",
         "lineno": 1,
         "col_offset": 15
       },
