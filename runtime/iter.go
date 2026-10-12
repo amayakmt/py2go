@@ -219,3 +219,12 @@ func Zip1[A any](a Iterable[A]) *Iterator[Tuple1[A]] {
 		return Tuple1[A]{}, false
 	})
 }
+
+// Spread is the items of an iterable as a []any, for print(*items).
+func Spread[T any](src Iterable[T]) []any {
+	var out []any
+	for c := src.Iter(); c.Next(); {
+		out = append(out, c.Value())
+	}
+	return out
+}

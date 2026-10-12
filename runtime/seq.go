@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -417,6 +418,9 @@ func Repr(v any) string {
 			return "(" + strings.Join(parts, ", ") + ")"
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
+	}
+	if reflect.TypeOf(v).Kind() == reflect.Func {
+		return "<function>" // CPython shows an address, which cannot match
 	}
 	panic(fmt.Sprintf("runtime: cannot repr %T", v))
 }
