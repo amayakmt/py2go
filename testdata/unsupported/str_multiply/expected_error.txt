@@ -1,0 +1,1 @@
+unsupported: operator * on str and int at line 1

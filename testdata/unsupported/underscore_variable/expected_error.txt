@@ -1,0 +1,1 @@
+unsupported: identifier '_' (reserved in Go output) at line 1

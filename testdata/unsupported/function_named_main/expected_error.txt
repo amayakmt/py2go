@@ -1,0 +1,1 @@
+unsupported: function named main (collides with generated main) at line 1

@@ -1,0 +1,1 @@
+unsupported: identifier 'init' (reserved in Go output) at line 1

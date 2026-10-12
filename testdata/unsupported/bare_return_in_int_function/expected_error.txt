@@ -1,0 +1,1 @@
+unsupported: return value of 'f' expects int, got None at line 2
