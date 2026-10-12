@@ -4,8 +4,12 @@ Transpiler from Python 3.13 to Go.
 
 ## Status
 
-Phase 2: typed core. Functions, `int`/`float`/`bool`/`str` variables, arithmetic,
-`if`/`while`/`for ... in range()`, and `print`.
+Phase 3: strings, builtins, sequences. On top of the phase 2 typed core
+(functions, `int`/`float`/`bool`/`str`, arithmetic, `if`/`while`/`for`), it
+handles `str` methods and slicing, f-strings, `list` and `tuple` with unpacking,
+`for` over lists, strings, `enumerate` and `zip`, and the builtins `len`, `int`,
+`float`, `str`, `abs`, `min`, `max`, `sum`, `sorted`, `round`, `divmod` and `**`.
+`dict`, `set` and comprehensions are not supported yet.
 
 ## Usage
 
@@ -19,7 +23,7 @@ Python 3.13 is resolved through `uv`.
 
     go test -count=1 ./...
 
-Each case under `testdata/phase2/` runs under CPython 3.13 (committed
+Each case under `testdata/phase2/` and `testdata/phase3/` runs under CPython 3.13 (committed
 `expected.txt`) and as transpiled Go; stdout must match. Cases under
 `testdata/unsupported/` assert the exact error and line number.
 After adding a case, `scripts/regen_expected.sh testdata/phase2/<case>` records
