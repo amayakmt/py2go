@@ -17,9 +17,6 @@ type Seq interface {
 	Kind() string // "list" or "tuple"
 }
 
-func indexError(msg string) *PyError { return &PyError{"IndexError", msg} }
-func valueError(msg string) *PyError { return &PyError{"ValueError", msg} }
-
 // Eq is Python's == for two values of the same static type. Lists and
 // tuples compare element by element.
 func Eq(a, b any) bool {
@@ -339,8 +336,11 @@ func SeqContains(s Seq, v any) bool {
 // Str is Python's str(). Strings are themselves, everything else is
 // its repr.
 func Str(v any) string {
-	if s, ok := v.(string); ok {
-		return s
+	switch v := v.(type) {
+	case string:
+		return v
+	case *PyError:
+		return v.str()
 	}
 	return Repr(v)
 }
@@ -361,6 +361,8 @@ func Repr(v any) string {
 		return FloatRepr(v)
 	case string:
 		return quote(v)
+	case *PyError:
+		return v.repr()
 	case Seq:
 		parts := make([]string, v.Len())
 		for i := range parts {

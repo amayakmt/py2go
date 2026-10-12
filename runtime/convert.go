@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-func overflowError(msg string) *PyError { return &PyError{"OverflowError", msg} }
-
 // BoolToInt is int(True) and int(False).
 func BoolToInt(b bool) int64 { return b2i(b) }
 

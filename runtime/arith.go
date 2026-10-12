@@ -91,7 +91,7 @@ func ModFloat(a, b float64) float64 {
 // Bits shifted out of int64 are lost, a known limit of the int64 mapping.
 func LShift(a, n int64) int64 {
 	if n < 0 {
-		panic(&PyError{"ValueError", "negative shift count"})
+		panic(valueError("negative shift count"))
 	}
 	if n >= 64 {
 		return 0
@@ -102,7 +102,7 @@ func LShift(a, n int64) int64 {
 // RShift is Python's >> on ints. A negative count raises ValueError.
 func RShift(a, n int64) int64 {
 	if n < 0 {
-		panic(&PyError{"ValueError", "negative shift count"})
+		panic(valueError("negative shift count"))
 	}
 	if n >= 64 {
 		n = 63
@@ -113,7 +113,7 @@ func RShift(a, n int64) int64 {
 // CheckRangeStep rejects a zero step the way range() does.
 func CheckRangeStep(step int64) {
 	if step == 0 {
-		panic(&PyError{"ValueError", "range() arg 3 must not be zero"})
+		panic(valueError("range() arg 3 must not be zero"))
 	}
 }
 
