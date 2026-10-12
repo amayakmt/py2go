@@ -1,9 +1,9 @@
 package main
 
-import "fmt"
+import "github.com/amayakmt/py2go/runtime"
 
 func greet() {
-	fmt.Println("hello")
+	runtime.Print("hello")
 }
 
 func main() {
