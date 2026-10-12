@@ -404,3 +404,27 @@ func (v *KeysView[K, V]) pyEq(other any) bool {
 	}
 	return false
 }
+
+// GetOpt is d.get(k): the value, or None when the key is missing.
+func (d *Dict[K, V]) GetOpt(k K) Opt[V] {
+	if i, ok := d.index[k]; ok {
+		return Some(d.entries[i].val)
+	}
+	return NoneOf[V]()
+}
+
+// DictWithout is a copy of d without the given keys, which is what the
+// "**rest" of a mapping pattern captures.
+func DictWithout[K comparable, V any](d *Dict[K, V], keys ...K) *Dict[K, V] {
+	out := NewDict[K, V]()
+	skip := make(map[K]bool, len(keys))
+	for _, k := range keys {
+		skip[k] = true
+	}
+	for _, e := range d.entries {
+		if !e.dead && !skip[e.key] {
+			out.Set(e.key, e.val)
+		}
+	}
+	return out
+}

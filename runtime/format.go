@@ -234,3 +234,20 @@ func FormatStr(v string, s string) string {
 	}
 	return sp.pad('<', "", v)
 }
+
+// FormatIntDyn formats an int with a spec known only at run time: a spec that
+// ends in f formats it as a float.
+func FormatIntDyn(v int64, s string) string {
+	if SpecIsFloat(s) {
+		return FormatFloat(float64(v), s)
+	}
+	return FormatInt(v, s)
+}
+
+// FormatOther formats a value that takes no spec: only the empty one.
+func FormatOther(v any, s string) string {
+	if s == "" {
+		return Str(v)
+	}
+	panic(newError("TypeError", "unsupported format string passed to "+TypeName(v)+".__format__"))
+}

@@ -36,6 +36,11 @@ var parents = map[string]string{
 	"RuntimeError":        "Exception",
 	"NotImplementedError": "RuntimeError",
 	"RecursionError":      "RuntimeError",
+	"GeneratorExit":       "BaseException",
+	"BaseExceptionGroup":  "BaseException",
+	"ExceptionGroup":      "Exception",
+	"KeyboardInterrupt":   "BaseException",
+	"SystemExit":          "BaseException",
 }
 
 // IsExceptionClass reports whether name is a supported built-in exception
@@ -68,6 +73,9 @@ func RegisterClass(name string, mro ...string) { userMRO[name] = mro }
 
 // IsSubclass reports whether class is parent or derives from it.
 func IsSubclass(class, parent string) bool {
+	if class == "ExceptionGroup" && parent == "BaseExceptionGroup" {
+		return true
+	}
 	if mro, ok := userMRO[class]; ok {
 		for _, c := range mro {
 			if c == parent {
@@ -98,6 +106,11 @@ type PyError struct {
 	// when this one was raised. Both appear in the report of an uncaught error.
 	Cause, Context  *PyError
 	SuppressContext bool
+
+	// Excs holds the exceptions of an ExceptionGroup, and Msg its message.
+	Excs    []*PyError
+	Msg     string
+	IsGroup bool
 }
 
 // ExcBase is embedded in the instances of exception classes the program
@@ -167,6 +180,13 @@ func (e *PyError) str() string {
 }
 
 func (e *PyError) baseStr() string {
+	if e.IsGroup {
+		n := len(e.Excs)
+		if n == 1 {
+			return e.Msg + " (1 sub-exception)"
+		}
+		return fmt.Sprintf("%s (%d sub-exceptions)", e.Msg, n)
+	}
 	switch len(e.Args) {
 	case 0:
 		return ""

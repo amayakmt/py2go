@@ -230,3 +230,40 @@ func (c *ClassRef) PyRepr() string {
 
 // ClassOfValue is type(x) for an instance.
 func ClassOfValue(x Named) *ClassRef { return ClassOf(x.PyClassName()) }
+
+// ExcClass is the class of a caught exception, as an object.
+func ExcClass(e *PyError) *ClassRef {
+	if _, user := userMRO[e.Type]; user {
+		return ClassOf(e.Type)
+	}
+	return BuiltinClassOf(e.Type)
+}
+
+// ExcValue is the exception as the value an __exit__ method receives: the
+// instance for a user-defined class, the exception itself otherwise.
+func ExcValue(e *PyError) any {
+	if e.Obj != nil {
+		return e.Obj
+	}
+	return e
+}
+
+// ExitCall runs the __exit__ of a with statement whose body raised pending.
+// An exception raised by __exit__ gets pending as its context.
+func ExitCall(pending *PyError, exit func() bool) (suppress bool) {
+	if e := Catch(func() { suppress = exit() }); e != nil {
+		panic(WithContext(e, pending))
+	}
+	return suppress
+}
+
+// StopValue is e.value of a StopIteration: what the generator returned.
+func StopValue(e *PyError) any {
+	if e.Type != "StopIteration" {
+		panic(newError("AttributeError", "'"+e.Type+"' object has no attribute 'value'"))
+	}
+	if len(e.Args) == 0 {
+		return nil
+	}
+	return e.Args[0]
+}

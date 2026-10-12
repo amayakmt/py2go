@@ -67,7 +67,7 @@ func TestExceptionHierarchy(t *testing.T) {
 			t.Errorf("%s must be a known class", name)
 		}
 	}
-	for _, name := range []string{"Foo", "int", "SystemExit", ""} {
+	for _, name := range []string{"Foo", "int", "TimeoutError", ""} {
 		if IsExceptionClass(name) {
 			t.Errorf("%q must not be a known class", name)
 		}

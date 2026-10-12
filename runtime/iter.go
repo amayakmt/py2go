@@ -1,5 +1,7 @@
 package runtime
 
+import "fmt"
+
 // Cursor walks a sequence one item at a time: Next moves to the next item
 // and reports whether there is one, and Value returns it. Every for loop
 // and every consumer of an iterable in generated code goes through one.
@@ -19,6 +21,26 @@ type Iterator[T any] struct {
 	next func() (T, bool)
 	cur  T
 	done bool
+
+	// A generator viewed as an Iterator keeps its close and throw.
+	closer  func()
+	thrower func(*PyError) T
+}
+
+// Close is it.close() of a generator: its finally blocks run.
+func (it *Iterator[T]) Close() {
+	if it.closer != nil {
+		it.closer()
+	}
+	it.done = true
+}
+
+// Throw is it.throw(exc) of a generator.
+func (it *Iterator[T]) Throw(e *PyError) T {
+	if it.thrower == nil {
+		panic(newError("AttributeError", "'iterator' object has no attribute 'throw'"))
+	}
+	return it.thrower(e)
 }
 
 // NewIterator wraps a function that returns the next item, or false at the end.
@@ -258,3 +280,9 @@ func (c *userCursor[T]) Next() bool {
 }
 
 func (c *userCursor[T]) Value() T { return c.cur }
+
+func (it *Iterator[T]) PyRepr() string { return "<iterator object at " + addr(it) + ">" }
+
+func (g *Gen[Y, S, R]) PyRepr() string { return "<generator object at " + addr(g) + ">" }
+
+func addr(p any) string { return fmt.Sprintf("%p", p) }

@@ -445,6 +445,8 @@ func Str(v any) string {
 // Repr is Python's repr() for the supported types.
 func Repr(v any) string {
 	switch v := v.(type) {
+	case nil:
+		return "None"
 	case bool:
 		if v {
 			return "True"
@@ -523,3 +525,14 @@ func quote(s string) string {
 	b.WriteByte(q)
 	return b.String()
 }
+
+// CheckUnpackStar checks the length for "a, *rest, b = x": at least want
+// items.
+func CheckUnpackStar(got, want int64) {
+	if got < want {
+		panic(valueError(fmt.Sprintf("not enough values to unpack (expected at least %d, got %d)", want, got)))
+	}
+}
+
+// Items is the elements of the list, not a copy.
+func (l *List[T]) Items() []T { return l.items }
