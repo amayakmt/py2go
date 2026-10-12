@@ -1,0 +1,1 @@
+unsupported: two starred expressions in assignment at line 1

@@ -1,0 +1,1 @@
+unsupported: type argument float of f violates the bound or constraints of T at line 5

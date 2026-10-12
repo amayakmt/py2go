@@ -1,0 +1,1 @@
+unsupported: generic class 'Box' needs type arguments: Box[...] at line 6

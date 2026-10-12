@@ -1,0 +1,1 @@
+unsupported: Pair needs 2 type arguments but 1 were given at line 7

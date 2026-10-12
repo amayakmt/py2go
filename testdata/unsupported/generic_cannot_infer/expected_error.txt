@@ -1,0 +1,1 @@
+unsupported: cannot infer type parameter 'T' of make (write make[...]) at line 5

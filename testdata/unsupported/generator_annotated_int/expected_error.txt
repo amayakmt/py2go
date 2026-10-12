@@ -1,0 +1,1 @@
+unsupported: generator function annotated int (use Iterator[T], Iterable[T] or Generator[Y, S, R]) at line 1
