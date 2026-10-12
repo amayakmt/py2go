@@ -51,8 +51,16 @@ type Expr struct {
 type Call struct {
 	Func        Node
 	Args        []Node
-	HasKeywords bool
+	Keywords    []*Keyword
+	HasKeywords bool // len(Keywords) > 0
 	Lineno      int
+}
+
+// Keyword is "name=value" in a call. Arg is empty for "**mapping".
+type Keyword struct {
+	Arg    string
+	Value  Node
+	Lineno int
 }
 type Name struct {
 	ID     string
@@ -157,32 +165,87 @@ type BoolOp struct {
 	Lineno int
 }
 
+// Attribute is "value.attr", as in the call "text.upper()".
+type Attribute struct {
+	Value  Node
+	Attr   string
+	Lineno int
+}
+
+// Subscript is "value[index]". Index is a Slice node for "value[a:b]".
+type Subscript struct {
+	Value  Node
+	Index  Node
+	Lineno int
+}
+
+// Slice is "lower:upper:step". Any part may be nil.
+type Slice struct {
+	Lower, Upper, Step Node
+	Lineno             int
+}
+
+type List struct {
+	Elts   []Node
+	Lineno int
+}
+
+type Tuple struct {
+	Elts   []Node
+	Lineno int
+}
+
+// JoinedStr is an f-string. Values alternate between Constant text and
+// FormattedValue nodes.
+type JoinedStr struct {
+	Values []Node
+	Lineno int
+}
+
+// FormattedValue is one {replacement} field of an f-string.
+// Conversion is -1 for none, or the code of 's', 'r' or 'a'.
+// FormatSpec is a JoinedStr, or nil without a spec.
+type FormattedValue struct {
+	Value      Node
+	Conversion int
+	FormatSpec Node
+	Lineno     int
+}
+
 // Unsupported holds any node type we haven't implemented.
 type Unsupported struct {
 	Type   string
 	Lineno int
 }
 
-func (n *Module) Line() int      { return 0 }
-func (n *FunctionDef) Line() int { return n.Lineno }
-func (n *Expr) Line() int        { return n.Lineno }
-func (n *Call) Line() int        { return n.Lineno }
-func (n *Name) Line() int        { return n.Lineno }
-func (n *Constant) Line() int    { return n.Lineno }
-func (n *Unsupported) Line() int { return n.Lineno }
-func (n *Arguments) Line() int   { return 0 }
-func (n *Arg) Line() int         { return n.Lineno }
-func (n *Return) Line() int      { return n.Lineno }
-func (n *Assign) Line() int      { return n.Lineno }
-func (n *AnnAssign) Line() int   { return n.Lineno }
-func (n *AugAssign) Line() int   { return n.Lineno }
-func (n *If) Line() int          { return n.Lineno }
-func (n *While) Line() int       { return n.Lineno }
-func (n *For) Line() int         { return n.Lineno }
-func (n *Break) Line() int       { return n.Lineno }
-func (n *Continue) Line() int    { return n.Lineno }
-func (n *Pass) Line() int        { return n.Lineno }
-func (n *BinOp) Line() int       { return n.Lineno }
-func (n *UnaryOp) Line() int     { return n.Lineno }
-func (n *Compare) Line() int     { return n.Lineno }
-func (n *BoolOp) Line() int      { return n.Lineno }
+func (n *Module) Line() int         { return 0 }
+func (n *FunctionDef) Line() int    { return n.Lineno }
+func (n *Expr) Line() int           { return n.Lineno }
+func (n *Call) Line() int           { return n.Lineno }
+func (n *Name) Line() int           { return n.Lineno }
+func (n *Constant) Line() int       { return n.Lineno }
+func (n *Unsupported) Line() int    { return n.Lineno }
+func (n *Arguments) Line() int      { return 0 }
+func (n *Arg) Line() int            { return n.Lineno }
+func (n *Return) Line() int         { return n.Lineno }
+func (n *Assign) Line() int         { return n.Lineno }
+func (n *AnnAssign) Line() int      { return n.Lineno }
+func (n *AugAssign) Line() int      { return n.Lineno }
+func (n *If) Line() int             { return n.Lineno }
+func (n *While) Line() int          { return n.Lineno }
+func (n *For) Line() int            { return n.Lineno }
+func (n *Break) Line() int          { return n.Lineno }
+func (n *Continue) Line() int       { return n.Lineno }
+func (n *Pass) Line() int           { return n.Lineno }
+func (n *BinOp) Line() int          { return n.Lineno }
+func (n *UnaryOp) Line() int        { return n.Lineno }
+func (n *Compare) Line() int        { return n.Lineno }
+func (n *BoolOp) Line() int         { return n.Lineno }
+func (n *Keyword) Line() int        { return n.Lineno }
+func (n *Attribute) Line() int      { return n.Lineno }
+func (n *Subscript) Line() int      { return n.Lineno }
+func (n *Slice) Line() int          { return n.Lineno }
+func (n *List) Line() int           { return n.Lineno }
+func (n *Tuple) Line() int          { return n.Lineno }
+func (n *JoinedStr) Line() int      { return n.Lineno }
+func (n *FormattedValue) Line() int { return n.Lineno }

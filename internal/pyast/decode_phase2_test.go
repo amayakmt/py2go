@@ -142,3 +142,69 @@ func TestDecodeStatementsAndExpressions(t *testing.T) {
 		t.Errorf("return 1.5: got %+v", f)
 	}
 }
+
+func TestDecodeSequences(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/sequences.py")
+
+	// xs: list[int] = [1, 2, 3]
+	ann := as[*AnnAssign](t, mod.Body[0])
+	sub := as[*Subscript](t, ann.Annotation)
+	if as[*Name](t, sub.Value).ID != "list" || as[*Name](t, sub.Index).ID != "int" {
+		t.Errorf("annotation list[int]: got %+v", sub)
+	}
+	list := as[*List](t, ann.Value)
+	if len(list.Elts) != 3 {
+		t.Errorf("list literal: want 3 elements, got %d", len(list.Elts))
+	}
+
+	// t: tuple[int, str] = (1, "a")
+	ann = as[*AnnAssign](t, mod.Body[1])
+	tupAnn := as[*Tuple](t, as[*Subscript](t, ann.Annotation).Index)
+	if len(tupAnn.Elts) != 2 {
+		t.Errorf("tuple[int, str] index: want 2 elements, got %d", len(tupAnn.Elts))
+	}
+	as[*Tuple](t, ann.Value)
+
+	// a, b = t
+	asg := as[*Assign](t, mod.Body[2])
+	if tgt := as[*Tuple](t, asg.Targets[0]); len(tgt.Elts) != 2 {
+		t.Errorf("unpacking target: got %+v", tgt)
+	}
+
+	// y = xs[1:], xs[::-1], xs[0], "abc".upper()
+	elts := as[*Tuple](t, as[*Assign](t, mod.Body[3]).Value).Elts
+	s1 := as[*Slice](t, as[*Subscript](t, elts[0]).Index)
+	if s1.Lower == nil || s1.Upper != nil || s1.Step != nil {
+		t.Errorf("xs[1:]: got %+v", s1)
+	}
+	s2 := as[*Slice](t, as[*Subscript](t, elts[1]).Index)
+	if s2.Lower != nil || s2.Upper != nil || s2.Step == nil {
+		t.Errorf("xs[::-1]: got %+v", s2)
+	}
+	as[*Constant](t, as[*Subscript](t, elts[2]).Index)
+	m := as[*Attribute](t, as[*Call](t, elts[3]).Func)
+	if m.Attr != "upper" {
+		t.Errorf("method name: want upper, got %q", m.Attr)
+	}
+
+	// print(f"{a!r:>5} and {{b}}", sep="-", end="")
+	call := as[*Call](t, as[*Expr](t, mod.Body[4]).Value)
+	if len(call.Keywords) != 2 || call.Keywords[0].Arg != "sep" || call.Keywords[1].Arg != "end" || !call.HasKeywords {
+		t.Errorf("keywords: got %+v", call.Keywords)
+	}
+	if kw := as[*Constant](t, call.Keywords[0].Value); kw.Value != "-" {
+		t.Errorf("sep value: got %+v", kw)
+	}
+	fstr := as[*JoinedStr](t, call.Args[0])
+	fv := as[*FormattedValue](t, fstr.Values[0])
+	if fv.Conversion != 'r' {
+		t.Errorf("conversion: want 'r', got %d", fv.Conversion)
+	}
+	spec := as[*JoinedStr](t, fv.FormatSpec)
+	if c := as[*Constant](t, spec.Values[0]); c.Value != ">5" {
+		t.Errorf("format spec: got %+v", c)
+	}
+	if text := as[*Constant](t, fstr.Values[1]); text.Value != " and {b}" {
+		t.Errorf("literal text: got %+v", text)
+	}
+}

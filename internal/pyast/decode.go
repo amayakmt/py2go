@@ -100,9 +100,25 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
+		var keywords []*Keyword
+		for _, r := range aux.Keywords {
+			var kw struct {
+				Arg    string          `json:"arg"`
+				Value  json.RawMessage `json:"value"`
+				Lineno int             `json:"lineno"`
+			}
+			if err := json.Unmarshal(r, &kw); err != nil {
+				return nil, err
+			}
+			value, err := decodeNode(kw.Value)
+			if err != nil {
+				return nil, err
+			}
+			keywords = append(keywords, &Keyword{Arg: kw.Arg, Value: value, Lineno: kw.Lineno})
+		}
 		return &Call{
-			Func: fn, Args: args,
-			HasKeywords: len(aux.Keywords) > 0, Lineno: head.Lineno,
+			Func: fn, Args: args, Keywords: keywords,
+			HasKeywords: len(keywords) > 0, Lineno: head.Lineno,
 		}, nil
 
 	case "Name":
@@ -347,6 +363,108 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			return nil, err
 		}
 		return &BoolOp{Op: op, Values: values, Lineno: head.Lineno}, nil
+
+	case "Attribute":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+			Attr  string          `json:"attr"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		value, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &Attribute{Value: value, Attr: aux.Attr, Lineno: head.Lineno}, nil
+
+	case "Subscript":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+			Slice json.RawMessage `json:"slice"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		value, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		index, err := decodeNode(aux.Slice)
+		if err != nil {
+			return nil, err
+		}
+		return &Subscript{Value: value, Index: index, Lineno: head.Lineno}, nil
+
+	case "Slice":
+		var aux struct {
+			Lower json.RawMessage `json:"lower"`
+			Upper json.RawMessage `json:"upper"`
+			Step  json.RawMessage `json:"step"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		s := &Slice{Lineno: head.Lineno}
+		var err error
+		if s.Lower, err = decodeOptional(aux.Lower); err != nil {
+			return nil, err
+		}
+		if s.Upper, err = decodeOptional(aux.Upper); err != nil {
+			return nil, err
+		}
+		if s.Step, err = decodeOptional(aux.Step); err != nil {
+			return nil, err
+		}
+		return s, nil
+
+	case "List", "Tuple":
+		var aux struct {
+			Elts []json.RawMessage `json:"elts"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		elts, err := decodeList(aux.Elts)
+		if err != nil {
+			return nil, err
+		}
+		if head.Type == "List" {
+			return &List{Elts: elts, Lineno: head.Lineno}, nil
+		}
+		return &Tuple{Elts: elts, Lineno: head.Lineno}, nil
+
+	case "JoinedStr":
+		var aux struct {
+			Values []json.RawMessage `json:"values"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		values, err := decodeList(aux.Values)
+		if err != nil {
+			return nil, err
+		}
+		return &JoinedStr{Values: values, Lineno: head.Lineno}, nil
+
+	case "FormattedValue":
+		var aux struct {
+			Value      json.RawMessage `json:"value"`
+			Conversion int             `json:"conversion"`
+			FormatSpec json.RawMessage `json:"format_spec"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		value, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		spec, err := decodeOptional(aux.FormatSpec)
+		if err != nil {
+			return nil, err
+		}
+		return &FormattedValue{Value: value, Conversion: aux.Conversion, FormatSpec: spec, Lineno: head.Lineno}, nil
 
 	default:
 		return &Unsupported{Type: head.Type, Lineno: head.Lineno}, nil
