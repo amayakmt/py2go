@@ -74,9 +74,6 @@
 13. Write `testdata/unsupported/` cases for each new rejection: user-defined exception classes, `except*`, an unknown class in `except` or `raise`, raising a non-exception, a bare `raise` outside a handler, storing or returning an exception, `e.args`, `with`.
 14. Run the exit test. All differential tests pass under `go test -count=1 ./...`, and every decision above is logged in `docs/decisions.md`. Known limits documented: tracebacks show no frames, exception chaining is not recorded, and the recursion limit counts only functions that can recurse.
 
-
-## Where the roadmap goes from here
-
 > The end goal: any Python 3.13 source file transpiles to Go and runs with the same observable behaviour as CPython 3.13, and every module of the 3.13 standard library can be imported and works. Phases 1 to 4 built a typed subset. Phases 5 to 8 finish the language inside that typed world. Phase 9 is the pivot, because the standard library is untyped, dynamic Python and a type-hint-only transpiler cannot compile it. Phases 10 to 19 add the data model and the standard library in dependency order. Phase 20 proves it.
 
 How the standard library gets done, in three parts:
@@ -100,8 +97,8 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 5. Add `set[T]` with literals, `add`, `remove`, `discard`, `pop`, `union`, `intersection`, `difference`, `symmetric_difference`, `issubset`, `issuperset`, `isdisjoint`, the operators `| & - ^` and their in-place forms, comparisons, and `{1, 2}` / `set()` printing.
 6. Reproduce CPython's set and dict hash layout for ints and tuples of ints, so that iterating a set of small ints prints in CPython's order. Strings hash with a fixed seed when `PYTHONHASHSEED=0` and tests sort their output otherwise.
 7. Support list, set and dict comprehensions with several `for` clauses and `if` filters. A comprehension has its own scope, which maps to a Go closure, and its variables do not leak.
-8. Support generator expressions as the argument of `sum`, `min`, `max`, `any`, `all`, `sorted`, `list`, `tuple`, `set`, `dict`, `str.join` and `for`. They are evaluated eagerly until phase 8 gives them real laziness.
-9. Add `any`, `all`, `list(x)`, `tuple(x)`, `set(x)`, `dict(x)`, `reversed`, and `sorted(d)`.
+8. Support generator expressions as the argument of `sum`, `min`, `max`, `any`, `all`, `sorted`, `list`, `set`, `dict`, `str.join` and `for`. They are evaluated eagerly until phase 8 gives them real laziness.
+9. Add `any`, `all`, `list(x)`, `set(x)`, `dict(x)`, `reversed`, and `sorted(d)`. Add `range` as a value with a type of its own (`len`, indexing, `in`, `list(range(n))`, `sum(range(n))`) and `zip` and `enumerate` as lazy values for `list`, `dict`, `set` and `for`. Generator expressions and `reversed` are lazy iterators, so `any(f(x) for x in xs)` stops at the first true value. `tuple(x)` waits for phase 6, which adds variable-length tuples.
 10. Let functions read module-level variables and rebind them with `global`. Module variables become package-level Go variables, a read before the assignment has run raises `NameError`, and the "module-level variable used inside a function" error disappears.
 11. Write 60+ differential tests under `testdata/phase5/`, including insertion order after deletes, `d[k] += 1` counting, nested dicts of lists, set algebra, comprehension scoping and closure capture in a comprehension, and the error cases (`KeyError`, mutation during iteration).
 12. Write `testdata/unsupported/` cases for each new rejection, then run the exit test: all differential tests pass under `go test -count=1 ./...` and every decision is in `docs/decisions.md`.
@@ -113,7 +110,7 @@ Some behaviour cannot match and is out of scope for all phases: `id()` values an
 1. Accept the names from `typing` and `collections.abc` that annotations need (`Callable`, `Optional`, `Any`, `Union`, `Iterable`, ...) as built-in annotation names through a fixed table. The real modules arrive in phase 12.
 2. Make functions values. A function can be assigned, stored in a list, tuple or dict, passed and returned. Function types are written `Callable[[int, str], bool]` and become Go function types.
 3. Support `lambda`, nested `def`, and closures. Closures share variables with the enclosing scope the way Python's cells do, including late binding in loops. Add `nonlocal` and keep `global` from phase 5.
-4. Support defaults, keyword arguments at the call site, keyword-only and positional-only parameters, `*args`, `**kwargs`, and `f(*xs, **d)` at the call. `*args: int` has type `tuple[int, ...]`, so the type system gains variable-length tuples, and `**kwargs: int` has type `dict[str, int]`. Defaults are evaluated once at definition time, so the mutable default trap behaves as in Python.
+4. Support defaults, keyword arguments at the call site, keyword-only and positional-only parameters, `*args`, `**kwargs`, and `f(*xs, **d)` at the call. `*args: int` has type `tuple[int, ...]`, so the type system gains variable-length tuples and `tuple(x)`, and `**kwargs: int` has type `dict[str, int]`. Defaults are evaluated once at definition time, so the mutable default trap behaves as in Python.
 5. Report call errors the way CPython does, as catchable `TypeError`s with the exact messages: `f() missing 1 required positional argument: 'b'`, `f() takes 2 positional arguments but 3 were given`, `f() got an unexpected keyword argument 'c'`, `f() got multiple values for argument 'a'`. Calls that can be checked statically are rejected at compile time with the same text.
 6. Support decorators on functions, including decorators with arguments and stacked decorators. A decorator is a function from function to function, so this follows from steps 2 to 4.
 7. Allow docstrings. A docstring is stored as the function's `__doc__` and no longer an unsupported expression statement. Add `__name__`, `__qualname__`, `__doc__`, `__defaults__` and `__kwdefaults__`.
