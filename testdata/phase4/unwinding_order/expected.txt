@@ -1,0 +1,5 @@
+c start
+c finally
+b finally
+a caught deep
+a finally

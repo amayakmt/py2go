@@ -1,0 +1,11 @@
+body 0
+finally 0
+finally 1
+body 2
+finally 2
+finally 3
+loop done
+cleanup 1
+cleanup 2
+cleanup 3
+3

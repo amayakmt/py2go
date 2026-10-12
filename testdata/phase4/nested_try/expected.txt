@@ -1,0 +1,15 @@
+outer try
+inner try
+inner caught inner problem
+inner finally
+outer caught inner problem
+outer finally
+outer try
+inner try
+inner finally
+outer caught other escapes
+outer finally
+outer try
+inner try
+inner finally
+outer finally

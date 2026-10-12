@@ -1,0 +1,5 @@
+0 arithmetic: integer division or modulo by zero
+1 lookup: list index out of range
+2 other: invalid literal for int() with base 10: 'x'
+3 arithmetic: (34, 'Numerical result out of range')
+4 fine

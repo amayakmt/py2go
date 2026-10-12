@@ -1,0 +1,9 @@
+ValueError() ''
+ValueError() ''
+ValueError('one') 'one'
+ValueError('two', 2) "('two', 2)"
+ValueError(42) '42'
+TypeError(1.5, True, 'x') "(1.5, True, 'x')"
+ValueError([1, 2]) '[1, 2]'
+ValueError("it's") "it's"
+KeyError('k') "'k'" 'k'

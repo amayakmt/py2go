@@ -1,0 +1,9 @@
+checked 3
+checked -4
+checked 1
+-4 0
+0.25 -1.0
+1 -1
+noop done
+flag was false
+noop done

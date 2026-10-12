@@ -1,0 +1,5 @@
+0 ValueError handler
+1 TypeError or KeyError handler: TypeError
+2 TypeError or KeyError handler: KeyError
+3 ArithmeticError handler: z
+4 Exception handler: r

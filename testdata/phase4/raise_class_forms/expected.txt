@@ -1,0 +1,4 @@
+0 ZeroDivisionError() | 
+1 ZeroDivisionError() | 
+2 OSError('disk') | disk
+3 EOFError('end', 1) | ('end', 1)

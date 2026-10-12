@@ -1,0 +1,21 @@
+0 ZeroDivisionError - integer division or modulo by zero
+1 ZeroDivisionError - integer modulo by zero
+2 ZeroDivisionError - division by zero
+3 ZeroDivisionError - float division by zero
+4 IndexError - list index out of range
+5 IndexError - string index out of range
+6 ValueError - invalid literal for int() with base 10: 'x1'
+7 ValueError - could not convert string to float: 'y'
+8 IndexError - pop from empty list
+9 ValueError - list.remove(x): x not in list
+10 ValueError - empty separator
+11 ValueError - max() iterable argument is empty
+12 OverflowError - (34, 'Numerical result out of range')
+13 ValueError - not enough values to unpack (expected 2, got 1)
+14 ValueError - 9 is not in list
+15 ValueError - negative shift count
+16 ZeroDivisionError - integer division or modulo by zero
+17 ValueError - cannot convert float NaN to integer
+18 ZeroDivisionError - 0.0 cannot be raised to a negative power
+19 ValueError - slice step cannot be zero
+no error

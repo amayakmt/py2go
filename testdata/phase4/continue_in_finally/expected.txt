@@ -1,0 +1,7 @@
+fin 0
+odd 1
+fin 1
+fin 2
+odd 3
+fin 3
+done

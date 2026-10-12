@@ -1,0 +1,4 @@
+finally sees 3
+2
+g cleanup
+from try

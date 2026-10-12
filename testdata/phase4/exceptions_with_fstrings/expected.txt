@@ -1,0 +1,3 @@
+20
+error: insufficient funds: 50 < 80
+error: insufficient funds: 50 < 70

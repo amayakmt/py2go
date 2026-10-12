@@ -1,0 +1,5 @@
+20 -1 10 -1
+pop from empty list
+list.remove(x): x not in list
+list assignment index out of range
+99 is not in list

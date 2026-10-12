@@ -1,0 +1,8 @@
+('bad value', 3)
+('bad value', 3) ValueError('bad value', 3)
+('bad value', 3)|ValueError('bad value', 3)|('bad value', 3)
+msg: ('bad value', 3) 16 True
+('BAD VALUE', 3)
+always truthy
+False
+'' 0

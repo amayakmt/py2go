@@ -1,0 +1,3 @@
+caught: maximum recursion depth exceeded
+also a RuntimeError: RecursionError
+still running

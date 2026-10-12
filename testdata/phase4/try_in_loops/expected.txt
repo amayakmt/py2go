@@ -1,0 +1,8 @@
+skip 'x' - invalid literal for int() with base 10: 'x'
+skip '' - invalid literal for int() with base 10: ''
+skip '4.5' - invalid literal for int() with base 10: '4.5'
+24 3
+3
+short row [3]
+short row []
+9

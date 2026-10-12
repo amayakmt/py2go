@@ -1,0 +1,7 @@
+fine 0
+after try 0
+skipping 1
+fine 2
+after try 2
+stopping at 3
+returned from handler 1

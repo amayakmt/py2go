@@ -1,0 +1,6 @@
+  parsed
+  finally
+42
+  invalid
+  finally
+-1

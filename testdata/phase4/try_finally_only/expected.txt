@@ -1,0 +1,7 @@
+step 0
+step 1
+15
+step 0
+step 1
+step 2
+stopped: integer division or modulo by zero
