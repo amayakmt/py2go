@@ -1,1 +1,1 @@
-x: int = int("5")
+x: int = chr(5)

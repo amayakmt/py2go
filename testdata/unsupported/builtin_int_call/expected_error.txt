@@ -1,1 +1,1 @@
-unsupported: call to undefined function 'int' at line 1
+unsupported: call to undefined function 'chr' at line 1

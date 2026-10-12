@@ -1,1 +1,1 @@
-unsupported: operator ** at line 2
+unsupported: operator ** with a variable exponent on int operands at line 3

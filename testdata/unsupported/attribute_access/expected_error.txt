@@ -1,1 +1,1 @@
-unsupported: Attribute at line 2
+unsupported: attribute access '.real' at line 2

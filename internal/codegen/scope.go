@@ -22,7 +22,7 @@ func (s *scope) lookup(name string) (pyType, bool) {
 			return t, true
 		}
 	}
-	return 0, false
+	return "", false
 }
 
 // declare adds a name to this block. It reports false if the name already

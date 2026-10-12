@@ -87,6 +87,15 @@ func (g *generator) rt(name string) string {
 	return "runtime." + name
 }
 
+// goType spells a type in Go and notes when that needs the runtime import.
+func (g *generator) goType(t pyType) string {
+	s := t.goType()
+	if strings.Contains(s, "runtime.") {
+		g.usesRuntime = true
+	}
+	return s
+}
+
 // tmp returns a fresh name for generated variables. The _py prefix is
 // rejected for user identifiers, so these never collide with them.
 func (g *generator) tmp(kind string) string {
@@ -219,16 +228,16 @@ func (g *generator) funcDef(b *strings.Builder, fn *pyast.FunctionDef) error {
 	// parameters and its own declarations only.
 	g.env = newScope(nil)
 	g.fnName, g.ret = fn.Name, sig.ret
-	defer func() { g.env, g.fnName, g.ret = g.mainEnv, "", 0 }()
+	defer func() { g.env, g.fnName, g.ret = g.mainEnv, "", "" }()
 
 	params := make([]string, 0, len(sig.params))
 	for i, p := range fn.Args.Positional() {
 		g.env.declare(p.Name, sig.params[i])
-		params = append(params, p.Name+" "+sig.params[i].goType())
+		params = append(params, p.Name+" "+g.goType(sig.params[i]))
 	}
 	result := ""
 	if sig.ret != tNone {
-		result = " " + sig.ret.goType()
+		result = " " + g.goType(sig.ret)
 	}
 
 	fmt.Fprintf(b, "func %s(%s)%s {\n", fn.Name, strings.Join(params, ", "), result)

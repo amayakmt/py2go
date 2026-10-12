@@ -6,6 +6,12 @@ import (
 	"github.com/amayakmt/py2go/internal/pyast"
 )
 
+func name(id string) *pyast.Name { return &pyast.Name{ID: id, Lineno: 6} }
+
+func sub(head string, index pyast.Node) *pyast.Subscript {
+	return &pyast.Subscript{Value: name(head), Index: index, Lineno: 6}
+}
+
 func TestAnnotationType(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -19,12 +25,28 @@ func TestAnnotationType(t *testing.T) {
 		{"bool", &pyast.Name{ID: "bool", Lineno: 1}, false, tBool, ""},
 		{"str", &pyast.Name{ID: "str", Lineno: 1}, false, tStr, ""},
 		{"None as return", &pyast.Constant{PyType: "none", Lineno: 1}, true, tNone, ""},
-		{"None as parameter", &pyast.Constant{PyType: "none", Lineno: 3}, false, 0,
+		{"None as parameter", &pyast.Constant{PyType: "none", Lineno: 3}, false, "",
 			"unsupported: type annotation None at line 3"},
-		{"list", &pyast.Name{ID: "list", Lineno: 4}, false, 0,
+		{"list", &pyast.Name{ID: "list", Lineno: 4}, false, "",
 			"unsupported: type annotation 'list' at line 4"},
-		{"list[int]", &pyast.Unsupported{Type: "Subscript", Lineno: 5}, false, 0,
-			"unsupported: type annotation of kind Subscript at line 5"},
+		{"unknown kind", &pyast.Unsupported{Type: "BinOp", Lineno: 5}, false, "",
+			"unsupported: type annotation of kind BinOp at line 5"},
+		{"list[int]", sub("list", name("int")), false, listOf(tInt), ""},
+		{"list[list[str]]", sub("list", sub("list", name("str"))), false, listOf(listOf(tStr)), ""},
+		{"tuple[int, str]", sub("tuple", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("str")}}), false,
+			tupleOf([]pyType{tInt, tStr}), ""},
+		{"tuple[int]", sub("tuple", name("int")), false, tupleOf([]pyType{tInt}), ""},
+		{"tuple[int, ...]", sub("tuple", &pyast.Tuple{Elts: []pyast.Node{name("int"), &pyast.Unsupported{Type: "ellipsis constant", Lineno: 6}}}), false, "",
+			"unsupported: variable-length tuple annotation at line 6"},
+		{"tuple[()]", sub("tuple", &pyast.Tuple{Lineno: 6}), false, "",
+			"unsupported: empty tuple annotation at line 6"},
+		{"tuple of seven", sub("tuple", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("int"), name("int"), name("int"), name("int"), name("int"), name("int")}}), false, "",
+			"unsupported: tuple with more than 6 elements at line 6"},
+		{"dict[int, int]", sub("dict", &pyast.Tuple{Elts: []pyast.Node{name("int"), name("int")}}), false, "",
+			"unsupported: type annotation 'dict[...]' at line 6"},
+		{"list[None]", sub("list", &pyast.Constant{PyType: "none", Lineno: 6}), false, "",
+			"unsupported: type annotation None at line 6"},
+		{"list[float]", sub("list", name("float")), true, listOf(tFloat), ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -50,6 +72,34 @@ func TestGoType(t *testing.T) {
 	for pt, goType := range want {
 		if got := pt.goType(); got != goType {
 			t.Errorf("%v: want %s, got %s", pt, goType, got)
+		}
+	}
+}
+
+func TestContainerTypes(t *testing.T) {
+	nested := tupleOf([]pyType{tInt, listOf(tStr), tupleOf([]pyType{tFloat, tBool})})
+	if nested != "tuple[int, list[str], tuple[float, bool]]" {
+		t.Fatalf("spelling: %s", nested)
+	}
+	elems := nested.elems()
+	if len(elems) != 3 || elems[1] != listOf(tStr) || elems[2] != tupleOf([]pyType{tFloat, tBool}) {
+		t.Errorf("elems must split only at the top level, got %v", elems)
+	}
+	if !nested.isTuple() || nested.isList() || !listOf(tInt).isList() {
+		t.Error("isList/isTuple")
+	}
+	if listOf(listOf(tInt)).elem() != listOf(tInt) {
+		t.Error("elem of a nested list")
+	}
+	want := map[pyType]string{
+		listOf(tInt):                             "*runtime.List[int64]",
+		listOf(listOf(tStr)):                     "*runtime.List[*runtime.List[string]]",
+		tupleOf([]pyType{tInt, tStr}):            "runtime.Tuple2[int64, string]",
+		tupleOf([]pyType{tFloat, listOf(tBool)}): "runtime.Tuple2[float64, *runtime.List[bool]]",
+	}
+	for typ, goType := range want {
+		if got := typ.goType(); got != goType {
+			t.Errorf("%s: want %s, got %s", typ, goType, got)
 		}
 	}
 }

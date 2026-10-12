@@ -1,1 +1,1 @@
-unsupported: List at line 1
+unsupported: variable 'x' expects int, got list[int] at line 1

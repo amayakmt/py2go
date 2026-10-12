@@ -34,6 +34,11 @@ type value struct {
 	// must be wrapped in float64() before it meets another constant.
 	konst bool
 	lit   bool
+	// intLit marks an integer literal and holds its value. A tuple index
+	// and the exponent of ** must be literals, because their result type
+	// depends on the value.
+	intLit bool
+	intVal int64
 }
 
 // at returns the code, parenthesized if it binds looser than min.
@@ -88,6 +93,16 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 		return g.compare(n)
 	case *pyast.BoolOp:
 		return g.boolOp(n)
+	case *pyast.List:
+		return g.listLit(n, "")
+	case *pyast.Tuple:
+		return g.tupleLit(n, "")
+	case *pyast.Subscript:
+		return g.subscript(n)
+	case *pyast.JoinedStr:
+		return g.fstring(n)
+	case *pyast.Attribute:
+		return value{}, unsupported("attribute access '."+n.Attr+"'", n.Line())
 	case *pyast.Unsupported:
 		return value{}, unsupported(n.Type, n.Line())
 	default:
@@ -95,10 +110,24 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 	}
 }
 
-// typedExpr generates an expression whose type must be one of the four
-// value types, which rules out the result of a call to a None function.
-func (g *generator) typedExpr(n pyast.Node) (value, error) {
-	v, err := g.expr(n)
+// typedExpr generates an expression whose type must be a value type, which
+// rules out the result of a call to a None function.
+func (g *generator) typedExpr(n pyast.Node) (value, error) { return g.exprAs(n, "") }
+
+// exprAs is typedExpr for a place that needs a known type, such as the
+// right side of "xs: list[int] = ...". The expectation matters only for
+// literals that carry no type of their own: [] is a list of anything.
+func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
+	var v value
+	var err error
+	switch n := n.(type) {
+	case *pyast.List:
+		v, err = g.listLit(n, want)
+	case *pyast.Tuple:
+		v, err = g.tupleLit(n, want)
+	default:
+		v, err = g.expr(n)
+	}
 	if err != nil {
 		return v, err
 	}
@@ -111,7 +140,8 @@ func (g *generator) typedExpr(n pyast.Node) (value, error) {
 func (g *generator) constant(n *pyast.Constant) (value, error) {
 	switch n.PyType {
 	case "int":
-		return value{code: strconv.FormatInt(n.Value.(int64), 10), typ: tInt, prec: precAtom, konst: true}, nil
+		v := n.Value.(int64)
+		return value{code: strconv.FormatInt(v, 10), typ: tInt, prec: precAtom, konst: true, intLit: true, intVal: v}, nil
 	case "float":
 		f := n.Value.(float64)
 		if math.IsInf(f, 1) {
@@ -152,40 +182,33 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 }
 
 func (g *generator) call(n *pyast.Call) (value, error) {
-	callee, ok := n.Func.(*pyast.Name)
-	if !ok {
-		return value{}, unsupported("call target that is not a plain name", n.Line())
+	switch fn := n.Func.(type) {
+	case *pyast.Name:
+		return g.namedCall(n, fn)
+	case *pyast.Attribute:
+		return g.methodCall(n, fn)
 	}
-	if n.HasKeywords {
-		return value{}, unsupported("keyword arguments", n.Line())
-	}
+	return value{}, unsupported("call target that is not a plain name", n.Line())
+}
 
+func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	// A local variable hides the function of the same name.
 	if _, isVar := g.env.lookup(callee.ID); isVar {
 		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", callee.ID), n.Line())
 	}
-
-	switch callee.ID {
-	case "print":
-		args := make([]string, 0, len(n.Args))
-		for _, a := range n.Args {
-			v, err := g.typedExpr(a)
-			if err != nil {
-				return value{}, err
-			}
-			args = append(args, v.code)
-		}
-		return value{code: g.rt("Print") + "(" + strings.Join(args, ", ") + ")", typ: tNone, prec: precAtom}, nil
-	case "range":
-		return value{}, unsupported("range() outside a for loop", n.Line())
-	}
-
+	// A function the program defines hides a builtin of the same name.
 	if err := g.sigErrs[callee.ID]; err != nil {
 		return value{}, err
 	}
-	sig, ok := g.sigs[callee.ID]
-	if !ok {
-		return value{}, unsupported(fmt.Sprintf("call to undefined function '%s'", callee.ID), n.Line())
+	if sig, ok := g.sigs[callee.ID]; ok {
+		return g.userCall(n, callee, sig)
+	}
+	return g.builtinCall(n, callee)
+}
+
+func (g *generator) userCall(n *pyast.Call, callee *pyast.Name, sig *funcSig) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
 	}
 	// At module level, Python runs top to bottom, so the def must come first.
 	if g.fnName == "" && !g.defined[callee.ID] {
@@ -198,7 +221,7 @@ func (g *generator) call(n *pyast.Call) (value, error) {
 
 	args := make([]string, 0, len(n.Args))
 	for i, a := range n.Args {
-		v, err := g.typedExpr(a)
+		v, err := g.exprAs(a, sig.params[i])
 		if err != nil {
 			return value{}, err
 		}
@@ -221,11 +244,7 @@ var opSymbols = map[string]string{
 }
 
 func (g *generator) binOp(n *pyast.BinOp) (value, error) {
-	l, err := g.typedExpr(n.Left)
-	if err != nil {
-		return value{}, err
-	}
-	r, err := g.typedExpr(n.Right)
+	l, r, err := g.operandPair(n.Left, n.Right)
 	if err != nil {
 		return value{}, err
 	}
@@ -239,12 +258,16 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	bad := func() (value, error) {
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s and %s", opSymbols[op], l.typ, r.typ), line)
 	}
-	if op == "Pow" || op == "MatMult" {
+	if op == "MatMult" {
 		return value{}, unsupported("operator "+opSymbols[op], line)
 	}
 
-	if l.typ == tStr && r.typ == tStr && op == "Add" {
-		return infix(l, "+", r, tStr, precAdd), nil
+	// str and list operands: concatenation and repetition.
+	if l.typ == tStr || r.typ == tStr || l.typ.isList() || r.typ.isList() {
+		if v, ok := g.sequenceBinary(op, l, r); ok {
+			return v, nil
+		}
+		return bad()
 	}
 	if !isNumeric(l.typ) || !isNumeric(r.typ) {
 		return bad()
@@ -252,6 +275,9 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	bothInt := l.typ == tInt && r.typ == tInt
 
 	switch op {
+	case "Pow":
+		return g.power(l, r, line)
+
 	case "Add", "Sub", "Mult":
 		goOp, prec := map[string]string{"Add": "+", "Sub": "-", "Mult": "*"}[op], precAdd
 		if op == "Mult" {
@@ -297,6 +323,44 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	return value{}, unsupported("operator "+op, line)
 }
 
+// sequenceBinary handles the operators that accept a str or list:
+// "+" joins two of the same type, "*" repeats one by an int.
+func (g *generator) sequenceBinary(op string, l, r value) (value, bool) {
+	same := l.typ == r.typ
+	switch {
+	case op == "Add" && same && l.typ == tStr:
+		return infix(l, "+", r, tStr, precAdd), true
+	case op == "Add" && same && l.typ.isList():
+		return value{code: l.at(precAtom) + ".Concat(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	case op == "Mult" && l.typ == tStr && r.typ == tInt:
+		return value{code: g.rt("StrRepeat") + "(" + l.code + ", " + r.code + ")", typ: tStr, prec: precAtom}, true
+	case op == "Mult" && l.typ == tInt && r.typ == tStr:
+		return value{code: g.rt("StrRepeat") + "(" + r.code + ", " + l.code + ")", typ: tStr, prec: precAtom}, true
+	case op == "Mult" && l.typ.isList() && r.typ == tInt:
+		return value{code: l.at(precAtom) + ".Repeat(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	case op == "Mult" && l.typ == tInt && r.typ.isList():
+		return value{code: r.at(precAtom) + ".Repeat(" + l.code + ")", typ: r.typ, prec: precAtom}, true
+	}
+	return value{}, false
+}
+
+// power is **. With int operands the result is an int for a non-negative
+// exponent and a float for a negative one, so the exponent has to be a
+// literal for the result type to be known. Any float operand gives a float.
+func (g *generator) power(l, r value, line int) (value, error) {
+	if l.typ == tInt && r.typ == tInt {
+		switch {
+		case !r.intLit:
+			return value{}, unsupported("operator ** with a variable exponent on int operands", line)
+		case r.intVal >= 0:
+			return value{code: g.rt("PowInt") + "(" + l.code + ", " + r.code + ")", typ: tInt, prec: precAtom}, nil
+		}
+	}
+	// The operands are function arguments, so Go does not fold them.
+	l, r = toFloat(l), toFloat(r)
+	return value{code: g.rt("PowFloat") + "(" + l.code + ", " + r.code + ")", typ: tFloat, prec: precAtom}, nil
+}
+
 // infix joins two operands with a Go binary operator of the given precedence.
 // The left operand may share the precedence (Go is left associative),
 // the right one may not, so that Python's explicit grouping is preserved.
@@ -338,7 +402,9 @@ func (g *generator) unaryOp(n *pyast.UnaryOp) (value, error) {
 		if c, ok := n.Operand.(*pyast.Constant); ok && c.PyType == "float" && c.Value.(float64) == 0 {
 			return value{code: g.rt("NegZero"), typ: tFloat, prec: precAtom}, nil
 		}
-		return unary("-", v, v.typ), nil
+		neg := unary("-", v, v.typ)
+		neg.intLit, neg.intVal = v.intLit, -v.intVal
+		return neg, nil
 
 	case "Invert":
 		if v.typ != tInt {
@@ -368,7 +434,35 @@ func truth(v value) value {
 	case tStr:
 		return value{code: v.at(precCmp+1) + ` != ""`, typ: tBool, prec: precCmp, konst: v.konst}
 	}
+	if v.typ.isList() || v.typ.isTuple() {
+		return value{code: v.at(precAtom) + ".Len() != 0", typ: tBool, prec: precCmp}
+	}
 	return v
+}
+
+// operandPair generates the two sides of a binary operator. A list or
+// tuple literal on one side takes its type from the other, so that
+// "xs == []" and "xs + [1]" work without annotations.
+func (g *generator) operandPair(left, right pyast.Node) (l, r value, err error) {
+	isLiteral := func(n pyast.Node) bool {
+		switch n.(type) {
+		case *pyast.List, *pyast.Tuple:
+			return true
+		}
+		return false
+	}
+	if isLiteral(left) && !isLiteral(right) {
+		if r, err = g.typedExpr(right); err != nil {
+			return
+		}
+		l, err = g.exprAs(left, r.typ)
+		return
+	}
+	if l, err = g.typedExpr(left); err != nil {
+		return
+	}
+	r, err = g.exprAs(right, l.typ)
+	return
 }
 
 func (g *generator) compare(n *pyast.Compare) (value, error) {
@@ -376,16 +470,15 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 		return value{}, unsupported("chained comparison", n.Line())
 	}
 	op := n.Ops[0]
+	if op == "In" || op == "NotIn" {
+		return g.contains(n, op == "NotIn")
+	}
 	goOp := map[string]string{"Eq": "==", "NotEq": "!=", "Lt": "<", "LtE": "<=", "Gt": ">", "GtE": ">="}[op]
 	if goOp == "" {
 		return value{}, unsupported("operator '"+opSymbols[op]+"'", n.Line())
 	}
 
-	l, err := g.typedExpr(n.Left)
-	if err != nil {
-		return value{}, err
-	}
-	r, err := g.typedExpr(n.Comparators[0])
+	l, r, err := g.operandPair(n.Left, n.Comparators[0])
 	if err != nil {
 		return value{}, err
 	}
@@ -400,6 +493,14 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("comparison of %s with %s", l.typ, r.typ), n.Line())
 	case l.typ == tBool && op != "Eq" && op != "NotEq":
 		return value{}, unsupported("ordering comparison of bool values", n.Line())
+	case l.typ.isList() || l.typ.isTuple():
+		// Containers compare element by element in the runtime.
+		fn := map[string]string{"Eq": "Eq", "NotEq": "Eq", "Lt": "Lt", "LtE": "Le", "Gt": "Gt", "GtE": "Ge"}[op]
+		code := g.rt(fn) + "(" + l.code + ", " + r.code + ")"
+		if op == "NotEq" {
+			return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
+		}
+		return value{code: code, typ: tBool, prec: precAtom}, nil
 	}
 	l, r = operands(l, r)
 
@@ -411,6 +512,53 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 		prec:  precCmp,
 		konst: l.konst && r.konst,
 	}, nil
+}
+
+// contains is "x in container" and "x not in container" for str, list
+// and tuple containers.
+func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
+	r, err := g.typedExpr(n.Comparators[0])
+	if err != nil {
+		return value{}, err
+	}
+	var want pyType
+	if r.typ.isList() {
+		want = r.typ.elem()
+	}
+	l, err := g.exprAs(n.Left, want)
+	if err != nil {
+		return value{}, err
+	}
+
+	var code string
+	switch {
+	case r.typ == tStr && l.typ == tStr:
+		code = g.rt("StrContains") + "(" + r.code + ", " + l.code + ")"
+	case r.typ.isList() && l.typ == r.typ.elem():
+		code = r.at(precAtom) + ".Contains(" + l.code + ")"
+	case r.typ.isTuple() && allEqual(r.typ.elems(), l.typ):
+		// The item is boxed as an interface, so give a constant its Go type.
+		code = g.rt("SeqContains") + "(" + r.code + ", " + l.typ.goType() + "(" + l.code + "))"
+	default:
+		op := "in"
+		if negate {
+			op = "not in"
+		}
+		return value{}, unsupported(fmt.Sprintf("operator '%s' on %s and %s", op, l.typ, r.typ), n.Line())
+	}
+	if negate {
+		return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
+	}
+	return value{code: code, typ: tBool, prec: precAtom}, nil
+}
+
+func allEqual(types []pyType, t pyType) bool {
+	for _, x := range types {
+		if x != t {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *generator) boolOp(n *pyast.BoolOp) (value, error) {

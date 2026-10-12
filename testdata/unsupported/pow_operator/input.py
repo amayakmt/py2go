@@ -1,2 +1,3 @@
 x: int = 2
-print(x ** 2)
+y: int = 3
+print(x ** y)

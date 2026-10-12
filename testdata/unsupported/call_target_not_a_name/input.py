@@ -1,1 +1,1 @@
-"abc".upper()
+(lambda: 1)()
