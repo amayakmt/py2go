@@ -8,3 +8,41 @@
 - 2026-10-11: Python functions named main are rejected until name mangling exists, since the generated main() would collide.
 - 2026-10-11: dump_ast.py is embedded in the binary and fed to python via stdin. Interpreter is resolved through uv with an explicit 3.13 pin.
 - 2026-10-11: Phase 1 exit criterion met. Differential harness compares go run stdout to committed CPython stdout.
+- 2026-10-12: Phase 2 starts. Every Constant carries a `pytype` tag from the dumper (int, float, str, bool, none). The decoder parses the raw JSON text by tag, so `1` stays int64 and `1.0` float64. bytes, complex and Ellipsis decode to Unsupported ("bytes constant").
+- 2026-10-12: Int literals outside int64 decode to Unsupported ("integer literal out of int64 range"). This also rejects the literal `-9223372036854775808`, since Python parses it as `-` applied to 9223372036854775808.
+- 2026-10-12: inf (from `1e999`) crosses JSON as the string "inf", because JSON has no spelling for it. Generated code uses `runtime.Inf`.
+- 2026-10-12: Operators decode to their class name ("Add", "FloorDiv", "Lt", ...) in a plain string field on BinOp, UnaryOp, AugAssign, Compare and BoolOp.
+- 2026-10-12: FunctionDef now carries the full signature (Arguments, Arg) plus HasDecorators and HasTypeParams, so codegen rejects with a line number instead of dropping them silently. HasParams stays as a convenience flag.
+- 2026-10-12: Type table maps int, float, bool, str to int64, float64, bool, string. `None` is valid only as a return annotation. Any other annotation, including `list[int]`, is unsupported.
+- 2026-10-12: Parameters must all be annotated. Positional-only (`/`) parameters are accepted since calls are positional anyway. Defaults, `*args`, `**kwargs`, keyword-only parameters, decorators and PEP 695 type parameters are rejected.
+- 2026-10-12: Function signatures are collected in a pre-pass so functions can call each other in any order. A bad signature is stored and reported when its def or a call to it is reached, so errors still come out in source order. At module level, calling a function before its def is rejected, as Python would fail with NameError.
+- 2026-10-12: Redefining a function is rejected.
+- 2026-10-12: Symbol table is block scoped and chains through the enclosing blocks of one function. A function body starts a fresh chain. Module-level code lives in main(), so functions cannot see module-level variables; the error says so.
+- 2026-10-12: `x: int = 5` declares. Annotating a name that already exists in scope (even from an inner block) assigns to it, as in Python, instead of shadowing it as Go's `:=` would. Re-annotating with a different type is rejected.
+- 2026-10-12: A bare annotation (`x: int`) is rejected. Python leaves the name unbound, Go would give it a zero value.
+- 2026-10-12: A plain Assign to an undeclared name is unsupported ("needs a type annotation"). Chained assignment and tuple unpacking are rejected.
+- 2026-10-12: Names declared in an inner block are not visible after it. Python would keep them alive, so using one afterwards fails with "undefined name" rather than behaving differently.
+- 2026-10-12: Every declaration is followed by `_ = x`, because Go rejects variables that are assigned but never read and Python does not.
+- 2026-10-12: Typing is strict at assignment, call arguments and return. `x: float = 1` is rejected because Python keeps `1` an int (it prints `1`), and converting would print `1.0`. Arithmetic does convert, as Python does: `int + float` becomes `float64(i) + f`.
+- 2026-10-12: bool is not numeric. `True + 1` and `True == 1` are rejected, as are comparisons between unrelated types, which Python allows but are almost always mistakes. Int and float compare after converting the int to float64, which is inexact above 2**53.
+- 2026-10-12: Go folds constant expressions exactly, so `0.1 + 0.2` would print 0.3. When both operands of an operator are constants, float literals are wrapped as `float64(0.1)`, which makes Go round each one first.
+- 2026-10-12: Go constants have no negative zero, so `-0.0` emits `runtime.NegZero`.
+- 2026-10-12: `/` always converts both operands to float. int/int uses `runtime.DivInt`, anything else `runtime.Div`; both panic on a zero divisor with CPython's message ("division by zero" vs "float division by zero").
+- 2026-10-12: `//` and `%` call `runtime.FloorDiv`/`Mod` for ints and `FloorDivFloat`/`ModFloat` for floats. The float versions follow CPython's divmod algorithm, since `floor(a/b)` is off by one for cases like `1 // 0.1` (9.0, not 10.0).
+- 2026-10-12: `and`/`or` accept bool operands only. `not`, `if` and `while` accept any of the four types and apply Python truthiness (`x != 0`, `s != ""`), because the result there is always a bool.
+- 2026-10-12: Beyond the roadmap, `& | ^ ~ << >>` on ints are supported. Shifts go through the runtime to raise ValueError on a negative count. `**` and `@` are rejected. Chained comparisons are rejected, and so are `is`, `is not`, `in`, `not in`.
+- 2026-10-12: `elif` becomes `else if`. Loop `else` clauses are rejected, reported at the loop's line since the AST has no line for the `else` keyword.
+- 2026-10-12: `for i in range(...)` uses a hidden counter and copies it into `i` each iteration, so assigning to `i` in the body does not change the iteration. Non-literal range arguments are evaluated once, left to right, into hoisted variables. A literal step picks the comparison at compile time; a variable step checks for zero at run time and compares both ways.
+- 2026-10-12: The loop variable is declared in the enclosing block, because Python keeps it alive after the loop. `for _ in range(n)` declares nothing. A literal step of zero is rejected at compile time.
+- 2026-10-12: `while True:` becomes `for {`, so Go sees a loop that only exits through break or return.
+- 2026-10-12: `break`/`continue` outside a loop and `return` at module level are rejected. CPython's parser accepts them and only the compiler complains.
+- 2026-10-12: A function with a return type whose body does not end in `return` gets a trailing `panic(runtime.MissingReturn(...))`, since Go requires a terminating statement. Python would return None there, which violates the annotation, so the program fails loudly instead.
+- 2026-10-12: Identifiers that are Go keywords, names the generated code relies on (`runtime`, `int64`, `true`, `panic`, ...), `init`, `_`, and the builtin `print` are rejected. So is anything starting with `_py`, which generated names use. Renaming is future work.
+- 2026-10-12: Expression statements must be calls, so docstrings are still rejected, as in phase 1.
+- 2026-10-12: runtime/ holds `Print`, `Str`, `FloatRepr`, the division helpers and `PyError`. `Print` writes to stdout directly with no buffering. `FloatRepr` follows repr(): shortest round-trip digits, scientific form when the exponent is below -4 or at least 16.
+- 2026-10-12: Division by zero panics with `*runtime.PyError`, whose message is "ZeroDivisionError: ..." as in CPython. Go exits with status 2 where Python exits with 1; only stdout and the message are compared. Real exceptions arrive in phase 4.
+- 2026-10-12: Differential test layout: `testdata/phase2/<case>/input.py` with `expected.txt` (CPython stdout) and, if the program crashes, `expected.err` (last stderr line). `scripts/regen_expected.sh` regenerates them from CPython 3.13. When `expected.err` exists the Go program must also fail with that message in its stderr.
+- 2026-10-12: Unsupported test layout: `testdata/unsupported/<case>/input.py` with `expected_error.txt` holding the exact error, line number included.
+- 2026-10-12: The harness builds each program in a temp module with a `replace` directive pointing at this checkout, so generated code can import `github.com/amayakmt/py2go/runtime`. Cases run in parallel.
+- 2026-10-12: Known limit: `int64` wraps where Python's `int` does not. Arithmetic on values that overflow gives wrong results; constant expressions that overflow fail to compile in Go. Related: `/` on ints beyond 2**53 can round differently from CPython's exact division.
+- 2026-10-12: Phase 2 exit criterion met. All differential and unsupported cases pass under `go test -count=1 ./...`.
