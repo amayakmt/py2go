@@ -1,0 +1,6 @@
+documented documented
+'Return x plus one.\n\nLonger text here.\n'
+plain
+outer.<locals>.inner inner inner doc
+x
+__main__

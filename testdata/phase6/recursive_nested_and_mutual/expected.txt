@@ -1,0 +1,2 @@
+True False
+['AC', 'AB', 'CB', 'AC', 'BA', 'BC', 'AC'] 7

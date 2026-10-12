@@ -1,0 +1,15 @@
+t: tuple[int, ...] = tuple([3, 1, 2])
+print(t, len(t), t[0], t[-1], t[1:], t[::-1])
+print(tuple("abc"), tuple(range(4)), tuple({5}), tuple({1: "a", 2: "b"}))
+print(t + t, t * 2, t == (3, 1, 2), t < (3, 2), 3 in t, 9 in t)
+print(sorted(t), list(t), sum(t), min(t), max(t), t.count(1), t.index(2))
+a, b, c = t
+print(a, b, c)
+e: tuple[str, ...] = ()
+print(e, len(e), bool(e), bool(t))
+one: tuple[int, ...] = (7,)
+print(one, tuple(x * x for x in range(4)))
+for x in t:
+    print(x, end=" ")
+print()
+print({tuple(range(3)) == (0, 1, 2)})

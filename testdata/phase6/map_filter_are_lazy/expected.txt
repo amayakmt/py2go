@@ -1,0 +1,15 @@
+map 1
+got 10
+map 2
+got 20
+map 3
+got 30
+filter 1
+filter 2
+kept 2
+filter 3
+kept 3
+True
+map 1
+map 2
+30

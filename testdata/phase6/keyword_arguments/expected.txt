@@ -1,0 +1,6 @@
+ann 30 nowhere
+ann 30 paris
+bob 25 nowhere
+cy 41 rome
+di 19 oslo
+ed 50 lima

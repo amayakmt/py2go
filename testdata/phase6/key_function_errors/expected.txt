@@ -1,0 +1,2 @@
+ZeroDivisionError: integer division or modulo by zero
+ValueError: max() iterable argument is empty

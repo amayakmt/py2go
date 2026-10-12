@@ -1,0 +1,3 @@
+caught maximum recursion depth exceeded
+3628800
+nested function recursion stops too

@@ -1,0 +1,12 @@
+eval a
+eval b
+eval c
+123
+eval c
+eval a
+eval b
+123
+eval a
+eval c
+eval b
+123

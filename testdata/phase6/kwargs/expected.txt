@@ -1,0 +1,5 @@
+[] 0
+['a'] 1
+['a', 'b', 'c'] 3
+0 1 6
+x x;color=red y;mode=fast;level=3

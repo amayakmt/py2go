@@ -1,0 +1,8 @@
+['fig', 'pear', 'kiwi', 'plum', 'banana']
+['plum', 'fig', 'kiwi', 'pear', 'banana']
+fig banana
+a -5
+('b', 1)
+2
+['a', 'a', 'a', 'bb', 'dd', 'bb', 'dd', 'bb', 'dd', 'ccc', 'ccc', 'ccc'] 12
+aa aa

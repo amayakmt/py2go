@@ -1,0 +1,3 @@
+TypeError: f() got an unexpected keyword argument 'c'
+15
+TypeError: f() got multiple values for argument 'a'
