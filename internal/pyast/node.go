@@ -212,6 +212,38 @@ type FormattedValue struct {
 	Lineno     int
 }
 
+// Try is try/except/else/finally. Handlers, Orelse and Finalbody may be empty.
+type Try struct {
+	Body      []Node
+	Handlers  []*ExceptHandler
+	Orelse    []Node
+	Finalbody []Node
+	Lineno    int
+}
+
+// ExceptHandler is one "except Type as Name:" clause. Type is nil for a
+// bare "except:", and Name is empty without "as".
+type ExceptHandler struct {
+	Type   Node
+	Name   string
+	Body   []Node
+	Lineno int
+}
+
+// Raise is "raise Exc from Cause". Both are nil for a bare "raise".
+type Raise struct {
+	Exc    Node
+	Cause  Node
+	Lineno int
+}
+
+// Assert is "assert Test, Msg". Msg is nil when omitted.
+type Assert struct {
+	Test   Node
+	Msg    Node
+	Lineno int
+}
+
 // Unsupported holds any node type we haven't implemented.
 type Unsupported struct {
 	Type   string
@@ -249,3 +281,7 @@ func (n *List) Line() int           { return n.Lineno }
 func (n *Tuple) Line() int          { return n.Lineno }
 func (n *JoinedStr) Line() int      { return n.Lineno }
 func (n *FormattedValue) Line() int { return n.Lineno }
+func (n *Try) Line() int            { return n.Lineno }
+func (n *ExceptHandler) Line() int  { return n.Lineno }
+func (n *Raise) Line() int          { return n.Lineno }
+func (n *Assert) Line() int         { return n.Lineno }

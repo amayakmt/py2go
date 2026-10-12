@@ -208,3 +208,49 @@ func TestDecodeSequences(t *testing.T) {
 		t.Errorf("literal text: got %+v", text)
 	}
 }
+
+func TestDecodeExceptions(t *testing.T) {
+	mod := decodeFile(t, "../../testdata/decode/exceptions.py")
+
+	try := as[*Try](t, mod.Body[0])
+	if try.Line() != 1 || len(try.Handlers) != 2 || len(try.Orelse) != 1 || len(try.Finalbody) != 1 {
+		t.Fatalf("Try: got %d handlers, %d else, %d finally", len(try.Handlers), len(try.Orelse), len(try.Finalbody))
+	}
+
+	raise := as[*Raise](t, try.Body[0])
+	call := as[*Call](t, raise.Exc)
+	if as[*Name](t, call.Func).ID != "ValueError" {
+		t.Errorf("raise target: got %+v", call.Func)
+	}
+	if c := as[*Constant](t, raise.Cause); c.PyType != "none" {
+		t.Errorf("raise ... from None: got cause %+v", c)
+	}
+
+	h := try.Handlers[0]
+	if h.Name != "e" || h.Line() != 3 {
+		t.Errorf("handler: name %q line %d", h.Name, h.Line())
+	}
+	if types := as[*Tuple](t, h.Type); len(types.Elts) != 2 {
+		t.Errorf("except (A, B): got %+v", types)
+	}
+	if bare := as[*Raise](t, h.Body[0]); bare.Exc != nil || bare.Cause != nil {
+		t.Errorf("bare raise must have no exc or cause, got %+v", bare)
+	}
+
+	bare := try.Handlers[1]
+	if bare.Type != nil || bare.Name != "" {
+		t.Errorf("bare except: got %+v", bare)
+	}
+
+	as_ := as[*Assert](t, try.Orelse[0])
+	if as_.Msg == nil {
+		t.Error("assert message must be kept")
+	}
+	as[*Compare](t, as_.Test)
+
+	// try/finally without any handler
+	tf := as[*Try](t, mod.Body[1])
+	if len(tf.Handlers) != 0 || len(tf.Finalbody) != 1 {
+		t.Errorf("try/finally: got %+v", tf)
+	}
+}

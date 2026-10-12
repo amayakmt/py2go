@@ -466,6 +466,84 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return &FormattedValue{Value: value, Conversion: aux.Conversion, FormatSpec: spec, Lineno: head.Lineno}, nil
 
+	case "Try":
+		var aux struct {
+			Body      []json.RawMessage `json:"body"`
+			Handlers  []json.RawMessage `json:"handlers"`
+			Orelse    []json.RawMessage `json:"orelse"`
+			Finalbody []json.RawMessage `json:"finalbody"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		t := &Try{Lineno: head.Lineno}
+		var err error
+		if t.Body, err = decodeList(aux.Body); err != nil {
+			return nil, err
+		}
+		for _, h := range aux.Handlers {
+			var ha struct {
+				Type   json.RawMessage   `json:"type"`
+				Name   string            `json:"name"`
+				Body   []json.RawMessage `json:"body"`
+				Lineno int               `json:"lineno"`
+			}
+			if err := json.Unmarshal(h, &ha); err != nil {
+				return nil, err
+			}
+			handler := &ExceptHandler{Name: ha.Name, Lineno: ha.Lineno}
+			if handler.Type, err = decodeOptional(ha.Type); err != nil {
+				return nil, err
+			}
+			if handler.Body, err = decodeList(ha.Body); err != nil {
+				return nil, err
+			}
+			t.Handlers = append(t.Handlers, handler)
+		}
+		if t.Orelse, err = decodeList(aux.Orelse); err != nil {
+			return nil, err
+		}
+		if t.Finalbody, err = decodeList(aux.Finalbody); err != nil {
+			return nil, err
+		}
+		return t, nil
+
+	case "Raise":
+		var aux struct {
+			Exc   json.RawMessage `json:"exc"`
+			Cause json.RawMessage `json:"cause"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		r := &Raise{Lineno: head.Lineno}
+		var err error
+		if r.Exc, err = decodeOptional(aux.Exc); err != nil {
+			return nil, err
+		}
+		if r.Cause, err = decodeOptional(aux.Cause); err != nil {
+			return nil, err
+		}
+		return r, nil
+
+	case "Assert":
+		var aux struct {
+			Test json.RawMessage `json:"test"`
+			Msg  json.RawMessage `json:"msg"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		a := &Assert{Lineno: head.Lineno}
+		var err error
+		if a.Test, err = decodeNode(aux.Test); err != nil {
+			return nil, err
+		}
+		if a.Msg, err = decodeOptional(aux.Msg); err != nil {
+			return nil, err
+		}
+		return a, nil
+
 	default:
 		return &Unsupported{Type: head.Type, Lineno: head.Lineno}, nil
 	}
