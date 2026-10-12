@@ -104,3 +104,15 @@ func (t VarTuple[T]) Iter() Cursor[T] { return &varTupleCursor[T]{t: t} }
 
 // ToList copies the items into a list.
 func (t VarTuple[T]) ToList() *List[T] { return &List[T]{items: append([]T(nil), t.items...)} }
+
+// Items are the elements, for variadic calls into the runtime.
+func (t VarTuple[T]) Items() []T { return t.items }
+
+// Boxed are the elements as any values.
+func (t VarTuple[T]) Boxed() []any {
+	out := make([]any, len(t.items))
+	for i, v := range t.items {
+		out[i] = v
+	}
+	return out
+}

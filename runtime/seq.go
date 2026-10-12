@@ -21,6 +21,24 @@ type Seq interface {
 // Eq is Python's == for two values of the same static type. Lists and
 // tuples compare element by element.
 func Eq(a, b any) bool {
+	if e, ok := a.(Equaler); ok {
+		if r, ok := e.PyEq(b); ok {
+			return r
+		}
+		if e2, ok := b.(Equaler); ok {
+			if r, ok := e2.PyEq(a); ok {
+				return r
+			}
+		}
+		return a == b
+	}
+	if e2, ok := b.(Equaler); ok {
+		if _, isSeq := a.(Seq); !isSeq {
+			if r, ok := e2.PyEq(a); ok {
+				return r
+			}
+		}
+	}
 	if e, ok := a.(eqer); ok {
 		return e.pyEq(b)
 	}
@@ -50,10 +68,43 @@ type subsetter interface {
 // Lt, Le, Gt and Ge are Python's ordering operators. Lists and tuples
 // order lexicographically: the first position that differs decides, and
 // if there is none the shorter sequence is smaller.
-func Lt(a, b any) bool { return order(a, b, "<") }
-func Le(a, b any) bool { return order(a, b, "<=") }
-func Gt(a, b any) bool { return order(b, a, "<") }
-func Ge(a, b any) bool { return order(b, a, "<=") }
+func Lt(a, b any) bool { return compare(a, b, "lt", "<") }
+func Le(a, b any) bool { return compare(a, b, "le", "<=") }
+func Gt(a, b any) bool { return compare(a, b, "gt", ">") }
+func Ge(a, b any) bool { return compare(a, b, "ge", ">=") }
+
+// reflected is the method tried on the right operand: a < b asks b > a.
+var reflected = map[string]string{"lt": "gt", "le": "ge", "gt": "lt", "ge": "le"}
+
+// compare dispatches an ordering operator. Instances of user classes try
+// their own method, then the reflected method of the other operand, and
+// raise TypeError if neither exists. Everything else orders as before.
+func compare(a, b any, op, symbol string) bool {
+	if o, ok := a.(Orderer); ok {
+		if r, ok := o.PyOrder(op, b); ok {
+			return r
+		}
+	}
+	if o, ok := b.(Orderer); ok {
+		if r, ok := o.PyOrder(reflected[op], a); ok {
+			return r
+		}
+	}
+	_, aUser := a.(Named)
+	_, bUser := b.(Named)
+	if aUser || bUser {
+		panic(NotOrderable(symbol, a, b))
+	}
+	switch op {
+	case "lt":
+		return order(a, b, "<")
+	case "le":
+		return order(a, b, "<=")
+	case "gt":
+		return order(b, a, "<")
+	}
+	return order(b, a, "<=")
+}
 
 func order(a, b any, op string) bool {
 	if s, ok := a.(subsetter); ok {
@@ -66,7 +117,10 @@ func order(a, b any, op string) bool {
 		n := min(x.Len(), y.Len())
 		for i := int64(0); i < n; i++ {
 			if !Eq(x.At(i), y.At(i)) {
-				return order(x.At(i), y.At(i), op)
+				if op == "<" {
+					return Lt(x.At(i), y.At(i))
+				}
+				return Le(x.At(i), y.At(i))
 			}
 		}
 		return compareScalar(x.Len(), y.Len(), op)
@@ -382,6 +436,8 @@ func Str(v any) string {
 		return v
 	case *PyError:
 		return v.str()
+	case Strer:
+		return v.PyStr()
 	}
 	return Repr(v)
 }
@@ -404,6 +460,8 @@ func Repr(v any) string {
 		return quote(v)
 	case *PyError:
 		return v.repr()
+	case Reprer:
+		return v.PyRepr()
 	case reprer:
 		return v.pyRepr()
 	case Seq:

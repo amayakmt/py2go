@@ -228,3 +228,33 @@ func Spread[T any](src Iterable[T]) []any {
 	}
 	return out
 }
+
+// Nexter is an iterator written in Python: an instance with __next__.
+type Nexter[T any] interface{ M___next__() T }
+
+// UserIterable is an instance with __iter__ that returns a Nexter. Each walk
+// asks for the iterator again, as a for loop does, and ends when __next__
+// raises StopIteration.
+type UserIterable[T any] struct{ Start func() Nexter[T] }
+
+func (u UserIterable[T]) Iter() Cursor[T] { return &userCursor[T]{it: u.Start()} }
+
+type userCursor[T any] struct {
+	it  Nexter[T]
+	cur T
+}
+
+func (c *userCursor[T]) Next() bool {
+	e := Catch(func() { c.cur = c.it.M___next__() })
+	if e == nil {
+		return true
+	}
+	if !IsSubclass(e.Type, "StopIteration") {
+		panic(e)
+	}
+	var zero T
+	c.cur = zero
+	return false
+}
+
+func (c *userCursor[T]) Value() T { return c.cur }

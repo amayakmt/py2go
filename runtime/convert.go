@@ -217,3 +217,40 @@ func PowFloat(a, b float64) float64 {
 	}
 	return r
 }
+
+// MinAny and MaxAny are min and max for items ordered by their own methods,
+// such as instances of classes with __lt__. They keep the first of equal
+// items, comparing the way Python does: min asks item < best, max item > best.
+func MinAny[T any](first T, rest ...T) T {
+	best := first
+	for _, x := range rest {
+		if Lt(x, best) {
+			best = x
+		}
+	}
+	return best
+}
+
+func MaxAny[T any](first T, rest ...T) T {
+	best := first
+	for _, x := range rest {
+		if Gt(x, best) {
+			best = x
+		}
+	}
+	return best
+}
+
+func MinAnyList[T any](l *List[T]) T {
+	if len(l.items) == 0 {
+		panic(valueError("min() iterable argument is empty"))
+	}
+	return MinAny(l.items[0], l.items[1:]...)
+}
+
+func MaxAnyList[T any](l *List[T]) T {
+	if len(l.items) == 0 {
+		panic(valueError("max() iterable argument is empty"))
+	}
+	return MaxAny(l.items[0], l.items[1:]...)
+}

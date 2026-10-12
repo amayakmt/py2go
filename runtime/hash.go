@@ -3,6 +3,7 @@ package runtime
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"math"
 	"math/bits"
 	"os"
 	"strconv"
@@ -141,6 +142,46 @@ func hashInt(n int64) int64 {
 	return fixHash(h)
 }
 
+// hashFloat is hash(x) for a float, CPython's _Py_HashDouble: a float equal to
+// an int hashes like it.
+func hashFloat(x float64) int64 {
+	const bits = 61
+	const modulus = uint64(1)<<bits - 1
+	switch {
+	case math.IsNaN(x):
+		return 0
+	case math.IsInf(x, 1):
+		return 314159
+	case math.IsInf(x, -1):
+		return -314159
+	}
+	m, e := math.Frexp(x)
+	sign := int64(1)
+	if m < 0 {
+		sign, m = -1, -m
+	}
+	var h uint64
+	for m != 0 {
+		h = (h<<28)&modulus | h>>(bits-28)
+		m *= 268435456.0
+		e -= 28
+		y := uint64(m)
+		m -= float64(y)
+		h += y
+		if h >= modulus {
+			h -= modulus
+		}
+	}
+	var shift uint
+	if e >= 0 {
+		shift = uint(e % bits)
+	} else {
+		shift = uint(bits - 1 - ((-1 - e) % bits))
+	}
+	h = (h<<shift)&modulus | h>>(bits-shift)
+	return fixHash(sign * int64(h))
+}
+
 // hashTuple is CPython's xxHash based tuple hash.
 func hashTuple(s Seq) int64 {
 	const (
@@ -174,10 +215,14 @@ func Hash(v any) int64 {
 		return b2i(v)
 	case string:
 		return hashStr(v)
+	case float64:
+		return hashFloat(v)
+	case Hasher:
+		return v.PyHash()
 	case Seq:
 		if v.Kind() == "tuple" {
 			return hashTuple(v)
 		}
 	}
-	panic(newError("TypeError", "unhashable type"))
+	panic(newError("TypeError", "unhashable type: '"+TypeName(v)+"'"))
 }
