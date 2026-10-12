@@ -27,10 +27,12 @@ func transpile(pyFile string) ([]byte, error) {
 	return codegen.Generate(root)
 }
 
-// goRun builds and runs generated source in a throwaway module.
-// Generated code imports github.com/amayakmt/py2go/runtime, so the module
-// gets a replace directive that points at this checkout.
-func goRun(t *testing.T, src []byte) (stdout, stderr string, err error) {
+// goRun builds generated source in a throwaway module, runs it, and returns
+// what it wrote and how it exited. Generated code imports
+// github.com/amayakmt/py2go/runtime, so the module gets a replace directive
+// that points at this checkout. A build failure is an error; a program that
+// exits non-zero is not.
+func goRun(t *testing.T, src []byte) (stdout, stderr string, exitCode int, err error) {
 	t.Helper()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -64,13 +66,28 @@ replace github.com/amayakmt/py2go => %s
 		}
 	}
 
+	// Build first and run the binary, so that stderr and the exit status
+	// are the program's own and not "go run"'s.
+	var buildErr bytes.Buffer
+	build := exec.Command("go", "build", "-o", "prog", ".")
+	build.Dir = tmp
+	build.Stderr = &buildErr
+	if err := build.Run(); err != nil {
+		return "", buildErr.String(), -1, fmt.Errorf("go build failed: %w\n%s", err, buildErr.String())
+	}
+
 	var out, errOut bytes.Buffer
-	cmd := exec.Command("go", "run", ".")
-	cmd.Dir = tmp
-	cmd.Stdout = &out
-	cmd.Stderr = &errOut
-	err = cmd.Run()
-	return out.String(), errOut.String(), err
+	run := exec.Command(filepath.Join(tmp, "prog"))
+	run.Stdout = &out
+	run.Stderr = &errOut
+	runErr := run.Run()
+	code := 0
+	if exitErr, ok := runErr.(*exec.ExitError); ok {
+		code = exitErr.ExitCode()
+	} else if runErr != nil {
+		return "", "", -1, runErr
+	}
+	return out.String(), errOut.String(), code, nil
 }
 
 // readOptional returns the trimmed file content and whether the file exists.
@@ -93,7 +110,8 @@ func readOptional(t *testing.T, path string) (string, bool) {
 //	expected.err  only if CPython exits with an error: its last stderr line
 //
 // The transpiled program must print the same stdout. When expected.err
-// exists it must also fail, with that message somewhere in its stderr.
+// exists it must also exit with status 1 and end its stderr with that line,
+// which is how CPython reports an uncaught exception. Otherwise it must exit 0.
 func runDiffCase(t *testing.T, dir string) {
 	t.Helper()
 	want, err := os.ReadFile(filepath.Join(dir, "expected.txt"))
@@ -106,16 +124,21 @@ func runDiffCase(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, err := goRun(t, src)
+	stdout, stderr, code, err := goRun(t, src)
+	if err != nil {
+		t.Fatalf("%v\n--- generated ---\n%s", err, src)
+	}
 
 	if expectFailure {
-		if err == nil {
-			t.Errorf("Python fails with %q, but the Go program succeeded", wantErr)
-		} else if !strings.Contains(stderr, wantErr) {
-			t.Errorf("stderr should contain %q\n--- stderr ---\n%s", wantErr, stderr)
+		lines := strings.Split(strings.TrimRight(stderr, "\n"), "\n")
+		if last := lines[len(lines)-1]; last != wantErr {
+			t.Errorf("last line of stderr: got %q, want %q\n--- stderr ---\n%s", last, wantErr, stderr)
 		}
-	} else if err != nil {
-		t.Fatalf("go run failed: %v\n%s\n--- generated ---\n%s", err, stderr, src)
+		if code != 1 {
+			t.Errorf("exit status: got %d, want 1 (CPython fails with %q)", code, wantErr)
+		}
+	} else if code != 0 {
+		t.Fatalf("exit status %d, want 0\n%s\n--- generated ---\n%s", code, stderr, src)
 	}
 	if stdout != string(want) {
 		t.Errorf("stdout mismatch\n--- go ---\n%q\n--- python ---\n%q\n--- generated ---\n%s", stdout, want, src)

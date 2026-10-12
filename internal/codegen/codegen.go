@@ -19,15 +19,18 @@ type generator struct {
 	// generated so functions can call each other in any order.
 	sigs    map[string]*funcSig
 	sigErrs map[string]error
-	defined map[string]bool // functions whose def has been passed so far
-	mainEnv *scope          // the scope of main(), for better error messages
+	defined map[string]bool            // functions whose def has been passed so far
+	mainEnv *scope                     // the scope of main(), for better error messages
+	calls   map[string]map[string]bool // which module-level function calls which
 
 	// State of the function (or main) being generated.
 	env       *scope
-	fnName    string // "" while generating main()
-	ret       pyType // return type of the current function
-	loopDepth int    // enclosing loops, for break and continue
-	nextID    int    // counter for generated names
+	fnName    string   // "" while generating main()
+	ret       pyType   // return type of the current function
+	loopDepth int      // enclosing loops, for break and continue
+	nextID    int      // counter for generated names
+	handlers  []string // Go variables of the exceptions being handled, innermost last
+	flow      *flowCtx // the closure being generated for a try body, or nil
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -41,6 +44,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 		sigs:    map[string]*funcSig{},
 		sigErrs: map[string]error{},
 		defined: map[string]bool{},
+		calls:   map[string]map[string]bool{},
 	}
 	g.collectSignatures(mod)
 
@@ -62,13 +66,20 @@ func Generate(root pyast.Node) ([]byte, error) {
 		}
 	}
 
+	funcText := g.placeRecursionGuards(funcs.String())
+
 	var out strings.Builder
 	out.WriteString("package main\n\n")
 	if g.usesRuntime {
 		fmt.Fprintf(&out, "import %q\n\n", runtimeImport)
 	}
-	out.WriteString(funcs.String())
+	out.WriteString(funcText)
 	out.WriteString("func main() {\n")
+	if g.usesRuntime {
+		// An exception that nothing caught ends the program the way CPython
+		// does: a message on stderr and exit status 1.
+		out.WriteString("defer " + g.rt("Report") + "()\n")
+	}
 	out.WriteString(body.String())
 	out.WriteString("}\n")
 
@@ -228,6 +239,7 @@ func (g *generator) funcDef(b *strings.Builder, fn *pyast.FunctionDef) error {
 	// parameters and its own declarations only.
 	g.env = newScope(nil)
 	g.fnName, g.ret = fn.Name, sig.ret
+	g.flow, g.handlers = nil, nil
 	defer func() { g.env, g.fnName, g.ret = g.mainEnv, "", "" }()
 
 	params := make([]string, 0, len(sig.params))
@@ -241,6 +253,7 @@ func (g *generator) funcDef(b *strings.Builder, fn *pyast.FunctionDef) error {
 	}
 
 	fmt.Fprintf(b, "func %s(%s)%s {\n", fn.Name, strings.Join(params, ", "), result)
+	fmt.Fprintf(b, "%s\n", guardMarker(fn.Name))
 	for _, s := range fn.Body {
 		if err := g.stmt(b, s); err != nil {
 			return err
@@ -273,4 +286,43 @@ func mismatch(dest string, want, got pyType, line int) error {
 // nodeName turns "*pyast.FunctionDef" into "FunctionDef" for error messages.
 func nodeName(n pyast.Node) string {
 	return strings.TrimPrefix(fmt.Sprintf("%T", n), "*pyast.")
+}
+
+// guardMarker stands in for a function's recursion guard until every body
+// has been generated and the call graph is known.
+func guardMarker(name string) string { return "/*recursion-guard:" + name + "*/" }
+
+// placeRecursionGuards fills in the markers. A function that can reach
+// itself through calls counts its depth, so runaway recursion raises
+// RecursionError as in Python instead of overflowing the Go stack. Other
+// functions pay nothing.
+func (g *generator) placeRecursionGuards(text string) string {
+	reaches := func(from, target string) bool {
+		seen := map[string]bool{}
+		var visit func(f string) bool
+		visit = func(f string) bool {
+			for callee := range g.calls[f] {
+				if callee == target {
+					return true
+				}
+				if !seen[callee] {
+					seen[callee] = true
+					if visit(callee) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		return visit(from)
+	}
+	for name := range g.defined {
+		marker := guardMarker(name) + "\n"
+		guard := ""
+		if reaches(name, name) {
+			guard = g.rt("Enter") + "()\ndefer " + g.rt("Leave") + "()\n"
+		}
+		text = strings.Replace(text, marker, guard, 1)
+	}
+	return text
 }

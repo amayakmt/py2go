@@ -165,3 +165,49 @@ func TestGenerateContainerOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateExceptionOutput(t *testing.T) {
+	tests := []struct {
+		name, src string
+		want      []string
+		notWant   []string
+	}{
+		{"raise with arguments", "raise ValueError('x', 2)\n", []string{`panic(runtime.NewError("ValueError", "x", 2))`}, nil},
+		{"raise a class", "raise KeyError\n", []string{`panic(runtime.NewError("KeyError"))`}, nil},
+		{"assert", "x: int = 1\nassert x < 3, 'big'\n", []string{"if !(x < 3) {", `panic(runtime.NewError("AssertionError", "big"))`}, nil},
+		{"uncaught exceptions are reported", "print(1)\n", []string{"defer runtime.Report()"}, nil},
+		{"no runtime, no report", "x: int = 1\n", nil, []string{"Report", "import"}},
+		{"try body is a closure", "try:\n    print(1)\nexcept ValueError:\n    pass\n", []string{"runtime.Catch(func() {", `runtime.Match(_py1_exc, "ValueError")`, "panic(_py1_exc)"}, nil},
+		{"handler binds a name", "try:\n    pass\nexcept (KeyError, IndexError) as e:\n    print(e, type(e).__name__)\n", []string{`runtime.Match(_py1_exc, "KeyError", "IndexError")`, "var e *runtime.PyError = _py1_exc", "runtime.Print(e, e.Type)"}, nil},
+		{"bare raise re-raises the caught exception", "try:\n    pass\nexcept ValueError:\n    raise\n", []string{"\"ValueError\") {\npanic(_py1_exc)"}, nil},
+		{"bare except has no match test", "try:\n    pass\nexcept:\n    pass\n", []string{"if _py1_exc != nil {\n{"}, []string{"Match"}},
+		{"finally runs after the closure", "try:\n    print(1)\nfinally:\n    print(2)\n", []string{"_py2_pending := runtime.Catch(func() {", "if _py2_pending != nil {\npanic(_py2_pending)"}, nil},
+		{"break leaves the closure by status", "for i in range(2):\n    try:\n        break\n    finally:\n        pass\n", []string{"_py2_flow = 1\nreturn", "if _py2_flow == 1 {\nbreak"}, nil},
+		{"return leaves the closure by status", "def f() -> int:\n    try:\n        return 1\n    finally:\n        pass\n", []string{"_py2_ret = 1", "_py1_flow = 3\nreturn", "return _py2_ret"}, nil},
+		{"else waits for a clean body", "for i in range(2):\n    try:\n        continue\n    except ValueError:\n        pass\n    else:\n        print(i)\n", []string{"} else if _py3_flow == 0 {"}, nil},
+		{"try declarations are hoisted", "try:\n    n: int = int('1')\nexcept ValueError:\n    n = 0\nprint(n)\n", []string{"var n int64\n", "n = runtime.IntFromStr(\"1\")"}, []string{"var n int64 = "}},
+		{"recursive functions count depth", "def f(n: int) -> int:\n    return f(n)\n", []string{"runtime.Enter()\ndefer runtime.Leave()"}, nil},
+		{"mutually recursive functions count depth", "def a() -> None:\n    b()\n\n\ndef b() -> None:\n    a()\n", []string{"func a() {\nruntime.Enter()", "func b() {\nruntime.Enter()"}, nil},
+		{"other functions do not", "def g(n: int) -> int:\n    return n\n\n\ndef f(n: int) -> int:\n    return g(n)\n", nil, []string{"Enter"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := generate(t, tc.src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = strings.ReplaceAll(got, "\t", "") // compare without gofmt's indentation
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("output should contain %q\n%s", w, got)
+				}
+			}
+			for _, w := range tc.notWant {
+				if strings.Contains(got, w) {
+					t.Errorf("output should not contain %q\n%s", w, got)
+				}
+			}
+		})
+	}
+}

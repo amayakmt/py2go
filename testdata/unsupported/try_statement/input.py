@@ -1,4 +1,4 @@
 try:
     pass
-except Exception:
+except* ValueError:
     pass

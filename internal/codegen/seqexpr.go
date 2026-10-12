@@ -30,6 +30,9 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 		if err != nil {
 			return value{}, err
 		}
+		if v.typ == tExc {
+			return value{}, unsupported("exception stored in a list", e.Line())
+		}
 		if i == 0 {
 			elem = v.typ
 		} else if v.typ != elem {
@@ -66,6 +69,9 @@ func (g *generator) tupleLit(n *pyast.Tuple, want pyType) (value, error) {
 		v, err := g.exprAs(e, w)
 		if err != nil {
 			return value{}, err
+		}
+		if v.typ == tExc {
+			return value{}, unsupported("exception stored in a tuple", e.Line())
 		}
 		types[i], codes[i] = v.typ, v.code
 	}

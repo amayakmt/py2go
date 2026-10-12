@@ -21,6 +21,10 @@ const (
 	tBool  pyType = "bool"
 	tStr   pyType = "str"
 	tNone  pyType = "None" // only the result of a call to a function that returns None
+
+	// tExc is the type of the name bound by "except ... as e". It cannot be
+	// written as an annotation, so an exception never outlives its handler.
+	tExc pyType = "exception"
 )
 
 // maxTupleArity is the largest tuple the runtime has a struct for.
@@ -79,6 +83,8 @@ func (t pyType) goType() string {
 		return "bool"
 	case t == tStr:
 		return "string"
+	case t == tExc:
+		return "*runtime.PyError"
 	case t.isList():
 		return "*runtime.List[" + t.elem().goType() + "]"
 	case t.isTuple():

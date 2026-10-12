@@ -102,7 +102,7 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 	case *pyast.JoinedStr:
 		return g.fstring(n)
 	case *pyast.Attribute:
-		return value{}, unsupported("attribute access '."+n.Attr+"'", n.Line())
+		return g.attribute(n)
 	case *pyast.Unsupported:
 		return value{}, unsupported(n.Type, n.Line())
 	default:
@@ -213,6 +213,12 @@ func (g *generator) userCall(n *pyast.Call, callee *pyast.Name, sig *funcSig) (v
 	// At module level, Python runs top to bottom, so the def must come first.
 	if g.fnName == "" && !g.defined[callee.ID] {
 		return value{}, unsupported(fmt.Sprintf("call to '%s' before its definition", callee.ID), n.Line())
+	}
+	if g.fnName != "" {
+		if g.calls[g.fnName] == nil {
+			g.calls[g.fnName] = map[string]bool{}
+		}
+		g.calls[g.fnName][callee.ID] = true
 	}
 	if len(n.Args) != len(sig.params) {
 		return value{}, unsupported(fmt.Sprintf("call to '%s' with %d arguments, expected %d",
@@ -437,6 +443,9 @@ func truth(v value) value {
 	if v.typ.isList() || v.typ.isTuple() {
 		return value{code: v.at(precAtom) + ".Len() != 0", typ: tBool, prec: precCmp}
 	}
+	if v.typ == tExc {
+		return value{code: "true", typ: tBool, prec: precAtom} // exceptions are always truthy
+	}
 	return v
 }
 
@@ -481,6 +490,10 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 	l, r, err := g.operandPair(n.Left, n.Comparators[0])
 	if err != nil {
 		return value{}, err
+	}
+
+	if l.typ == tExc || r.typ == tExc {
+		return value{}, unsupported("comparison of exceptions", n.Line())
 	}
 
 	// An int compared with a float converts to float, as in Python.

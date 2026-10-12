@@ -27,18 +27,16 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 		return g.whileStmt(b, n)
 	case *pyast.For:
 		return g.forStmt(b, n)
+	case *pyast.Raise:
+		return g.raiseStmt(b, n)
+	case *pyast.Assert:
+		return g.assertStmt(b, n)
 	case *pyast.Break:
-		if g.loopDepth == 0 {
-			return unsupported("'break' outside loop", n.Line())
-		}
-		b.WriteString("break\n")
-		return nil
+		return g.jump(b, "break", n.Line())
 	case *pyast.Continue:
-		if g.loopDepth == 0 {
-			return unsupported("'continue' not properly in loop", n.Line())
-		}
-		b.WriteString("continue\n")
-		return nil
+		return g.jump(b, "continue", n.Line())
+	case *pyast.Try:
+		return g.tryStmt(b, n)
 	case *pyast.Pass:
 		return nil
 	case *pyast.FunctionDef:
@@ -458,7 +456,7 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 		if g.ret != tNone {
 			return mismatch(dest, g.ret, tNone, n.Line())
 		}
-		b.WriteString("return\n")
+		g.emitReturn(b, "")
 		return nil
 	}
 
@@ -469,7 +467,7 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 	if v.typ != g.ret {
 		return mismatch(dest, g.ret, v.typ, n.Line())
 	}
-	fmt.Fprintf(b, "return %s\n", v.code)
+	g.emitReturn(b, v.code)
 	return nil
 }
 

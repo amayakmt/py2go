@@ -7,5 +7,6 @@ func greet() {
 }
 
 func main() {
+	defer runtime.Report()
 	greet()
 }
