@@ -170,6 +170,8 @@ func (g *generator) emptyConstructor(n *pyast.Call, want pyType) (value, bool) {
 	switch {
 	case name == "list" && want.isList():
 		return value{code: g.rt("NewList") + "[" + g.goType(want.elem()) + "]()", typ: want, prec: precAtom}, true
+	case name == "tuple" && want.isVarTuple():
+		return value{code: g.rt("NewVarTuple") + "[" + g.goType(want.elem()) + "]()", typ: want, prec: precAtom}, true
 	case name == "set" && want.isSet():
 		return value{code: g.rt("NewSet") + "[" + g.goType(want.elem()) + "]()", typ: want, prec: precAtom}, true
 	case name == "dict" && want.isDict():

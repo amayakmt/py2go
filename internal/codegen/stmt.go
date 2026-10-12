@@ -46,7 +46,13 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 	case *pyast.Pass:
 		return nil
 	case *pyast.FunctionDef:
-		return unsupported("function definition inside a block", n.Line())
+		return g.nestedDef(b, n)
+	case *pyast.Nonlocal:
+		return g.nonlocalStmt(n)
+	case *pyast.ImportFrom:
+		return g.importFrom(n)
+	case *pyast.Import:
+		return unsupported(fmt.Sprintf("import of module '%s' (modules arrive in phase 11)", n.Names[0].Name), n.Line())
 	case *pyast.Unsupported:
 		return unsupported(n.Type, n.Line())
 	default:
@@ -60,6 +66,9 @@ func (g *generator) block(b *strings.Builder, stmts []pyast.Node) error {
 	outer := g.env
 	g.env = newScope(outer)
 	defer func() { g.env = outer }()
+	if err := g.predeclareDefs(b, stmts); err != nil {
+		return err
+	}
 	for _, s := range stmts {
 		if err := g.stmt(b, s); err != nil {
 			return err
@@ -71,6 +80,16 @@ func (g *generator) block(b *strings.Builder, stmts []pyast.Node) error {
 func (g *generator) exprStmt(b *strings.Builder, n *pyast.Expr) error {
 	// Go rejects a bare expression like "text" as a statement,
 	// and go/format won't catch it. Python docstrings hit this.
+	// A literal on its own does nothing: a docstring, or the "..." that
+	// stands for a body not written yet.
+	switch c := n.Value.(type) {
+	case *pyast.Constant:
+		return nil
+	case *pyast.Unsupported:
+		if c.Type == "ellipsis constant" {
+			return nil
+		}
+	}
 	if _, ok := n.Value.(*pyast.Call); !ok {
 		return unsupported("expression statement that is not a call", n.Line())
 	}
@@ -134,8 +153,9 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 	if err != nil {
 		return err
 	}
-	if v.typ != t {
-		return mismatch(fmt.Sprintf("variable '%s'", target.ID), t, v.typ, n.Line())
+	v, err = g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line())
+	if err != nil {
+		return err
 	}
 
 	// Python has one variable per name per function. A second annotation
@@ -168,8 +188,9 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 		if err != nil {
 			return err
 		}
-		if v.typ != t {
-			return mismatch(fmt.Sprintf("variable '%s'", target.ID), t, v.typ, n.Line())
+		v, err = g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line())
+		if err != nil {
+			return err
 		}
 		fmt.Fprintf(b, "%s = %s\n", target.ID, v.code)
 		g.afterAssign(b, target.ID, global)
@@ -194,8 +215,9 @@ func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valu
 	if err != nil {
 		return err
 	}
-	if v.typ != elem {
-		return mismatch("item", elem, v.typ, line)
+	v, err = g.coerce(v, elem, "item", line)
+	if err != nil {
+		return err
 	}
 	fmt.Fprintf(b, "%s.Set(%s, %s)\n", base.at(precAtom), idx.code, v.code)
 	return nil
@@ -256,7 +278,7 @@ func unpackTypes(n int, t pyType, line int) ([]pyType, error) {
 		} else {
 			return elems, nil
 		}
-	case t.isList():
+	case t.isList() || t.isVarTuple():
 		types := make([]pyType, n)
 		for i := range types {
 			types[i] = t.elem()
@@ -369,7 +391,7 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		return nil
 
 	case *pyast.Tuple:
-		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isIter() {
+		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isVarTuple() && !t.isIter() {
 			// A str, dict, set or range unpacks through a list of its items.
 			list, err := g.asList(value{code: src, typ: t, prec: precAtom}, "unpacking", line)
 			if err != nil {
@@ -383,12 +405,13 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		if err != nil {
 			return err
 		}
-		if t.isList() {
+		dynamic := t.isList() || t.isVarTuple()
+		if dynamic {
 			fmt.Fprintf(b, "%s(%s.Len(), %d)\n", g.rt("CheckUnpack"), src, len(tg.Elts))
 		}
 		for i, elt := range tg.Elts {
 			part := fmt.Sprintf("%s.F%d", src, i)
-			if t.isList() {
+			if dynamic {
 				part = fmt.Sprintf("%s.Get(%d)", src, i)
 			}
 			if err := g.assignTarget(b, elt, part, types[i], line); err != nil {
@@ -539,8 +562,9 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 	if err != nil {
 		return err
 	}
-	if v.typ != g.ret {
-		return mismatch(dest, g.ret, v.typ, n.Line())
+	v, err = g.coerce(v, g.ret, dest, n.Line())
+	if err != nil {
+		return err
 	}
 	g.emitReturn(b, v.code)
 	return nil
@@ -914,3 +938,52 @@ type compAction struct {
 }
 
 func (a *compAction) Line() int { return 0 }
+
+// nonlocalStmt is "nonlocal a, b": assignments to these names change the
+// variable of an enclosing function.
+func (g *generator) nonlocalStmt(n *pyast.Nonlocal) error {
+	if g.fnName == "" {
+		return unsupported("nonlocal at module level", n.Line())
+	}
+	root := g.env.functionRoot()
+	for _, name := range n.Names {
+		if root == nil || root.parent == nil {
+			return unsupported(fmt.Sprintf("no binding for nonlocal '%s' found", name), n.Line())
+		}
+		if _, ok := root.parent.lookup(name); !ok {
+			return unsupported(fmt.Sprintf("no binding for nonlocal '%s' found", name), n.Line())
+		}
+		g.fnNonlocals[name] = true
+	}
+	return nil
+}
+
+// typingModules are the modules whose names annotations use. They are
+// recognised without importing anything real until phase 12.
+var typingModules = map[string]bool{"typing": true, "collections.abc": true, "__future__": true}
+
+// importFrom accepts "from typing import Callable" and its kind, which only
+// bring annotation names into scope, and nothing else.
+func (g *generator) importFrom(n *pyast.ImportFrom) error {
+	if n.Level > 0 || !typingModules[n.Module] {
+		return unsupported(fmt.Sprintf("import from module '%s' (modules arrive in phase 11)", n.Module), n.Line())
+	}
+	if n.Module == "__future__" {
+		return nil
+	}
+	for _, a := range n.Names {
+		_, alias := typingAliases[a.Name]
+		_, named := typingNames[a.Name]
+		if a.Name != "*" && !alias && !named && !typingKnown[a.Name] {
+			return unsupported(fmt.Sprintf("'%s' from %s", a.Name, n.Module), n.Line())
+		}
+		if a.AsName != "" {
+			return unsupported("import ... as in the typing module", n.Line())
+		}
+	}
+	return nil
+}
+
+// typingKnown are the other names of typing and collections.abc that are
+// harmless to import.
+var typingKnown = map[string]bool{"Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}

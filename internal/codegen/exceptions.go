@@ -12,6 +12,17 @@ import (
 // attribute handles the one attribute the transpiler knows:
 // type(e).__name__ on an exception, which is the name of its class.
 func (g *generator) attribute(n *pyast.Attribute) (value, error) {
+	// __name__, __qualname__ and __doc__ of a function whose def is known.
+	if name, ok := n.Value.(*pyast.Name); ok {
+		if sig, found := g.env.lookupSig(name.ID); found && sig != nil {
+			return g.functionAttribute(sig, n.Attr, n.Line())
+		}
+		if _, isVar := g.env.lookup(name.ID); !isVar {
+			if sig, ok := g.sigs[name.ID]; ok && len(sig.decorators) == 0 {
+				return g.functionAttribute(sig, n.Attr, n.Line())
+			}
+		}
+	}
 	if call, ok := n.Value.(*pyast.Call); ok && n.Attr == "__name__" {
 		if name, _ := callName(call); name == "type" && len(call.Args) == 1 && !call.HasKeywords {
 			v, err := g.typedExpr(call.Args[0])
@@ -412,6 +423,9 @@ func (g *generator) handlerBody(b *strings.Builder, h *pyast.ExceptHandler, exc 
 			return err
 		}
 		g.declareLocal(b, h.Name, tExc, exc)
+	}
+	if err := g.predeclareDefs(b, h.Body); err != nil {
+		return err
 	}
 	for _, s := range h.Body {
 		if err := g.stmt(b, s); err != nil {

@@ -48,6 +48,22 @@ func (g *generator) listLit(n *pyast.List, want pyType) (value, error) {
 
 // tupleLit generates (a, b). Tuples keep the type of each position.
 func (g *generator) tupleLit(n *pyast.Tuple, want pyType) (value, error) {
+	if want.isVarTuple() {
+		// A tuple display where tuple[T, ...] is expected.
+		codes := make([]string, len(n.Elts))
+		for i, e := range n.Elts {
+			v, err := g.exprAs(e, want.elem())
+			if err != nil {
+				return value{}, err
+			}
+			v, err = g.coerce(v, want.elem(), "tuple item", e.Line())
+			if err != nil {
+				return value{}, err
+			}
+			codes[i] = v.code
+		}
+		return value{code: g.rt("NewVarTuple") + "[" + g.goType(want.elem()) + "](" + strings.Join(codes, ", ") + ")", typ: want, prec: precAtom}, nil
+	}
 	if len(n.Elts) == 0 {
 		return value{}, unsupported("empty tuple", n.Line())
 	}
@@ -96,7 +112,7 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	}
 
 	if sl, ok := n.Index.(*pyast.Slice); ok {
-		if base.typ != tStr && !base.typ.isList() {
+		if base.typ != tStr && !base.typ.isList() && !base.typ.isVarTuple() {
 			return value{}, unsupported("slice of "+string(base.typ), n.Line())
 		}
 		bounds, err := g.bounds(sl)
@@ -106,7 +122,7 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 		switch {
 		case base.typ == tStr:
 			return value{code: call(g.rt("StrSlice"), base.code, bounds), typ: tStr, prec: precAtom}, nil
-		case base.typ.isList():
+		case base.typ.isList() || base.typ.isVarTuple():
 			return value{code: base.at(precAtom) + ".Slice(" + bounds + ")", typ: base.typ, prec: precAtom}, nil
 		}
 		return value{}, unsupported("slice of "+string(base.typ), n.Line())
@@ -132,7 +148,7 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	switch {
 	case base.typ == tStr:
 		return value{code: call(g.rt("StrIndex"), base.code, idx.code), typ: tStr, prec: precAtom}, nil
-	case base.typ.isList():
+	case base.typ.isList() || base.typ.isVarTuple():
 		return value{code: base.at(precAtom) + ".Get(" + idx.code + ")", typ: base.typ.elem(), prec: precAtom}, nil
 	case base.typ.isTuple():
 		return g.tupleIndex(n, base, idx)

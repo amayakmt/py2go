@@ -37,6 +37,34 @@ func listOf(elem pyType) pyType { return "list[" + elem + "]" }
 func setOf(elem pyType) pyType  { return "set[" + elem + "]" }
 func iterOf(elem pyType) pyType { return "iter[" + elem + "]" }
 
+// iterableOfType is the type of a parameter annotated Iterable[T]: any
+// list, set, dict, range, view or iterator of T can be passed for it.
+func iterableOfType(elem pyType) pyType { return "iterable[" + elem + "]" }
+
+func varTupleOf(elem pyType) pyType { return pyType("tuple[" + string(elem) + ", ...]") }
+
+// funcOf is the type of a function taking params and returning ret. The
+// return type is the last type argument, tNone for a function that
+// returns nothing.
+func funcOf(params []pyType, ret pyType) pyType {
+	parts := make([]string, 0, len(params)+1)
+	for _, p := range params {
+		parts = append(parts, string(p))
+	}
+	parts = append(parts, string(ret))
+	return pyType("func[" + strings.Join(parts, ", ") + "]")
+}
+
+func (t pyType) funcParams() []pyType {
+	args := t.typeArgs()
+	return args[:len(args)-1]
+}
+
+func (t pyType) funcRet() pyType {
+	args := t.typeArgs()
+	return args[len(args)-1]
+}
+
 func dictOf(key, val pyType) pyType { return pyType("dict[" + string(key) + ", " + string(val) + "]") }
 
 func tupleOf(elems []pyType) pyType {
@@ -80,8 +108,22 @@ func (t pyType) typeArgs() []pyType {
 	return append(out, pyType(inner[start:]))
 }
 
-func (t pyType) isList() bool       { return t.head() == "list" }
-func (t pyType) isTuple() bool      { return t.head() == "tuple" }
+func (t pyType) isList() bool { return t.head() == "list" }
+
+// isTuple is a tuple of fixed length, tuple[int, str]. A tuple[int, ...]
+// is a different type, with a different representation.
+func (t pyType) isTuple() bool { return t.head() == "tuple" && !t.isVarTuple() }
+
+func (t pyType) isVarTuple() bool {
+	if t.head() != "tuple" {
+		return false
+	}
+	args := t.typeArgs()
+	return len(args) == 2 && args[1] == "..."
+}
+
+func (t pyType) isFunc() bool       { return t.head() == "func" }
+func (t pyType) isIterable() bool   { return t.head() == "iterable" }
 func (t pyType) isDict() bool       { return t.head() == "dict" }
 func (t pyType) isSet() bool        { return t.head() == "set" }
 func (t pyType) isIter() bool       { return t.head() == "iter" }
@@ -111,7 +153,7 @@ func (t pyType) iterElem() (pyType, bool) {
 		return tStr, true
 	case t == tRange:
 		return tInt, true
-	case t.isList(), t.isSet(), t.isIter():
+	case t.isList(), t.isSet(), t.isIter(), t.isVarTuple(), t.isIterable():
 		return t.elem(), true
 	case t.isDict(), t.isKeysView():
 		return t.keyType(), true
@@ -157,6 +199,21 @@ func (t pyType) goType() string {
 		return "*runtime.PyError"
 	case t == tRange:
 		return "*runtime.Range"
+	case t.isFunc():
+		params := t.funcParams()
+		parts := make([]string, len(params))
+		for i, p := range params {
+			parts[i] = p.goType()
+		}
+		out := "func(" + strings.Join(parts, ", ") + ")"
+		if r := t.funcRet(); r != tNone {
+			out += " " + r.goType()
+		}
+		return out
+	case t.isVarTuple():
+		return "runtime.VarTuple[" + t.elem().goType() + "]"
+	case t.isIterable():
+		return "runtime.Iterable[" + t.elem().goType() + "]"
 	case t.isList():
 		return "*runtime.List[" + t.elem().goType() + "]"
 	case t.isSet():
@@ -200,6 +257,9 @@ func annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 		if t, ok := typeTable[n.ID]; ok {
 			return t, nil
 		}
+		if why, ok := typingNames[n.ID]; ok {
+			return "", unsupported("type annotation '"+n.ID+"' ("+why+")", n.Line())
+		}
 		return "", unsupported("type annotation '"+n.ID+"'", n.Line())
 	case *pyast.Subscript:
 		return containerType(n)
@@ -215,7 +275,39 @@ func annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 	}
 }
 
-// containerType resolves list[T], set[T], dict[K, V] and tuple[A, B, ...].
+// typingAliases are the names of the typing module that mean a built-in
+// container: List[int] is list[int]. The typing module itself arrives in
+// phase 12; until then these names are recognised on their own.
+var typingAliases = map[string]string{
+	"List": "list", "MutableSequence": "list",
+	"Set":  "set",
+	"Dict": "dict", "Mapping": "dict", "MutableMapping": "dict",
+	"Tuple": "tuple",
+}
+
+// typingNames are typing names that exist, but need something the typed
+// subset does not have yet.
+var typingNames = map[string]string{
+	"Optional":  "needs None as a value, which arrives in phase 8",
+	"Union":     "needs union types, which arrive in phase 8",
+	"Any":       "needs the dynamic object model of phase 9",
+	"Literal":   "needs literal types",
+	"Callable":  "write the parameters: Callable[[int], int]",
+	"Sequence":  "use list[...]; sequences are not a type of their own",
+	"Iterable":  "write the item type: Iterable[int]",
+	"Generic":   "needs generic classes, which arrive in phase 8",
+	"TypeVar":   "needs generics, which arrive in phase 8",
+	"List":      "write the item type: list[int]",
+	"Dict":      "write the key and value types: dict[str, int]",
+	"Set":       "write the item type: set[int]",
+	"Tuple":     "write the item types: tuple[int, str]",
+	"Type":      "needs classes, which arrive in phase 7",
+	"Iterator":  "needs generators, which arrive in phase 8",
+	"Generator": "needs generators, which arrive in phase 8",
+}
+
+// containerType resolves list[T], set[T], dict[K, V], tuple[A, B, ...],
+// tuple[T, ...], Iterable[T] and Callable[[A, B], R].
 func containerType(n *pyast.Subscript) (pyType, error) {
 	head, ok := n.Value.(*pyast.Name)
 	if !ok {
@@ -227,7 +319,27 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 	}
 	resolve := func(node pyast.Node) (pyType, error) { return annotationType(node, false) }
 
-	switch head.ID {
+	name := head.ID
+	if alias, ok := typingAliases[name]; ok {
+		name = alias
+	}
+	switch name {
+	case "Callable":
+		return callableType(n, args)
+	case "Iterable":
+		if len(args) != 1 {
+			return "", unsupported(fmt.Sprintf("Iterable[...] with %d type arguments", len(args)), n.Line())
+		}
+		elem, err := resolve(args[0])
+		if err != nil {
+			return "", err
+		}
+		return iterableOfType(elem), nil
+	case "Optional", "Union", "Literal", "Type", "Sequence":
+		return "", unsupported("type annotation '"+head.ID+"[...]' ("+typingNames[head.ID]+")", n.Line())
+	}
+
+	switch name {
 	case "list", "set":
 		if len(args) != 1 {
 			return "", unsupported(fmt.Sprintf("%s[...] with %d type arguments", head.ID, len(args)), n.Line())
@@ -236,7 +348,7 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 		if err != nil {
 			return "", err
 		}
-		if head.ID == "list" {
+		if name == "list" {
 			return listOf(elem), nil
 		}
 		if !elem.hashable() {
@@ -262,14 +374,22 @@ func containerType(n *pyast.Subscript) (pyType, error) {
 		return dictOf(key, val), nil
 
 	case "tuple":
+		if len(args) == 2 {
+			if u, ok := args[1].(*pyast.Unsupported); ok && u.Type == "ellipsis constant" {
+				elem, err := resolve(args[0])
+				if err != nil {
+					return "", err
+				}
+				return varTupleOf(elem), nil
+			}
+		}
 		if len(args) > maxTupleArity {
 			return "", unsupported(fmt.Sprintf("tuple with more than %d elements", maxTupleArity), n.Line())
 		}
 		elems := make([]pyType, 0, len(args))
 		for _, item := range args {
-			// "..." decodes as an Unsupported "ellipsis constant" node.
 			if u, ok := item.(*pyast.Unsupported); ok && u.Type == "ellipsis constant" {
-				return "", unsupported("variable-length tuple annotation", n.Line())
+				return "", unsupported("tuple annotation with '...' after more than one item", n.Line())
 			}
 			t, err := resolve(item)
 			if err != nil {
@@ -294,4 +414,28 @@ func constantText(c *pyast.Constant) string {
 		return strconv.Quote(s)
 	}
 	return fmt.Sprint(c.Value)
+}
+
+// callableType resolves Callable[[A, B], R].
+func callableType(n *pyast.Subscript, args []pyast.Node) (pyType, error) {
+	if len(args) != 2 {
+		return "", unsupported("Callable[...] needs a parameter list and a return type", n.Line())
+	}
+	list, ok := args[0].(*pyast.List)
+	if !ok {
+		return "", unsupported("Callable[..., R] (the parameters must be written out)", n.Line())
+	}
+	params := make([]pyType, len(list.Elts))
+	for i, p := range list.Elts {
+		t, err := annotationType(p, false)
+		if err != nil {
+			return "", err
+		}
+		params[i] = t
+	}
+	ret, err := annotationType(args[1], true)
+	if err != nil {
+		return "", err
+	}
+	return funcOf(params, ret), nil
 }

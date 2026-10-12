@@ -34,6 +34,10 @@ type value struct {
 	// must be wrapped in float64() before it meets another constant.
 	konst bool
 	lit   bool
+	// fsig is the def behind a function used as a value. It lets a
+	// function with defaults go where a Callable with fewer parameters
+	// is expected.
+	fsig *funcSig
 	// intLit marks an integer literal and holds its value. A tuple index
 	// and the exponent of ** must be literals, because their result type
 	// depends on the value.
@@ -109,6 +113,8 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 		return g.dictComp(n, "")
 	case *pyast.GeneratorExp:
 		return g.genExp(n)
+	case *pyast.Lambda:
+		return value{}, unsupported("lambda without a Callable type from its context (annotate the variable, or pass it where a Callable is expected)", n.Line())
 	case *pyast.Subscript:
 		return g.subscript(n)
 	case *pyast.JoinedStr:
@@ -147,6 +153,17 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 		v, err = g.setComp(n, want)
 	case *pyast.DictComp:
 		v, err = g.dictComp(n, want)
+	case *pyast.Name:
+		if lam := g.builtinAsLambda(n, want); lam != nil {
+			v, err = g.lambda(lam, want.funcParams(), "")
+		} else {
+			v, err = g.expr(n)
+		}
+	case *pyast.Lambda:
+		if !want.isFunc() {
+			return value{}, unsupported("lambda without a Callable type from its context (annotate the variable, or pass it where a Callable is expected)", n.Line())
+		}
+		v, err = g.lambda(n, want.funcParams(), want.funcRet())
 	case *pyast.Call:
 		if ev, ok := g.emptyConstructor(n, want); ok {
 			return ev, nil
@@ -208,13 +225,20 @@ func (g *generator) isVariable(name string) bool {
 
 func (g *generator) name(n *pyast.Name) (value, error) {
 	if t, ok := g.env.lookup(n.ID); ok {
-		return value{code: n.ID, typ: t, prec: precAtom}, nil
+		sig, _ := g.env.lookupSig(n.ID)
+		if sig != nil && len(sig.decorators) > 0 {
+			sig = nil
+		}
+		return value{code: n.ID, typ: t, prec: precAtom, fsig: sig}, nil
 	}
 	if v, ok := g.readGlobal(n.ID); ok {
 		return v, nil
 	}
-	if _, isFunc := g.sigs[n.ID]; isFunc {
-		return value{}, unsupported(fmt.Sprintf("function '%s' used as a value", n.ID), n.Line())
+	if sig, ok := g.sigs[n.ID]; ok && len(sig.decorators) == 0 {
+		return g.functionValue(sig)
+	}
+	if n.ID == "__name__" {
+		return value{code: `"__main__"`, typ: tStr, prec: precAtom}, nil
 	}
 	return value{}, unsupported(fmt.Sprintf("undefined name '%s'", n.ID), n.Line())
 }
@@ -226,55 +250,67 @@ func (g *generator) call(n *pyast.Call) (value, error) {
 	case *pyast.Attribute:
 		return g.methodCall(n, fn)
 	}
-	return value{}, unsupported("call target that is not a plain name", n.Line())
-}
-
-func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) {
-	// A local variable hides the function of the same name.
-	if g.isVariable(callee.ID) {
-		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", callee.ID), n.Line())
-	}
-	// A function the program defines hides a builtin of the same name.
-	if err := g.sigErrs[callee.ID]; err != nil {
-		return value{}, err
-	}
-	if sig, ok := g.sigs[callee.ID]; ok {
-		return g.userCall(n, callee, sig)
-	}
-	return g.builtinCall(n, callee)
-}
-
-func (g *generator) userCall(n *pyast.Call, callee *pyast.Name, sig *funcSig) (value, error) {
-	if n.HasKeywords {
-		return value{}, unsupported("keyword arguments", n.Line())
-	}
-	// At module level, Python runs top to bottom, so the def must come first.
-	if g.fnName == "" && !g.defined[callee.ID] {
-		return value{}, unsupported(fmt.Sprintf("call to '%s' before its definition", callee.ID), n.Line())
-	}
-	if g.fnName != "" {
-		if g.calls[g.fnName] == nil {
-			g.calls[g.fnName] = map[string]bool{}
+	// A lambda called on the spot takes its parameter types from the arguments.
+	if lam, ok := n.Func.(*pyast.Lambda); ok {
+		if n.HasKeywords {
+			return value{}, unsupported("keyword arguments in a call of a lambda", n.Line())
 		}
-		g.calls[g.fnName][callee.ID] = true
-	}
-	if len(n.Args) != len(sig.params) {
-		return value{}, unsupported(fmt.Sprintf("call to '%s' with %d arguments, expected %d",
-			callee.ID, len(n.Args), len(sig.params)), n.Line())
-	}
-
-	args := make([]string, 0, len(n.Args))
-	for i, a := range n.Args {
-		v, err := g.exprAs(a, sig.params[i])
+		types := make([]pyType, len(n.Args))
+		for i, a := range n.Args {
+			v, err := g.typedExpr(a)
+			if err != nil {
+				return value{}, err
+			}
+			types[i] = v.typ
+		}
+		fv, err := g.lambda(lam, types, "")
 		if err != nil {
 			return value{}, err
 		}
-		if v.typ != sig.params[i] {
-			return value{}, mismatch(fmt.Sprintf("argument %d of '%s'", i+1, callee.ID), sig.params[i], v.typ, a.Line())
-		}
-		args = append(args, v.code)
+		return g.callValue(n, fv)
 	}
-	return value{code: callee.ID + "(" + strings.Join(args, ", ") + ")", typ: sig.ret, prec: precAtom}, nil
+	// Any other expression, such as make_adder(1)(2) or handlers[0](x), is
+	// called through its value.
+	fv, err := g.typedExpr(n.Func)
+	if err != nil {
+		return value{}, err
+	}
+	if !fv.typ.isFunc() {
+		return value{}, unsupported(fmt.Sprintf("call of a value of type %s", fv.typ), n.Line())
+	}
+	return g.callValue(n, fv)
+}
+
+func (g *generator) namedCall(n *pyast.Call, callee *pyast.Name) (value, error) {
+	name := callee.ID
+	// Variables and nested functions hide module-level functions and builtins.
+	if sig, found := g.env.lookupSig(name); found {
+		if sig != nil {
+			return g.userCall(n, sig)
+		}
+		t, _ := g.env.lookup(name)
+		if t.isFunc() {
+			return g.callValue(n, value{code: name, typ: t, prec: precAtom})
+		}
+		return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
+	}
+	if g.fnName != "" {
+		if t, ok := g.globalTypes[name]; ok {
+			if !t.isFunc() {
+				return value{}, unsupported(fmt.Sprintf("call of variable '%s'", name), n.Line())
+			}
+			v, _ := g.readGlobal(name)
+			return g.callValue(n, v)
+		}
+	}
+	// A function the program defines hides a builtin of the same name.
+	if err := g.sigErrs[name]; err != nil {
+		return value{}, err
+	}
+	if sig, ok := g.sigs[name]; ok && len(sig.decorators) == 0 {
+		return g.userCall(n, sig)
+	}
+	return g.builtinCall(n, callee)
 }
 
 // opSymbols spells operators for error messages.
@@ -310,8 +346,8 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 		return v, nil
 	}
 
-	// str and list operands: concatenation and repetition.
-	if l.typ == tStr || r.typ == tStr || l.typ.isList() || r.typ.isList() {
+	// str, list and tuple[T, ...] operands: concatenation and repetition.
+	if l.typ == tStr || r.typ == tStr || l.typ.isList() || r.typ.isList() || l.typ.isVarTuple() || r.typ.isVarTuple() {
 		if v, ok := g.sequenceBinary(op, l, r); ok {
 			return v, nil
 		}
@@ -413,6 +449,12 @@ func (g *generator) sequenceBinary(op string, l, r value) (value, bool) {
 		return value{code: l.at(precAtom) + ".Repeat(" + r.code + ")", typ: l.typ, prec: precAtom}, true
 	case op == "Mult" && l.typ == tInt && r.typ.isList():
 		return value{code: r.at(precAtom) + ".Repeat(" + l.code + ")", typ: r.typ, prec: precAtom}, true
+	case op == "Add" && same && l.typ.isVarTuple():
+		return value{code: l.at(precAtom) + ".Concat(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	case op == "Mult" && l.typ.isVarTuple() && r.typ == tInt:
+		return value{code: l.at(precAtom) + ".Repeat(" + r.code + ")", typ: l.typ, prec: precAtom}, true
+	case op == "Mult" && l.typ == tInt && r.typ.isVarTuple():
+		return value{code: r.at(precAtom) + ".Repeat(" + l.code + ")", typ: r.typ, prec: precAtom}, true
 	}
 	return value{}, false
 }
@@ -507,7 +549,7 @@ func truth(v value) value {
 	case tStr:
 		return value{code: v.at(precCmp+1) + ` != ""`, typ: tBool, prec: precCmp, konst: v.konst}
 	}
-	if v.typ.isList() || v.typ.isTuple() || v.typ.isDict() || v.typ.isSet() || v.typ.isView() || v.typ == tRange {
+	if v.typ.isList() || v.typ.isTuple() || v.typ.isVarTuple() || v.typ.isDict() || v.typ.isSet() || v.typ.isView() || v.typ == tRange {
 		return value{code: v.at(precAtom) + ".Len() != 0", typ: tBool, prec: precCmp}
 	}
 	if v.typ.isIter() {
@@ -565,6 +607,9 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 	if l.typ == tExc || r.typ == tExc {
 		return value{}, unsupported("comparison of exceptions", n.Line())
 	}
+	if l.typ.isFunc() || r.typ.isFunc() {
+		return value{}, unsupported("comparison of function values", n.Line())
+	}
 
 	// A keys view equals a set (or another keys view) with the same items.
 	if (op == "Eq" || op == "NotEq") && keysViewAndSet(l.typ, r.typ) {
@@ -595,7 +640,7 @@ func (g *generator) compare(n *pyast.Compare) (value, error) {
 			return value{code: "!" + code, typ: tBool, prec: precUnary}, nil
 		}
 		return value{code: code, typ: tBool, prec: precAtom}, nil
-	case l.typ.isList() || l.typ.isTuple() || l.typ.isSet():
+	case l.typ.isList() || l.typ.isTuple() || l.typ.isVarTuple() || l.typ.isSet():
 		// Containers compare element by element in the runtime. For sets,
 		// the ordering operators mean "is a subset".
 		fn := map[string]string{"Eq": "Eq", "NotEq": "Eq", "Lt": "Lt", "LtE": "Le", "Gt": "Gt", "GtE": "Ge"}[op]
@@ -626,7 +671,7 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 	}
 	var want pyType
 	switch {
-	case r.typ.isList() || r.typ.isSet():
+	case r.typ.isList() || r.typ.isSet() || r.typ.isVarTuple():
 		want = r.typ.elem()
 	case r.typ.isDict() || r.typ.isKeysView():
 		want = r.typ.keyType()
@@ -642,7 +687,7 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 	switch {
 	case r.typ == tStr && l.typ == tStr:
 		code = g.rt("StrContains") + "(" + r.code + ", " + l.code + ")"
-	case r.typ.isList() && l.typ == r.typ.elem():
+	case (r.typ.isList() || r.typ.isVarTuple()) && l.typ == r.typ.elem():
 		code = r.at(precAtom) + ".Contains(" + l.code + ")"
 	case (r.typ.isSet() && l.typ == r.typ.elem()), (r.typ.isDict() && l.typ == r.typ.keyType()),
 		(r.typ.isKeysView() && l.typ == r.typ.keyType()), (r.typ.isValuesView() && l.typ == r.typ.valType()),

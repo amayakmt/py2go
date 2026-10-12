@@ -32,6 +32,12 @@ type generator struct {
 	handlers  []string // Go variables of the exceptions being handled, innermost last
 	flow      *flowCtx // the closure being generated for a try body, or nil
 
+	// Functions.
+	topFn        string          // the top-level function being generated, for the call graph
+	fnNonlocals  map[string]bool // names the current function declared nonlocal
+	callsUnknown bool            // the code being generated calls a function it cannot resolve
+	defaultVars  []defaultVar    // package variables holding top-level defaults
+
 	// Module-level variables. They are package-level Go variables, so that
 	// functions can read them and, after "global", assign them.
 	globalTypes map[string]pyType // annotated module-level names found before generation
@@ -61,8 +67,10 @@ func Generate(root pyast.Node) ([]byte, error) {
 		globalDecl:  map[string]pyType{},
 		globalReads: map[string]bool{},
 		fnGlobals:   map[string]bool{},
+		fnNonlocals: map[string]bool{},
 	}
 	g.collectSignatures(mod)
+	g.decoratedTypes()
 	if err := g.collectGlobals(mod); err != nil {
 		return nil, err
 	}
@@ -76,7 +84,7 @@ func Generate(root pyast.Node) ([]byte, error) {
 	for _, stmt := range mod.Body {
 		var err error
 		if fn, ok := stmt.(*pyast.FunctionDef); ok {
-			err = g.funcDef(&funcs, fn)
+			err = g.funcDef(&funcs, &body, fn)
 		} else {
 			err = g.stmt(&body, stmt)
 		}
@@ -163,137 +171,6 @@ func checkName(name string, line int) error {
 	return nil
 }
 
-// collectSignatures records every module-level function's signature.
-// A bad signature is stored, not returned, so errors still surface in
-// source order when the offending def or call is reached.
-func (g *generator) collectSignatures(mod *pyast.Module) {
-	for _, stmt := range mod.Body {
-		fn, ok := stmt.(*pyast.FunctionDef)
-		if !ok {
-			continue
-		}
-		if _, dup := g.sigs[fn.Name]; dup {
-			continue
-		}
-		if _, dup := g.sigErrs[fn.Name]; dup {
-			continue
-		}
-		sig, err := signature(fn)
-		if err != nil {
-			g.sigErrs[fn.Name] = err
-			continue
-		}
-		g.sigs[fn.Name] = sig
-	}
-}
-
-// signature validates a def line and returns its parameter and return types.
-func signature(fn *pyast.FunctionDef) (*funcSig, error) {
-	if fn.Name == "main" {
-		return nil, unsupported("function named main (collides with generated main)", fn.Line())
-	}
-	if err := checkName(fn.Name, fn.Line()); err != nil {
-		return nil, err
-	}
-	if fn.HasDecorators {
-		return nil, unsupported("decorators", fn.Line())
-	}
-	if fn.HasTypeParams {
-		return nil, unsupported("generic functions", fn.Line())
-	}
-
-	a := fn.Args
-	if a.Vararg != nil {
-		return nil, unsupported("*args parameter", a.Vararg.Line())
-	}
-	if len(a.Kwonly) > 0 {
-		return nil, unsupported("keyword-only parameters", a.Kwonly[0].Line())
-	}
-	if a.Kwarg != nil {
-		return nil, unsupported("**kwargs parameter", a.Kwarg.Line())
-	}
-	if len(a.Defaults) > 0 {
-		return nil, unsupported("default parameter values", a.Defaults[0].Line())
-	}
-
-	sig := &funcSig{}
-	seen := map[string]bool{}
-	for _, p := range a.Positional() {
-		if err := checkName(p.Name, p.Line()); err != nil {
-			return nil, err
-		}
-		if seen[p.Name] {
-			return nil, unsupported(fmt.Sprintf("duplicate parameter '%s'", p.Name), p.Line())
-		}
-		seen[p.Name] = true
-		if p.Annotation == nil {
-			return nil, unsupported(fmt.Sprintf("parameter '%s' without type annotation", p.Name), p.Line())
-		}
-		t, err := annotationType(p.Annotation, false)
-		if err != nil {
-			return nil, err
-		}
-		sig.params = append(sig.params, t)
-	}
-
-	if fn.Returns == nil {
-		return nil, unsupported("function without return annotation", fn.Line())
-	}
-	ret, err := annotationType(fn.Returns, true)
-	if err != nil {
-		return nil, err
-	}
-	sig.ret = ret
-	return sig, nil
-}
-
-func (g *generator) funcDef(b *strings.Builder, fn *pyast.FunctionDef) error {
-	if g.defined[fn.Name] {
-		return unsupported(fmt.Sprintf("redefinition of function '%s'", fn.Name), fn.Line())
-	}
-	if err := g.sigErrs[fn.Name]; err != nil {
-		return err
-	}
-	sig := g.sigs[fn.Name]
-	g.defined[fn.Name] = true
-
-	// A function body is its own scope chain. Its names come from the
-	// parameters and its own declarations only.
-	g.env = newScope(nil)
-	g.fnName, g.ret = fn.Name, sig.ret
-	g.flow, g.handlers = nil, nil
-	g.fnGlobals = map[string]bool{}
-	defer func() {
-		g.env, g.fnName, g.ret = g.mainEnv, "", ""
-		g.fnGlobals = map[string]bool{}
-	}()
-
-	params := make([]string, 0, len(sig.params))
-	for i, p := range fn.Args.Positional() {
-		g.env.declare(p.Name, sig.params[i])
-		params = append(params, p.Name+" "+g.goType(sig.params[i]))
-	}
-	result := ""
-	if sig.ret != tNone {
-		result = " " + g.goType(sig.ret)
-	}
-
-	fmt.Fprintf(b, "func %s(%s)%s {\n", fn.Name, strings.Join(params, ", "), result)
-	fmt.Fprintf(b, "%s\n", guardMarker(fn.Name))
-	for _, s := range fn.Body {
-		if err := g.stmt(b, s); err != nil {
-			return err
-		}
-	}
-	// Go insists that a function with a result ends in a terminating
-	// statement. Python would return None here, which breaks the annotation.
-	if _, endsInReturn := fn.Body[len(fn.Body)-1].(*pyast.Return); sig.ret != tNone && !endsInReturn {
-		fmt.Fprintf(b, "panic(%s(%q))\n", g.rt("MissingReturn"), fn.Name)
-	}
-	b.WriteString("}\n\n")
-	return nil
-}
-
 func unsupported(what string, line int) error {
 	return fmt.Errorf("unsupported: %s at line %d", what, line)
 }
@@ -345,7 +222,7 @@ func (g *generator) placeRecursionGuards(text string) string {
 	for name := range g.defined {
 		marker := guardMarker(name) + "\n"
 		guard := ""
-		if reaches(name, name) {
+		if g.calls[name]["*"] || reaches(name, name) {
 			guard = g.rt("Enter") + "()\ndefer " + g.rt("Leave") + "()\n"
 		}
 		text = strings.Replace(text, marker, guard, 1)

@@ -66,7 +66,10 @@ func (g *generator) collectGlobals(mod *pyast.Module) error {
 
 	// A Go package has one namespace for functions and variables.
 	for name, line := range g.globalLines {
-		if _, isFunc := g.sigs[name]; isFunc {
+		if sig, isFunc := g.sigs[name]; isFunc {
+			if len(sig.decorators) > 0 {
+				continue // the decorated name is itself a variable
+			}
 			return unsupported(fmt.Sprintf("'%s' is both a function and a module-level variable", name), line)
 		}
 		if _, isFunc := g.sigErrs[name]; isFunc {
@@ -108,6 +111,9 @@ func (g *generator) placeGlobalFlags(text string) string {
 // globalDeclarations emits the package-level variables.
 func (g *generator) globalDeclarations() string {
 	var b strings.Builder
+	for _, d := range g.defaultVars {
+		fmt.Fprintf(&b, "var %s %s\n", d.name, g.goType(d.typ))
+	}
 	for _, name := range g.globalOrder {
 		fmt.Fprintf(&b, "var %s %s\n", name, g.goType(g.globalDecl[name]))
 		if g.globalReads[name] {
@@ -150,8 +156,15 @@ func (g *generator) lookupBinding(name string) (t pyType, found, global bool) {
 		}
 		return "", false, false
 	}
-	if t, ok := g.env.lookup(name); ok {
+	if t, ok := g.env.lookupWithinFunction(name); ok {
 		return t, true, false
+	}
+	if g.fnNonlocals[name] {
+		if root := g.env.functionRoot(); root != nil && root.parent != nil {
+			if t, ok := root.parent.lookup(name); ok {
+				return t, true, false
+			}
+		}
 	}
 	if g.fnName != "" && g.fnGlobals[name] {
 		if t, ok := g.globalTypes[name]; ok {

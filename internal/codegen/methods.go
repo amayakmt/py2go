@@ -22,6 +22,8 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 		return g.strMethod(n, m, recv)
 	case recv.typ.isList():
 		return g.listMethod(n, m, recv)
+	case recv.typ.isVarTuple():
+		return g.varTupleMethod(n, m, recv)
 	case recv.typ.isDict():
 		return g.dictMethod(n, m, recv)
 	case recv.typ.isSet():
@@ -46,8 +48,9 @@ func (g *generator) methodArgs(n *pyast.Call, m *pyast.Attribute, types ...pyTyp
 		if err != nil {
 			return nil, err
 		}
-		if v.typ != types[i] {
-			return nil, mismatch(fmt.Sprintf("argument %d of %s()", i+1, m.Attr), types[i], v.typ, a.Line())
+		v, err = g.coerce(v, types[i], fmt.Sprintf("argument %d of %s()", i+1, m.Attr), a.Line())
+		if err != nil {
+			return nil, err
 		}
 		codes[i] = v.code
 	}
@@ -134,9 +137,17 @@ func (g *generator) listMethod(n *pyast.Call, m *pyast.Attribute, recv value) (v
 		if len(n.Args) > 0 {
 			return value{}, unsupported(fmt.Sprintf("sort() with %d arguments", len(n.Args)), n.Line())
 		}
-		rev, err := g.reverseKeyword(n, "sort")
+		rev, keyNode, err := g.sortKeywords(n, "sort")
 		if err != nil {
 			return value{}, err
+		}
+		if keyNode != nil {
+			key, keyT, err := g.keyFunc(keyNode, elem)
+			if err != nil {
+				return value{}, err
+			}
+			fn := g.rt("SortKey") + "[" + g.goType(elem) + ", " + g.goType(keyT) + "]"
+			return value{code: call(fn, recv.code, key, rev), typ: tNone, prec: precAtom}, nil
 		}
 		return value{code: r + ".Sort(" + rev + ")", typ: tNone, prec: precAtom}, nil
 	}
@@ -339,6 +350,25 @@ func (g *generator) setMethod(n *pyast.Call, m *pyast.Attribute, recv value) (va
 		return others("IsSuperset", tBool, 1, 1)
 	case "isdisjoint":
 		return others("IsDisjoint", tBool, 1, 1)
+	}
+	return value{}, unsupported(fmt.Sprintf("method '%s' on %s", m.Attr, recv.typ), n.Line())
+}
+
+func (g *generator) varTupleMethod(n *pyast.Call, m *pyast.Attribute, recv value) (value, error) {
+	elem := recv.typ.elem()
+	r := recv.at(precAtom)
+	method := func(name string, ret pyType, params ...pyType) (value, error) {
+		args, err := g.methodArgs(n, m, params...)
+		if err != nil {
+			return value{}, err
+		}
+		return value{code: r + "." + name + "(" + joinArgs(args) + ")", typ: ret, prec: precAtom}, nil
+	}
+	switch m.Attr {
+	case "count":
+		return method("Count", tInt, elem)
+	case "index":
+		return method("Index", tInt, elem)
 	}
 	return value{}, unsupported(fmt.Sprintf("method '%s' on %s", m.Attr, recv.typ), n.Line())
 }

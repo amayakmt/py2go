@@ -25,13 +25,28 @@ func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error
 		return g.zipCall(n)
 	case "reversed":
 		return g.reversedCall(n)
-	case "list", "set", "dict":
+	case "list", "set", "dict", "tuple":
 		return g.convertCall(name, n)
 	case "any", "all":
 		return g.anyAllCall(name, n)
-	case "tuple":
-		return value{}, unsupported("tuple() of a sequence, which has no fixed length (variable-length tuples arrive in phase 6)", n.Line())
-	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod", "min", "max":
+	case "map":
+		return g.mapCall(n)
+	case "filter":
+		return g.filterCall(n)
+	case "min", "max":
+		if len(n.Keywords) > 0 {
+			return g.minMaxKey(name, n)
+		}
+		args := make([]value, len(n.Args))
+		for i, a := range n.Args {
+			v, err := g.typedExpr(a)
+			if err != nil {
+				return value{}, err
+			}
+			args[i] = v
+		}
+		return g.minMax(name, n, args)
+	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod":
 		if n.HasKeywords {
 			return value{}, unsupported("keyword arguments", n.Line())
 		}
@@ -75,7 +90,7 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		switch {
 		case a.typ == tStr:
 			return atom(call(g.rt("StrLen"), a.code), tInt)
-		case a.typ.isList() || a.typ.isTuple() || a.typ.isDict() || a.typ.isSet() || a.typ.isView() || a.typ == tRange:
+		case a.typ.isList() || a.typ.isTuple() || a.typ.isVarTuple() || a.typ.isDict() || a.typ.isSet() || a.typ.isView() || a.typ == tRange:
 			return atom(a.at(precAtom)+".Len()", tInt)
 		}
 		return badArg(a)
@@ -268,11 +283,198 @@ func (g *generator) sortedCall(n *pyast.Call) (value, error) {
 	if err != nil {
 		return value{}, err
 	}
-	rev, err := g.reverseKeyword(n, "sorted")
+	rev, keyNode, err := g.sortKeywords(n, "sorted")
 	if err != nil {
 		return value{}, err
 	}
-	return value{code: call(g.rt("Sorted"), list.code, rev), typ: list.typ, prec: precAtom}, nil
+	if keyNode == nil {
+		return value{code: call(g.rt("Sorted"), list.code, rev), typ: list.typ, prec: precAtom}, nil
+	}
+	key, keyT, err := g.keyFunc(keyNode, list.typ.elem())
+	if err != nil {
+		return value{}, err
+	}
+	fn := g.rt("SortedKey") + "[" + g.goType(list.typ.elem()) + ", " + g.goType(keyT) + "]"
+	return value{code: call(fn, list.code, key, rev), typ: list.typ, prec: precAtom}, nil
+}
+
+// sortKeywords reads reverse=... and key=... of sorted() and list.sort().
+func (g *generator) sortKeywords(n *pyast.Call, fn string) (reverse string, key pyast.Node, err error) {
+	reverse = "false"
+	for _, kw := range n.Keywords {
+		switch kw.Arg {
+		case "reverse":
+			v, err := g.typedExpr(kw.Value)
+			if err != nil {
+				return "", nil, err
+			}
+			if v.typ != tBool {
+				return "", nil, mismatch("reverse", tBool, v.typ, kw.Line())
+			}
+			reverse = v.code
+		case "key":
+			key = kw.Value
+		default:
+			return "", nil, unsupported(fmt.Sprintf("keyword argument '%s' of %s()", kw.Arg, fn), kw.Line())
+		}
+	}
+	return reverse, key, nil
+}
+
+// keyFunc generates the key function of sorted, min, max or sort for items
+// of type item. A lambda takes its parameter type from the items.
+func (g *generator) keyFunc(node pyast.Node, item pyType) (code string, key pyType, err error) {
+	var v value
+	if lam := g.builtinAsLambda(node, funcOf([]pyType{item}, tNone)); lam != nil {
+		node = lam
+	}
+	if lam, ok := node.(*pyast.Lambda); ok {
+		v, err = g.lambda(lam, []pyType{item}, "")
+	} else {
+		v, err = g.typedExpr(node)
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if !v.typ.isFunc() || len(v.typ.funcParams()) != 1 || v.typ.funcParams()[0] != item || v.typ.funcRet() == tNone {
+		return "", "", unsupported(fmt.Sprintf("key function of type %s for items of type %s", v.typ, item), node.Line())
+	}
+	return v.code, v.typ.funcRet(), nil
+}
+
+// minMaxKey is min(...) and max(...) with a key function.
+func (g *generator) minMaxKey(name string, n *pyast.Call) (value, error) {
+	var keyNode pyast.Node
+	for _, kw := range n.Keywords {
+		if kw.Arg != "key" {
+			return value{}, unsupported(fmt.Sprintf("keyword argument '%s' of %s()", kw.Arg, name), kw.Line())
+		}
+		keyNode = kw.Value
+	}
+	var list value
+	if len(n.Args) == 1 {
+		v, err := g.typedExpr(n.Args[0])
+		if err != nil {
+			return value{}, err
+		}
+		if list, err = g.asList(v, name+"()", n.Line()); err != nil {
+			return value{}, err
+		}
+	} else if len(n.Args) >= 2 {
+		codes := make([]string, len(n.Args))
+		var t pyType
+		for i, a := range n.Args {
+			v, err := g.typedExpr(a)
+			if err != nil {
+				return value{}, err
+			}
+			if i == 0 {
+				t = v.typ
+			} else if v.typ != t {
+				return value{}, unsupported(fmt.Sprintf("%s() of %s and %s", name, t, v.typ), a.Line())
+			}
+			codes[i] = v.code
+		}
+		list = value{code: g.rt("NewList") + "[" + g.goType(t) + "](" + strings.Join(codes, ", ") + ")", typ: listOf(t), prec: precAtom}
+	} else {
+		return value{}, unsupported(fmt.Sprintf("%s() with no arguments", name), n.Line())
+	}
+	item := list.typ.elem()
+	key, keyT, err := g.keyFunc(keyNode, item)
+	if err != nil {
+		return value{}, err
+	}
+	fn := map[string]string{"min": "MinKey", "max": "MaxKey"}[name]
+	return value{
+		code: call(g.rt(fn)+"["+g.goType(item)+", "+g.goType(keyT)+"]", list.code, key),
+		typ:  item, prec: precAtom,
+	}, nil
+}
+
+// functionArg generates the function argument of map() or filter(): a lambda
+// takes its parameter types from the iterables.
+func (g *generator) functionArg(node pyast.Node, params []pyType) (value, error) {
+	var v value
+	var err error
+	if lam := g.builtinAsLambda(node, funcOf(params, tNone)); lam != nil {
+		node = lam
+	}
+	if lam, ok := node.(*pyast.Lambda); ok {
+		v, err = g.lambda(lam, params, "")
+	} else {
+		v, err = g.typedExpr(node)
+	}
+	if err != nil {
+		return value{}, err
+	}
+	if !v.typ.isFunc() || len(v.typ.funcParams()) != len(params) {
+		return value{}, unsupported(fmt.Sprintf("function of type %s where one taking %d argument(s) is expected", v.typ, len(params)), node.Line())
+	}
+	for i, p := range params {
+		if v.typ.funcParams()[i] != p {
+			return value{}, mismatch(fmt.Sprintf("function argument %d", i+1), p, v.typ.funcParams()[i], node.Line())
+		}
+	}
+	return v, nil
+}
+
+// mapCall is map(f, iterable) and map(f, a, b).
+func (g *generator) mapCall(n *pyast.Call) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) < 2 || len(n.Args) > 3 {
+		return value{}, unsupported(fmt.Sprintf("map() with %d arguments", len(n.Args)), n.Line())
+	}
+	codes := make([]string, len(n.Args)-1)
+	elems := make([]pyType, len(n.Args)-1)
+	for i, a := range n.Args[1:] {
+		code, elem, err := g.iterableArg(a, "map()")
+		if err != nil {
+			return value{}, err
+		}
+		codes[i], elems[i] = code, elem
+	}
+	fn, err := g.functionArg(n.Args[0], elems)
+	if err != nil {
+		return value{}, err
+	}
+	ret := fn.typ.funcRet()
+	if ret == tNone {
+		return value{}, unsupported("map() of a function that returns None", n.Line())
+	}
+	if len(elems) == 1 {
+		f := g.rt("Map") + "[" + g.goType(elems[0]) + ", " + g.goType(ret) + "]"
+		return value{code: call(f, fn.code, codes[0]), typ: iterOf(ret), prec: precAtom}, nil
+	}
+	f := g.rt("Map2") + "[" + g.goType(elems[0]) + ", " + g.goType(elems[1]) + ", " + g.goType(ret) + "]"
+	return value{code: call(f, fn.code, codes[0], codes[1]), typ: iterOf(ret), prec: precAtom}, nil
+}
+
+// filterCall is filter(f, iterable).
+func (g *generator) filterCall(n *pyast.Call) (value, error) {
+	if n.HasKeywords {
+		return value{}, unsupported("keyword arguments", n.Line())
+	}
+	if len(n.Args) != 2 {
+		return value{}, unsupported(fmt.Sprintf("filter() with %d arguments", len(n.Args)), n.Line())
+	}
+	if c, ok := n.Args[0].(*pyast.Constant); ok && c.PyType == "none" {
+		return value{}, unsupported("filter(None, ...)", n.Line())
+	}
+	code, elem, err := g.iterableArg(n.Args[1], "filter()")
+	if err != nil {
+		return value{}, err
+	}
+	fn, err := g.functionArg(n.Args[0], []pyType{elem})
+	if err != nil {
+		return value{}, err
+	}
+	if fn.typ.funcRet() != tBool {
+		return value{}, mismatch("filter() function result", tBool, fn.typ.funcRet(), n.Line())
+	}
+	f := g.rt("Filter") + "[" + g.goType(elem) + "]"
+	return value{code: call(f, fn.code, code), typ: iterOf(elem), prec: precAtom}, nil
 }
 
 // printCall is print(*args, sep=..., end=...).
@@ -296,6 +498,46 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 			end = v.code
 		}
 		custom = true
+	}
+
+	// print(*items) spreads the items into the arguments.
+	spread := false
+	for _, a := range n.Args {
+		if _, ok := a.(*pyast.Starred); ok {
+			spread = true
+		}
+	}
+	if spread {
+		var segments []string // the arguments as a []any expression, built left to right
+		var run []string
+		flush := func() {
+			if len(run) > 0 {
+				segments = append(segments, "[]any{"+strings.Join(run, ", ")+"}")
+				run = nil
+			}
+		}
+		for _, a := range n.Args {
+			if st, ok := a.(*pyast.Starred); ok {
+				code, elem, err := g.iterableArg(st.Value, "print(*...)")
+				if err != nil {
+					return value{}, err
+				}
+				flush()
+				segments = append(segments, call(g.rt("Spread")+"["+g.goType(elem)+"]", code))
+				continue
+			}
+			v, err := g.typedExpr(a)
+			if err != nil {
+				return value{}, err
+			}
+			run = append(run, v.code)
+		}
+		flush()
+		all := segments[0]
+		for _, seg := range segments[1:] {
+			all = "append(" + all + ", " + seg + "...)"
+		}
+		return value{code: g.rt("PrintOpts") + "(" + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, nil
 	}
 
 	args := make([]string, 0, len(n.Args)+2)
@@ -478,6 +720,8 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 		return value{}, unsupported(fmt.Sprintf("%s() of %s", name, v.typ), n.Line())
 	}
 	switch name {
+	case "tuple":
+		return value{code: call(g.rt("TupleFrom")+"["+g.goType(elem)+"]", code), typ: varTupleOf(elem), prec: precAtom}, nil
 	case "list":
 		if v.typ.isList() {
 			return value{code: v.at(precAtom) + ".Copy()", typ: v.typ, prec: precAtom}, nil
