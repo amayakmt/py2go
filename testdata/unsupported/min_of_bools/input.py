@@ -1,0 +1,1 @@
+print(min(True, False))

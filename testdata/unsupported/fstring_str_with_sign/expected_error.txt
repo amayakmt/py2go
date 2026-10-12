@@ -1,0 +1,1 @@
+unsupported: format spec '+': sign, '0', ',' and '=' are not allowed in a string format specifier at line 2

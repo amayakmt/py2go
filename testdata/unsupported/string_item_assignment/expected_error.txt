@@ -1,0 +1,1 @@
+unsupported: item assignment on str at line 2

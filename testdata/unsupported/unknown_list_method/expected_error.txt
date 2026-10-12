@@ -1,0 +1,1 @@
+unsupported: method 'frobnicate' on list[int] at line 2

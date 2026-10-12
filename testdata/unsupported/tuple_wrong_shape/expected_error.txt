@@ -1,0 +1,1 @@
+unsupported: variable 'x' expects tuple[int, str], got tuple[int, int] at line 1

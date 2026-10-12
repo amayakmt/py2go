@@ -1,0 +1,1 @@
+unsupported: type annotation 'list' at line 1
