@@ -1,0 +1,8 @@
+ann {'age': 30, 'score': 95} 30
+bob {'age': 25, 'score': 85} 25
+cy {'age': 41, 'score': 70} 41
+1 -> 2
+1 -> 3
+2 -> 4
+3 -> 4
+{'ann': {'age': 30, 'score': 95}, 'bob': {'age': 25, 'score': 85}, 'cy': {'age': 41, 'score': 70}}

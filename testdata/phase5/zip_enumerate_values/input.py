@@ -1,0 +1,15 @@
+xs: list[int] = [1, 2, 3]
+ys: list[str] = ["a", "b", "c"]
+print(list(zip(xs, ys)))
+print(list(zip(xs, ys, [True, False, True])))
+print(list(zip(xs, "ab")))
+print(list(enumerate(ys)))
+print(list(enumerate(ys, 1)))
+print(list(enumerate("xy", start=10)))
+print(dict(zip(ys, xs)))
+print(dict(enumerate(ys)))
+print([a * b for a, b in zip(xs, xs)])
+print(sum(a * b for a, b in zip(xs, [4, 5, 6])))
+print(list(zip(range(3), range(10, 0, -3))))
+print({k: v for k, v in zip("abc", range(3))})
+print(list(zip(xs)))

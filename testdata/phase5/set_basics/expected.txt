@@ -1,0 +1,7 @@
+{1, 2, 3} 3 True False True
+set() 0 False True
+{10, 1, 2, 3}
+{10, 2, 3}
+[2, 3, 10] 2 10 15
+2 True False
+2

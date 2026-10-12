@@ -1,0 +1,6 @@
+['apple', 'fig', 'pear'] 3 True
+['apple', 'fig', 'kiwi']
+['apple', 'fig', 'kiwi', 'plum'] ['fig'] ['apple', 'kiwi'] ['apple', 'kiwi', 'plum']
+apple
+fig
+kiwi

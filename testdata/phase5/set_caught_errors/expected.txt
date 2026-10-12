@@ -1,0 +1,3 @@
+KeyError 7
+KeyError 'pop from an empty set'
+Set changed size during iteration

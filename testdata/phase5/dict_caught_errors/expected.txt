@@ -1,0 +1,3 @@
+KeyError 'b'
+KeyError 'c'
+dictionary changed size during iteration

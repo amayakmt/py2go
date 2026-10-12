@@ -1,0 +1,9 @@
+produce 0
+consume 0
+produce 1
+consume 1
+produce 2
+consume 4
+produce 0
+produce 1
+1
