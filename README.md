@@ -4,43 +4,11 @@ Transpiler from Python 3.13 to Go.
 
 ## Status
 
-Phase 8: `None` and `Optional[T]` with narrowing, generators (`yield`, `yield from`,
-`send`, `throw`, `close`), `with`, `match`, generics (`def f[T]`, `class Box[T]`,
-`TypeVar` and `Generic`, `type` aliases), `except*` and `ExceptionGroup`,
-conditional expressions, chained comparisons, `:=`, star expressions, loop `else`
-and nested format specs. `py2go check <dir>` reports how much of a tree of Python
-files is accepted.
+[![phases](docs/progress/badge-phases.svg)](docs/roadmap.md) [![differential tests](docs/progress/badge-tests.svg)](testdata) [![rejection tests](docs/progress/badge-rejected.svg)](testdata/unsupported)
 
-Phase 7: classes. Methods, `@staticmethod`, `@classmethod`, `@property` with
-setters, class attributes with instance shadowing, single and multiple
-inheritance with C3 and `super()`, `isinstance`, `type`, the special methods
-(`__repr__`, `__eq__`, `__lt__`, the arithmetic family with reflected and
-in-place forms, `__len__`, `__getitem__`, `__iter__`, `__call__`, ...),
-`@dataclass`, and user-defined exceptions with `raise ... from` and the chain
-printed for an uncaught one.
+[![progress map](docs/progress/progress.svg)](docs/roadmap.md)
 
-Phase 6: functions as values and the full call syntax. Default values, keyword
-and keyword-only and positional-only parameters, `*args`, `**kwargs`, `*xs` and
-`**d` at the call site, lambdas, nested functions with `nonlocal`, closures,
-decorators, `Callable[[A], R]`, `tuple[int, ...]`, `tuple(x)`, and `map`,
-`filter` and `key=` for `sorted`, `min`, `max` and `sort`. Argument errors carry
-CPython's `TypeError` text, at compile time where the call is static.
-
-Phase 5: `dict`, `set`, list/set/dict comprehensions, generator expressions,
-`range`, `zip`, `enumerate` and `reversed` as values, and module-level variables
-that functions can read and rebind with `global`. Sets iterate in CPython's order.
-
-Phase 4: exceptions. `raise`, `try`/`except`/`else`/`finally` and `assert` work
-with the built-in exception classes, uncaught errors exit with status 1 like
-CPython, and runaway recursion raises `RecursionError`. User-defined exception
-classes arrived in phase 7.
-
-Phase 3: strings, builtins, sequences. On top of the phase 2 typed core
-(functions, `int`/`float`/`bool`/`str`, arithmetic, `if`/`while`/`for`), it
-handles `str` methods and slicing, f-strings, `list` and `tuple` with unpacking,
-`for` over lists, strings, `enumerate` and `zip`, and the builtins `len`, `int`,
-`float`, `str`, `abs`, `min`, `max`, `sum`, `sorted`, `round`, `divmod` and `**`.
-
+<sub>A phase is done when its exit test passes (see [decisions](docs/decisions.md)). The pictures are drawn by `go run ./cmd/progress` from the roadmap, the decision log and the test directories; run it after finishing a phase.</sub>
 
 ## Usage
 
