@@ -1,0 +1,5 @@
+3 2 1.2 1 not exported 5
+1 [1, 2] f 8
+NameError name '_gamma' is not defined
+2 Counter ab [1, 2] 1180591620717411303425
+[1, 2, 3] 1 3

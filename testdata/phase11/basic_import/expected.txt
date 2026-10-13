@@ -1,0 +1,4 @@
+3.14159 12.56636 3.14159
+1 2 2
+shape sq in mathx shape tri in mathx __main__ mathx
+Shape True

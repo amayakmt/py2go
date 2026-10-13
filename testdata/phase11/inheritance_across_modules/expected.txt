@@ -1,0 +1,5 @@
+rex says woof Dog('rex') True True
+tom says meow Cat('tom') True False
+bit says woof! Puppy('bit') True True
+x says ... Animal('x') True False
+rex fetches woof ['Dog', 'Cat', 'Puppy', 'Animal']

@@ -1,0 +1,9 @@
+main start
+a start
+b start
+c runs once
+b end
+a sees b 42
+a end
+1 42 3
+main end

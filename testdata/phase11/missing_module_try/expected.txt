@@ -1,0 +1,5 @@
+ModuleNotFoundError No module named 'nothere'
+MNF No module named 'nothere'
+False
+ImportError cannot import name 'absent' from 'present'
+present

@@ -1,0 +1,4 @@
+1
+AppError zero AppError('zero')
+NotFound item -3 not found item -3 NotFound True
+True NotFound

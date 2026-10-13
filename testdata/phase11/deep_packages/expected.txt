@@ -1,0 +1,6 @@
+a init
+a.b init
+a.b.c init
+leaf a.b.c.leaf
+99 99 99 a.b.c.leaf
+a.b.c.leaf 99

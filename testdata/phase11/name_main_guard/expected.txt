@@ -1,0 +1,3 @@
+tool imported, __name__ = tool
+tool main running
+main of __main__
