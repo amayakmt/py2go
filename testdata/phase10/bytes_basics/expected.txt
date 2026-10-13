@@ -1,0 +1,18 @@
+b'hello \x00\xff world' 14 104 100 b'ell' b'dlrow \xff\x00 olleh' b'hlo\x00 ol' bytes b"it's" b'say "hi"' b'both \' and "' b'\n\t\r\\'
+b'' b'\x00\x00\x00' b'hi' b'h\xc3\xa9llo' b'abc' b'xyz' b'\x00\x01\x02\x03\x04' [97, 98, 99] (1, 2)
+b'abcd' b'ababab' b'xxx' True True True True True True True False
+616263 00ff 61-62-63-64-65-66 6162:6364:6566 b'Hello' b'\x00\xff' b''
+False True True 1 True [b'a', b'ab', b'b'] 99 97 294
+b'ab-5-ff' b'x' b'    a|b    |' b'A'
+TypeError can't concat str to bytes
+TypeError can only concatenate str (not "bytes") to str
+TypeError can't multiply sequence by non-int of type 'float'
+IndexError index out of range
+ValueError negative count
+ValueError bytes must be in range(0, 256)
+TypeError string argument without an encoding
+TypeError '<' not supported between instances of 'bytes' and 'str'
+TypeError 'float' object cannot be interpreted as an integer
+ValueError byte must be in range(0, 256)
+ValueError non-hexadecimal number found in fromhex() arg at position 0
+False False True b'abc' [b'a', b'b'] b'x' b'y' b'z'

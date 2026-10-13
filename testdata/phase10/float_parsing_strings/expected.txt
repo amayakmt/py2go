@@ -1,0 +1,57 @@
+'0' 0.0 0.0 True
+'-0' -0.0 -0.0 True
+'+0.0' 0.0 0.0 True
+'1' 1.0 1.0 True
+'1.' 1.0 1.0 True
+'.5' 0.5 0.5 False
+'-.5' -0.5 -0.5 False
+'1e3' 1000.0 1000.0 True
+'1E3' 1000.0 1000.0 True
+'1e+3' 1000.0 1000.0 True
+'1e-3' 0.001 0.001 False
+'1_000.5' 1000.5 1000.5 False
+'1_0e1_0' 100000000000.0 100000000000.0 True
+'  3.14  ' 3.14 3.14 False
+'\t2\n' 2.0 2.0 True
+'inf' inf inf None
+'-inf' -inf -inf None
+'+Infinity' inf inf None
+'INFINITY' inf inf None
+'nan' nan nan None
+'-NaN' nan nan None
+'8' 8.0 8.0 True
+'123456789012345678901234567890' 1.2345678901234568e+29 1.2345678901234568e+29 True
+'1e308' 1e+308 1e+308 True
+'1e309' inf inf None
+'-1e309' -inf -inf None
+'1e-400' 0.0 0.0 True
+'4.9e-324' 5e-324 5e-324 False
+'2.5e-324' 5e-324 5e-324 False
+'0.1' 0.1 0.1 False
+'0.30000000000000004' 0.30000000000000004 0.30000000000000004 False
+'9007199254740993' 9007199254740992.0 9007199254740992.0 True
+'1.7976931348623157e308' 1.7976931348623157e+308 1.7976931348623157e+308 True
+'1.7976931348623159e308' inf inf None
+'' ValueError could not convert string to float: ''
+' ' ValueError could not convert string to float: ' '
+'1 2' ValueError could not convert string to float: '1 2'
+'1..2' ValueError could not convert string to float: '1..2'
+'1e' ValueError could not convert string to float: '1e'
+'e1' ValueError could not convert string to float: 'e1'
+'.' ValueError could not convert string to float: '.'
+'+' ValueError could not convert string to float: '+'
+'-' ValueError could not convert string to float: '-'
+'1_' ValueError could not convert string to float: '1_'
+'_1' ValueError could not convert string to float: '_1'
+'1__0' ValueError could not convert string to float: '1__0'
+'0x10' ValueError could not convert string to float: '0x10'
+'1,5' ValueError could not convert string to float: '1,5'
+'one' ValueError could not convert string to float: 'one'
+'١٢٣' 123.0
+'1e1.5' ValueError could not convert string to float: '1e1.5'
+'--1' ValueError could not convert string to float: '--1'
+'+-1' ValueError could not convert string to float: '+-1'
+'infinit' ValueError could not convert string to float: 'infinit'
+'nann' ValueError could not convert string to float: 'nann'
+'1.5f' ValueError could not convert string to float: '1.5f'
+'١.٥' 1.5

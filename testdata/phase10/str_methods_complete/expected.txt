@@ -1,0 +1,23 @@
+['The', 'quick', 'brown', 'fox', 'jumps', 'over', 'the', 'lazy', 'dog'] ['', '', 'The', 'quick', 'brown', 'fox\tjumps\nover', 'the', 'lazy', 'dog', '', ''] ['The', 'quick', 'brown fox\tjumps\nover the lazy dog  '] ['  The quick brown fox\tjumps\nover the', 'lazy', 'dog'] ['The quick br', 'wn f', 'x\tjumps\n', 'ver the lazy d', 'g'] ['The quick brown fox\tjumps\nover the lazy d', 'g'] ['  The quick brown fox\tjumps', 'over the lazy dog  ']   The quick brown fox   jumps
+ ('The', ' ', 'quick brown fox\tjumps\nover the lazy dog') ('The quick brown fox\tjumps\nover the lazy', ' ', 'dog')
+['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] ['a'] ['\n', '\n'] [] ['ab'] ['a\r\n', 'b']
+***abc**** abc --abcd- ab... ...ab -00012 +005 abc 000 00é
+1 4 4 -1 2 3 2 2 4 1 2
+heLLo heLlo -h-e-l-l-o-  ba JLLo xyc bb {97: '1', 98: '2'}
+True True False True True True True True True True False True False False True
+True False True False True False True True True False True
+['a', 'b;c'] ['a', 'b', ''] ['', 'a'] ['a', 'c'] ['a', '', 'b'] True True True True True c a
+ValueError empty separator
+TypeError center expected at least 1 argument, got 0
+TypeError replace() takes at least 2 positional arguments (1 given)
+ValueError substring not found
+TypeError startswith first arg must be str or a tuple of str, not int
+TypeError can only join an iterable
+TypeError sequence item 0: expected str instance, int found
+TypeError 'str' object cannot be interpreted as an integer
+TypeError encode() argument 'encoding' must be str, not int
+ValueError empty separator
+TypeError 'int' object is not subscriptable
+ValueError the first two maketrans arguments must have equal length
+TypeError 'str' object cannot be interpreted as an integer
+TypeError count() argument 1 must be str, not int

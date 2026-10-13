@@ -1,0 +1,13 @@
+00112233445566778899aabbccddeeff 00-11-22-33-44-55-66-77-88-99-aa-bb-cc-dd-ee-ff 0011:2233:4455:6677:8899:aabb:ccdd:eeff 001122 334455 667788 99aabb ccddee ff b'Hello' b'' bytearray(b'\xff\x00') True
+non-hexadecimal number found in fromhex() arg at position 1
+non-hexadecimal number found in fromhex() arg at position 0
+non-hexadecimal number found in fromhex() arg at position 1
+non-hexadecimal number found in fromhex() arg at position 4
+256 1 -1 -1 0 0 170141183460469231731687303715884105728 -170141183460469231731687303715884105728
+b'\x04\x00' b'\x00\x04\x00\x00' b'\xff\xff' b'\xff' b'' b'\x00@\x00\x00\x00\x00\x00\x00\x00\x00' b'\x00\x00\x00\x00\x00\x00\x00\x00\xc0\xff' b'\xff\xff\xff\xff\xff\xff\xff\xff'
+OverflowError int too big to convert
+OverflowError can't convert negative int to unsigned
+OverflowError int too big to convert
+ValueError byteorder must be either 'little' or 'big'
+ValueError byteorder must be either 'little' or 'big'
+[222, 173, 190, 239] ['0xde', '0xad'] DEADBEEF b'476' b'cba' True

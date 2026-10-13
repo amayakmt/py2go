@@ -1,0 +1,14 @@
+alphalowerasciiprintident delorxy
+alphalowerprintident öαβγ
+alphaprintident 日本語
+alphaupperasciiprintident HW
+alphaupperprintident ΑΒΓ
+asciiprint !-
+asciiprintident _
+digitdecimalnumericasciiprint 123
+digitdecimalnumericprint ٣٤٥
+digitnumericprint ²
+numericprint ½
+print 😀
+spaceasciiprint  
+True 16 [1, 2, 9, 16, 260, 264, 354, 1285] [' '] 32

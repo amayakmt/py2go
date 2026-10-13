@@ -1,0 +1,32 @@
+'hello' 'HELLO' 'hello' 'Hello' 'Hello' 'HELLO' 'hello' 5 5 False True False
+'HELLO' 'HELLO' 'hello' 'Hello' 'Hello' 'hello' 'hello' 5 5 True False False
+'Straße' 'STRASSE' 'straße' 'Straße' 'Straße' 'sTRASSE' 'strasse' 7 6 False False True
+'ǅ' 'Ǆ' 'ǆ' 'ǅ' 'ǅ' 'ǅ' 'ǆ' 1 1 False False True
+'ß' 'SS' 'ß' 'Ss' 'Ss' 'SS' 'ss' 2 1 False True False
+'ﬁ' 'FI' 'ﬁ' 'Fi' 'Fi' 'FI' 'fi' 2 1 False True False
+'İstanbul' 'İSTANBUL' 'i̇stanbul' 'İstanbul' 'İstanbul' 'i̇STANBUL' 'i̇stanbul' 8 9 False False True
+'ΑΣ' 'ΑΣ' 'ας' 'Ας' 'Ας' 'ας' 'ασ' 2 2 True False False
+'ΑΣΑ' 'ΑΣΑ' 'ασα' 'Ασα' 'Ασα' 'ασα' 'ασα' 3 3 True False False
+'ὈΔΥΣΣΕΎΣ' 'ὈΔΥΣΣΕΎΣ' 'ὀδυσσεύς' 'Ὀδυσσεύς' 'Ὀδυσσεύς' 'ὀδυσσεύς' 'ὀδυσσεύσ' 8 8 True False False
+'ŉ' 'ʼN' 'ŉ' 'ʼN' 'ʼN' 'ʼN' 'ʼn' 2 1 False True False
+'ǰ' 'J̌' 'ǰ' 'J̌' 'J̌' 'J̌' 'ǰ' 2 1 False True False
+'Ǆ' 'Ǆ' 'ǆ' 'ǅ' 'ǅ' 'ǆ' 'ǆ' 1 1 True False True
+'ǆ' 'Ǆ' 'ǆ' 'ǅ' 'ǅ' 'Ǆ' 'ǆ' 1 1 False True False
+'ꙋ' 'Ꙋ' 'ꙋ' 'Ꙋ' 'Ꙋ' 'Ꙋ' 'ꙋ' 1 1 False True False
+'ᾳ' 'ΑΙ' 'ᾳ' 'ᾼ' 'ᾼ' 'ΑΙ' 'αι' 2 1 False True False
+'ᾼ' 'ΑΙ' 'ᾳ' 'ᾼ' 'ᾼ' 'ᾼ' 'αι' 2 1 False False True
+'ΐ' 'Ϊ́' 'ΐ' 'Ϊ́' 'Ϊ́' 'Ϊ́' 'ΐ' 3 1 False True False
+'ẞ' 'ẞ' 'ß' 'ẞ' 'ẞ' 'ß' 'ss' 1 1 True False True
+'Ⅻ' 'Ⅻ' 'ⅻ' 'Ⅻ' 'Ⅻ' 'ⅻ' 'ⅻ' 1 1 True False True
+'ⓐ' 'Ⓐ' 'ⓐ' 'Ⓐ' 'Ⓐ' 'Ⓐ' 'ⓐ' 1 1 False True False
+'σς' 'ΣΣ' 'σς' 'Σς' 'Σς' 'ΣΣ' 'σσ' 2 2 False True False
+'Σ' 'Σ' 'σ' 'Σ' 'Σ' 'σ' 'σ' 1 1 True False True
+'ﬃ' 'FFI' 'ﬃ' 'Ffi' 'Ffi' 'FFI' 'ffi' 3 1 False True False
+'µ' 'Μ' 'µ' 'Μ' 'Μ' 'Μ' 'μ' 1 1 False True False
+'ÿ' 'Ÿ' 'ÿ' 'Ÿ' 'Ÿ' 'Ÿ' 'ÿ' 1 1 False True False
+'ĳ' 'Ĳ' 'ĳ' 'Ĳ' 'Ĳ' 'Ĳ' 'ĳ' 1 1 False True False
+'ŀ' 'Ŀ' 'ŀ' 'Ŀ' 'Ŀ' 'Ŀ' 'ŀ' 1 1 False True False
+'ᲀ' 'В' 'ᲀ' 'В' 'В' 'В' 'в' 1 1 False True False
+ǅ ǈ Hello World They'Re Bill'S X1Y2Z àéî ÀÉÎ True True True
+[False, True, True, False, False, False, True, True, False, True, False, False, False, True]
+True i̇ 2 σας ας  σ ας. asς

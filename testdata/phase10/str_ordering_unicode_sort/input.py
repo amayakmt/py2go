@@ -1,0 +1,10 @@
+words = ["banana", "Apple", "cherry", "apple", "Banana", "éclair", "Éclair", "zebra", "Zebra", "ångström", "naïve", "naive", "日本", "中文", "😀", "a", "A", "", " ", "10", "9", "2", "a b", "ab", "a-b", "a_b"]
+print(sorted(words))
+print(sorted(words, key=str.lower))
+print(sorted(words, key=str.casefold, reverse=True))
+print(sorted(words, key=lambda w: (len(w), w)))
+print(sorted(words, key=lambda w: [ord(c) for c in w]) == sorted(words))
+print(min(words), max(words), min(words, key=len), max(words, key=len), "a" < "b" < "c", "Z" < "a", "é" > "z", "日" > "z", "😀" > "日", "abc" < "abd", "abc" < "abcd", "" < "a", "a" * 3 < "a" * 4)
+print([w for w in words if w > "m"][:5], [w for w in words if "a" <= w < "c"], [ord(w[0]) for w in words if w][:12], [w.encode("utf-8") for w in words[-6:-3]], [w.lower() == w.casefold() for w in ("ß", "SS", "İ")])
+import_pairs = sorted(zip(words[:6], range(6)), key=lambda p: p[0].lower())
+print(import_pairs, sorted(set(w[:1] for w in words if w)), sorted(words)[::-1][:3], words.index("日本"), sorted(["b", "a", "C"], key=str.swapcase))

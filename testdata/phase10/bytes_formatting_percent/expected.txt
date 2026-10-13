@@ -1,0 +1,9 @@
+b'5 items' b'a-b' b'    1|2    |00003' b'ff FF 10 A' b"b'x'" b'ok' b'%' b'3.14' b'ba' b'ok'
+TypeError %b requires a bytes-like object, or an object that implements __bytes__, not 'str'
+TypeError %d format: a real number is required, not str
+TypeError not enough arguments for format string
+TypeError not all arguments converted during bytes formatting
+ValueError unsupported format character 'y' (0x79) at index 1
+OverflowError %c arg not in range(256)
+TypeError %c requires an integer in range(256) or a single byte
+0 b'   ab|cd   |' b'x' b'7' b'+3' b' 3' b'1.234568e+04' b'1e-05'

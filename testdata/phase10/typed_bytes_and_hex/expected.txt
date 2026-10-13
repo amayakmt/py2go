@@ -1,0 +1,3 @@
+0001feff68656c6c6f 18 b'```' b'\xfe\xffhe' hello 9 4 2 b'\x00\x01\xfe\xffHELLO' b'hello!' b'\x00\x01\xfe\xffhello\x00\x01\xfe\xffhello' b'\xfe\x01\x00' [0, 1, 254, 255] 255 1042 True True
+bytearray(b'Abcdef!') 8 b'Abcdef!?' Abcdef!? 416263646566213f 63 bytearray(b'Abcdef!') 3 bytearray(b'bc') True [33, 65, 98] b'!Abcdef'
+[b'apple', b'fig', b'pear'] [b'fig', b'pear', b'apple'] b'pear,fig,apple' ['Pear', 'Fig', 'Apple'] {b'pear': 4, b'fig': 3, b'apple': 5} True 2 b'pear' b'fig'

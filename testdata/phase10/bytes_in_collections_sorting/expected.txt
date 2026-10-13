@@ -1,0 +1,7 @@
+[b'', b'Zed', b'a\x00', b'apple', b'apple', b'fig', b'pear', b'\xff'] [b'\xff', b'pear', b'fig', b'apple', b'apple', b'a\x00', b'Zed', b''] [b'', b'\xff', b'a\x00', b'fig', b'Zed', b'pear', b'apple', b'apple'] [b'', b'Zed', b'a\x00', b'apple', b'fig', b'pear', b'\xff'] 2 2 True b'\xff' b''
+{b'y': [b'a'], b'z': {b'k': b'v'}, b'w': 1} [b'x', b'y', b'z', b'w'] [(b'w', 1), (b'x', 1), (b'y', [b'a']), (b'z', {b'k': b'v'})] True 1 3
+[b'a', b'b'] 2 True True True
+(b'pear', b'apple', b'fig') True True (b'pear', b'apple', b'fig', b'!') (b'pear', b'apple', b'fig', b'pear', b'apple', b'fig')
+[bytearray(b'a'), bytearray(b'b')] [bytearray(b'b'), bytearray(b'a')] True True ['b', 'a']
+unhashable type: 'bytearray'
+'<' not supported between instances of 'bytearray' and 'str'

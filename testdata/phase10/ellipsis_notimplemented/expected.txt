@@ -1,0 +1,10 @@
+Ellipsis Ellipsis Ellipsis ellipsis True True True True [Ellipsis] (Ellipsis, 1) 1 True Ellipsis Ellipsis
+NotImplemented NotImplemented NotImplementedType True True 0 [NotImplemented] NotImplemented
+True False False True True V(3) V(4) 0
+'<' not supported between instances of 'V' and 'int'
+'<' not supported between instances of 'int' and 'V'
+unsupported operand type(s) for +: 'V' and 'str'
+unsupported operand type(s) for +: 'V' and 'str'
+'<=' not supported between instances of 'V' and 'V'
+unsupported operand type(s) for *: 'V' and 'int'
+(1, Ellipsis, 2) [Ellipsis, None, NotImplemented] ok

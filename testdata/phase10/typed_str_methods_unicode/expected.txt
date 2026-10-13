@@ -1,0 +1,3 @@
+'héllo wörld straße ǆungla' ['Héllo', 'Wörld', 'Straße', 'ǅungla'] 6   HÉLLO   WÖRLD  STRASSE  ǄUNGLA   héllo   wörld  strasse  ǆungla   hÉLLO   wörld  STRASSE  ǅUNGLA     Héllo   Wörld  Straße  ǅungla   False 33 29 b'H\xc3\xa9llo   W\xc3\x96RLD  stra\xc3\x9fe  \xc7\x85ungla' 37 10 3
+àéîõü ÀÉÎÕÜ True False False üõÎÉÀ ÉÎ ··ÀÉÎõü·· ÀÉÎõü-- --ÀÉÎõü 192 à ['0xc0', '0xc9', '0xce', '0xf5', '0xfc'] ['À', 'É', 'Î', 'õ', 'ü'] ü À c000c900ce00f500fc00 b'\xc0\xc9\xce\xf5\xfc'
+['a', 'b', 'c', 'd'] d,c,b,a d|c|b|a ('a,b', ';', 'c d') ('a', ',', 'b;c d') ['a,b;c d'] a b c d 000a,b;c d a,b;c d True True a|   a,|a,b  |    'a,b;c d'|     a,b;c d|  a,b;c d   |a,b;c d*****|

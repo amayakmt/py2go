@@ -1,0 +1,7 @@
+Hi Zoë (31): Café au lait costs     3.50|1,180,591,620,717,411,303,424|12.3%|0x400000000000000000|***Zoë***
+no vars 118059162071741130342411805916
+KeyError 'missing'
+KeyError 'zip'
+ValueError substring not found
+ValueError Negative zero coercion (z) not allowed in integer format specifier
+  abcdef "q'z" ab ---x--- 1-2-v 1,234,567.891 1,234,567.89 -003.142 +5| 5|ff|FF|10|101|a

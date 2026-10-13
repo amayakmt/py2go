@@ -1,0 +1,15 @@
+b'hello world' 11 104 100 b'ell' b'dlrow olleh' b'hlowrd' int bytes [104, 101, 108] (97, 98) b'\x00\x00\x00' b'ABC' b'xyz' b'\xc3\xa9' b'\x00\x01\x02\x03\x04'
+True True True True True True True 99 97 [97, 98, 99] 294 True True True
+b'\x00\x01\xff\'"\\\n\t\r' b"it's" b'say "hi"' b'\'"\'' b'\x7f\x80' b'abc' b'hello world' b'hello world' [b'a', b'b'] {b'k': b'v'} (b'x',)
+b'abcdef' b'ababab' b'ababab' b'' b'' b'hello world!' bytearray(b'!hello world')
+IndexError index out of range
+TypeError can't concat str to bytes
+TypeError can only concatenate str (not "bytes") to str
+TypeError can't multiply sequence by non-int of type 'float'
+ValueError bytes must be in range(0, 256)
+ValueError bytes must be in range(0, 256)
+ValueError negative count
+TypeError string argument without an encoding
+TypeError 'str' object cannot be interpreted as an integer
+TypeError unsupported operand type(s) for +: 'int' and 'bytes'
+b'abcdef' True 1 False True b'1ab2ab3' b'' b'A,B'

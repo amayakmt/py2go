@@ -1,0 +1,13 @@
+True 61c3a9e282acf09f9880e697a5e69cace8aa9e007edfbfe0a080efbfbff48fbfbf ['0x61', '0xe9', '0x20ac', '0x1f600', '0x65e5', '0x672c', '0x8a9e', '0x0', '0x7e', '0x7ff', '0x800', '0xffff', '0x10ffff'] True 33 13
+0x7f 7f 7f 1
+0x80 c280 c280 2
+0x7ff dfbf dfbf 2
+0x800 e0a080 e0a080 3
+0xffff efbfbf efbfbf 3
+0x10000 f0908080 f0908080 4
+0x10ffff f48fbfbf f48fbfbf 4
+builtin b'\xff' 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
+builtin b'\xc3' 'utf-8' codec can't decode byte 0xc3 in position 0: unexpected end of data
+builtin b'\xe2\x82' 'utf-8' codec can't decode bytes in position 0-1: unexpected end of data
+builtin b'\x80' 'utf-8' codec can't decode byte 0x80 in position 0: invalid start byte
+builtin b'\xf0\x9f\x98' 'utf-8' codec can't decode bytes in position 0-2: unexpected end of data

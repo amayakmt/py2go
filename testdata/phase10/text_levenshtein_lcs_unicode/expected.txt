@@ -1,0 +1,9 @@
+kitten sitting 3 ittn 3 6 7
+flaw lawn 2 law 2 4 4
+ abc 3  3 0 3
+naïve naive 1 nave 1 6 5
+日本語 日本人 1 日本 1 9 9
+😀a😀 a😀b 2 a😀 2 9 6
+straße strasse 2 strae 0 7 7
+abc abc 0 abc 0 3 3
+['quick', 'jumps', 'lazy', 'the'] lazy 28 [0, 1, 2, 3, 4]

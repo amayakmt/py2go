@@ -1,0 +1,21 @@
+ZeroDivisionError True True False False
+OverflowError True True False False
+FloatingPointError True True False False
+ArithmeticError True True False False
+ValueError True False True False
+UnicodeDecodeError True False True False
+UnicodeEncodeError True False True False
+UnicodeError True False True False
+LookupError True False False True
+IndexError True False False True
+KeyError True False False True
+TypeError True False False False
+AttributeError True False False False
+OSError True False False False
+RecursionError True False False False
+MemoryError True False False False
+StopIteration True False False False
+AssertionError True False False False
+['arith:ZeroDivisionError', 'arith:OverflowError', 'value', 'unicode:UnicodeDecodeError', 'unicode:UnicodeEncodeError', 'lookup:IndexError', 'lookup:KeyError', 'type', 'arith:OverflowError', 'value', 'other:AttributeError', 'none', 'type', 'value', 'lookup:LookupError']
+wrapped ZeroDivisionError division by zero
+NumErr ('custom', 42) ('custom', 42) NumErr('custom', 42)

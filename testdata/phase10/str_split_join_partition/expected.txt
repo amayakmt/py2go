@@ -1,0 +1,13 @@
+['alpha', 'beta', 'gamma', 'delta'] ['', '', 'alpha', '', 'beta\tgamma\n\ndelta', '', ''] ['alpha', 'beta', 'gamma\n\ndelta  '] ['  alpha  beta', 'gamma', 'delta'] ['  alpha  beta\tgamma', '', 'delta  '] ['alpha', 'beta\tgamma\n\ndelta'] ['a', 'b', '', 'c'] ['a', 'b,,c'] ['a,b,', 'c'] ['', ''] [''] [] ['', ''] ['a', 'b', 'c'] ['a', 'c']
+ValueError empty separator
+TypeError must be str or None, not int
+ValueError empty separator
+TypeError sequence item 0: expected str instance, int found
+TypeError can only join an iterable
+ValueError empty separator
+TypeError 'str' object cannot be interpreted as an integer
+('a', '-', 'b-c') ('a-b', '-', 'c') ('abc', '', '') ('', '', 'abc') ('', 'abc', '') ('', '', '') ('', '-', '-')
+a
+b ab x-y-z 0, 1, 2, 3  only 1ab2ab3 t u k,j a/b
+['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'] ['a\n', 'b\n'] ['a', '', 'b'] [''] [] ['ab\r\n'] ['x']
+['one', 'two  three'] ['k', 'v=w'] ['k=v', 'w'] ['lead'] ['trail'] ['a b c d'] ['a b c d'] ['a', 'b']

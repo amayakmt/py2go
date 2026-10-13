@@ -1,0 +1,28 @@
+2 0 1
+2 1 2
+2 10 1024
+2 100 1267650600228229401496703205376
+3 40 12157665459056928801
+-2 63 -9223372036854775808
+-2 64 18446744073709551616
+10 25 10000000000000000000000000
+7 1 7
+0 5 0
+1 1000000 1
+-1 1000000 1
+-1 1000001 -1
+2 -1 0.5
+2 -10 0.0009765625
+10 -3 0.001
+-2 -3 -0.125
+3 -2 0.1111111111111111
+24 688423210 246336683 2 -2 1 0 0
+4 1 12 18633540 4
+ValueError base is not invertible for the given modulus
+ValueError base is not invertible for the given modulus
+ValueError base is not invertible for the given modulus
+ValueError pow() 3rd argument cannot be 0
+TypeError pow() 3rd argument not allowed unless all arguments are integers
+TypeError pow() 3rd argument not allowed unless all arguments are integers
+1 True 5 286138 1
+101720494617005859

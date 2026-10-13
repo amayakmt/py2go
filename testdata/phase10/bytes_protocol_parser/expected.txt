@@ -1,0 +1,5 @@
+368 b'PK\x03\x04\x04\x00\x05a.txt' 00013915
+[('a.txt', 5, b'hell'), ('日本.bin', 10, b'\x00\x01\x02\x03'), ('empty', 0, b''), ('big', 300, b'\xff\xff\xff\xff')] True
+False
+bad magic
+IndexError

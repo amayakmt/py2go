@@ -1,0 +1,11 @@
+True True True [P(0, 5), P(1, 2)] 42 -2 True 517
+unhashable type: 'Q'
+unhashable type: 'R'
+unhashable type: 'list'
+unhashable type: 'dict'
+unhashable type: 'set'
+unhashable type: 'list'
+True
+unhashable type: 'bytearray'
+True
+True -2 -2 0 10 0 1 -2 5 1 0 True True True True True True True True

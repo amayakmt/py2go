@@ -1,0 +1,18 @@
+frozenset({1, 2, 3}) 3 True False [1, 2, 3] ['a', 'b', 'c'] frozenset() frozenset({1}) frozenset({(1, 2)}) frozenset False True
+frozenset({1, 2, 3, 9}) frozenset({1, 2}) frozenset({2, 3}) frozenset({8, 2, 3}) frozenset set {1, 2} frozenset({1, 2, 3, 4}) frozenset({1, 2, 3, 5, 6}) frozenset({1, 2}) frozenset({2, 3}) frozenset({3, 10, 2}) True
+True True True True True False True True True True True True False
+{frozenset({1, 2, 3}): 'b'} 1 True True True frozenset({frozenset(), frozenset({1})})
+{1, 2, 3} frozenset({1, 2}) frozenset [0, 1, 4] [1, 2, 3] [2, 4, 6] 3 1 6 True True [3, 2, 1] 4
+AttributeError 'frozenset' object has no attribute 'add'
+AttributeError 'frozenset' object has no attribute 'remove'
+AttributeError 'frozenset' object has no attribute 'discard'
+AttributeError 'frozenset' object has no attribute 'pop'
+AttributeError 'frozenset' object has no attribute 'clear'
+TypeError unhashable type: 'list'
+TypeError 'int' object is not iterable
+TypeError 'frozenset' object is not subscriptable
+TypeError unsupported operand type(s) for +: 'frozenset' and 'frozenset'
+TypeError '<' not supported between instances of 'frozenset' and 'int'
+TypeError unsupported operand type(s) for |: 'frozenset' and 'list'
+TypeError 'int' object is not iterable
+TypeError unhashable type: 'set'

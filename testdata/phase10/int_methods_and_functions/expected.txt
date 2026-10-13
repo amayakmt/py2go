@@ -1,0 +1,14 @@
+71 8 0 8 65 65
+8 70 3 0
+(10, 1) (1180591620717411303424, 1) True 5 5 0 5 1
+b'\x04\x00' b'\x00\x04' b'\xff' b'\xff\xff' b'\x00@\x00\x00\x00\x00\x00\x00\x00\x00'
+1024 4 -1 65535 0
+OverflowError int too big to convert
+OverflowError can't convert negative int to unsigned
+ValueError byteorder must be either 'little' or 'big'
+1267650600228229401496703205376 376 5 2 -3 0 9 0.25 2
+ValueError pow() 3rd argument cannot be 0
+ValueError base is not invertible for the given modulus
+TypeError pow() 3rd argument not allowed unless all arguments are integers
+1180591620717411303424 (-4, 1) (-4, -1) 1180591620717411303424 -1180591620717411303000 1234600 1200 1400 20 20
+499999500000 13835058055282163712 9 3 int 1

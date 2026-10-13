@@ -1,0 +1,21 @@
+b'Hello, World! hello' b'Hello, World! hello  ' b'  Hello, World! hello' b'ello, World! hello' b'  HELLO, WORLD! HELLO  ' b'  hello, world! hello  ' b'  Hello, World! Hello  ' b'  hELLO, wORLD! HELLO  ' b'Hello, world! hello' 5 4 24
+6 20 -1 9 -1 True True True 3 16
+[b'Hello,', b'World!', b'hello'] [b'  Hello', b' World! hello  '] [b'  He', b'', b'o, World! hello  '] [b'  Hello, World! he', b'', b'o  '] [b'a', b'b', b'', b'c'] [b'a', b'b'] [b'a', b'b c'] [b'a b', b'c'] [b'', b'']
+b'a-b-c' b'xy' b'' b'1ab2ab3' b'aXXc' b'bba' b'-a-b-c-'
+(b'a', b'b', b'c') (b'abc', b'', b'') (b'a-b', b'-', b'c') b'**abc**' b'abc  ' b'..abc' b'00042' b'-00042' [b'line1', b'line2', b'line3'] [b'a\n', b'b'] b'a   b'
+True True True True True True True True False False False
+b'xyz' b'heo' b'bc' b'ab' b'abc'
+café café café abc  ab a
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xc3 in position 3: unexpected end of data
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xc3 in position 0: invalid continuation byte
+UnicodeDecodeError 'utf-8' codec can't decode bytes in position 0-1: unexpected end of data
+UnicodeDecodeError 'ascii' codec can't decode byte 0xc3 in position 3: ordinal not in range(128)
+LookupError unknown encoding: nope
+TypeError argument should be integer or bytes-like object, not 'str'
+ValueError empty separator
+TypeError sequence item 0: expected a bytes-like object, int found
+ValueError subsection not found
+ValueError empty separator
+TypeError a bytes-like object is required, not 'str'
+��(ab (ab \xffab caf���

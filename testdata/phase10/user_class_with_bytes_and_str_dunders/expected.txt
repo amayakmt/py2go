@@ -1,0 +1,3 @@
+b'\x07\x00\x05hello' 07000568656c6c6f <Packet 7 b'hello'> Packet(7, b'hello') 5 [104, 101, 108, 108, 111] True False 104 b'el' 111 b'\x07\x00\x05hello\x07\x00\x05hello' 3
+True True [101, 104, 108, 108, 111] 111 532 b'hello' bytearray(b'\x07\x00\x05hello') <Packet 7 b'hello'> <Packet 7 b'hello'>|Packet(7, b'hello') ["<Packet 7 b'hello'>", "<Packet 0 b'\\x00'>"]
+hello b'\x07' 5 b'ab'

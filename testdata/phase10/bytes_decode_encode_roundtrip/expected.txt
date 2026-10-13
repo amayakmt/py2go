@@ -1,0 +1,30 @@
+'' b'' fffe  b'' True True 0 0
+'abc' b'abc' fffe610062006300 610000006200000063000000 b'abc' True True 3 3
+'héllo' b'h\xc3\xa9llo' fffe6800e9006c006c006f00 68000000e90000006c0000006c0000006f000000 b'h\xe9llo' True True 6 5
+'日本語' b'\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e' fffee5652c679e8a e56500002c6700009e8a0000 'latin-1' codec can't encode characters in position 0-2: ordinal not in range(256) True True 9 3
+'😀 emoji' b'\xf0\x9f\x98\x80 emoji' fffe3dd800de200065006d006f006a006900 00f6010020000000650000006d0000006f0000006a00000069000000 'latin-1' codec can't encode character '\U0001f600' in position 0: ordinal not in range(256) True True 10 7
+'a\x00b' b'a\x00b' fffe610000006200 610000000000000062000000 b'a\x00b' True True 3 3
+'ÿĀ' b'\xc3\xbf\xc4\x80' fffeff000001 ff00000000010000 'latin-1' codec can't encode character '\u0100' in position 1: ordinal not in range(256) True True 4 2
+'tab\there' b'tab\there' fffe74006100620009006800650072006500 7400000061000000620000000900000068000000650000007200000065000000 b'tab\there' True True 8 8
+utf-8 b'h\xc3\xa9\xc3\xa9' b'abc'
+UTF8 b'h\xc3\xa9\xc3\xa9' b'abc'
+utf_8 b'h\xc3\xa9\xc3\xa9' b'abc'
+ascii ERR 'ascii' codec can't encode characters in position 1-2: ordinal not in range(128)
+latin1 b'h\xe9\xe9' b'abc'
+iso-8859-1 b'h\xe9\xe9' b'abc'
+utf-16-le b'h\x00\xe9\x00\xe9\x00' b'a\x00b\x00c\x00'
+utf-16-be b'\x00h\x00\xe9\x00\xe9' b'\x00a\x00b\x00c'
+utf-32 b'\xff\xfe\x00\x00h\x00\x00\x00\xe9\x00\x00\x00\xe9\x00\x00\x00' b'\xff\xfe\x00\x00a\x00\x00\x00b\x00\x00\x00c\x00\x00\x00'
+utf-8-sig b'\xef\xbb\xbfh\xc3\xa9\xc3\xa9' b'\xef\xbb\xbfabc'
+US-ASCII ERR 'ascii' codec can't encode characters in position 1-2: ordinal not in range(128)
+latin-1 b'h\xe9\xe9' b'abc'
+b'' b'?' b'\\xe9\\u20ac' b'&#233;&#8364;' b'\xe9'
+café café caf� caf caf\xe9  hi True
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xe9 in position 3: unexpected end of data
+UnicodeDecodeError 'ascii' codec can't decode byte 0xff in position 0: ordinal not in range(128)
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xc3 in position 0: unexpected end of data
+UnicodeDecodeError 'utf-8' codec can't decode bytes in position 0-1: unexpected end of data
+LookupError unknown encoding: nope
+LookupError unknown encoding: nope
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xf0 in position 0: invalid continuation byte
+UnicodeEncodeError 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)

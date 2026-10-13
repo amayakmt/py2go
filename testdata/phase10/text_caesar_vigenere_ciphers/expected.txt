@@ -1,0 +1,9 @@
+0 The Quick Brown Fox Jumps Over The Lazy Dog! Ünïcödé stays. True
+3 Wkh Txlfn Eurzq Ira Mxpsv Ryhu Wkh Odcb Grj! Üqïfögé vwdbv. True
+13 Gur Dhvpx Oebja Sbk Whzcf Bire Gur Ynml Qbt! Üaïpöqé fgnlf. True
+25 Sgd Pthbj Aqnvm Enw Itlor Nudq Sgd Kzyx Cnf! Ümïböcé rszxr. True
+-5 Ocz Lpdxf Wmjri Ajs Ephkn Jqzm Ocz Gvut Yjb! Üiïxöyé novtn. True
+100 Pda Mqeyg Xnksj Bkt Fqilo Kran Pda Hwvu Zkc! Üjïyözé opwuo. True
+Elq Ehtgw Pezaz Tbi Ngacd Shse Elq Znkc Pct! Üyïgöpé gglce. True
+[('o', 4), ('e', 3), ('s', 3), ('t', 3), ('a', 2), ('c', 2)] 30
+ThE QUIck BrOwn FOx JUmps OvEr ThE LAzy DOg! Ünïcödé stAys. abcdefghijklmnopqrstuvwxyzéïöü The Quick Brown Fox Jumps Over The Lazy Dog! ?n?c?d? stays. ncd stays.

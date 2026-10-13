@@ -1,0 +1,15 @@
+utf-16 fffe4100ac203dd800de 10 True
+utf-16-le 4100ac203dd800de 8 True
+utf-16-be 004120acd83dde00 8 True
+utf-32 fffe000041000000ac20000000f60100 16 True
+utf-32-le 41000000ac20000000f60100 12 True
+utf-32-be 00000041000020ac0001f600 12 True
+utf-8 41e282acf09f9880 8 True
+utf-8-sig efbbbf41e282acf09f9880 11 True
+A A A True A A True
+utf-16 'utf-16-le' codec can't decode byte 0x41 in position 0: truncated data
+utf-16-le 'utf-16-le' codec can't decode bytes in position 0-1: unexpected end of data
+utf-16-le 'utf-16-le' codec can't decode bytes in position 0-1: illegal encoding
+utf-32-le 'utf-32-le' codec can't decode bytes in position 0-2: truncated data
+utf-32-le 'utf-32-le' codec can't decode bytes in position 0-3: code point not in range(0x110000)
+b'A\x00\xe9\x00' d83dde00 3dd800de 00d848df 1 2

@@ -1,0 +1,48 @@
+'0' 0 int
+'-0' 0 int
+'+7' 7 int
+'007' 7 int
+'1_000' 1000 int
+'  42  ' 42 int
+'\n-5\t' -5 int
+'٣٤' 34 int
+'１２３' 123 int
+'12345678901234567890123456789 123456789012345678901234567890 int
+'-9999999999999999999999999999 41 int
+'00000000000000000000000000000 0 int
+'10000000000000000000000000000 101 int
+'' ValueError invalid literal for int() with base 10: ''
+' ' ValueError invalid literal for int() with base 10: ' '
+'1.5' ValueError invalid literal for int() with base 10: '1.5'
+'1e3' ValueError invalid literal for int() with base 10: '1e3'
+'0x10' ValueError invalid literal for int() with base 10: '0x10'
+'1 2' ValueError invalid literal for int() with base 10: '1 2'
+'--1' ValueError invalid literal for int() with base 10: '--1'
+'+-1' ValueError invalid literal for int() with base 10: '+-1'
+'1_' ValueError invalid literal for int() with base 10: '1_'
+'_1' ValueError invalid literal for int() with base 10: '_1'
+'1__0' ValueError invalid literal for int() with base 10: '1__0'
+'0b1' ValueError invalid literal for int() with base 10: '0b1'
+'١٢a' ValueError invalid literal for int() with base 10: '١٢a'
+'½' ValueError invalid literal for int() with base 10: '½'
+'²' ValueError invalid literal for int() with base 10: '²'
+'1,000' ValueError invalid literal for int() with base 10: '1,000'
+'- 1' ValueError invalid literal for int() with base 10: '- 1'
+'٣.٤' ValueError invalid literal for int() with base 10: '٣.٤'
+'\x00' ValueError invalid literal for int() with base 10: '\x00'
+'12\x00' ValueError invalid literal for int() with base 10: '12\x00'
+ff 16 255
+FF 16 255
+0xff 16 255
+0XFF 0 255
+-0b101 0 -5
+0o777 8 511
+777 8 511
+zz 36 1295
+Zz 36 1295
+1_0 2 2
+102 2 ValueError invalid literal for int() with base 2: '102'
+0b 0 ValueError invalid literal for int() with base 0: '0b'
+111111111111 2 22
+999999999999 10 30
+-fffffffffff 16 38

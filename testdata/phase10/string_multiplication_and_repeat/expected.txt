@@ -1,0 +1,12 @@
+ababab ababab    éééé ('a', 'a', 'a') [0, 0, 0] [[0], [0]] b'xxx' bytearray(b'yy') [] (1, 2, 1, 2) ab ab 
+TypeError can't multiply sequence by non-int of type 'float'
+TypeError can't multiply sequence by non-int of type 'str'
+TypeError can't multiply sequence by non-int of type 'NoneType'
+TypeError can't multiply sequence by non-int of type 'float'
+OverflowError cannot fit 'int' into an index-sized integer
+OverflowError cannot fit 'int' into an index-sized integer
+OverflowError cannot fit 'int' into an index-sized integer
+skip
+TypeError can't multiply sequence by non-int of type 'str'
+TypeError unsupported operand type(s) for *: 'dict' and 'int'
+[[1, 0, 0], [0, 0, 0]] [[1, 0, 0], [1, 0, 0]] -------------------- | ababcdcd

@@ -1,0 +1,11 @@
+[b'ab', b'cd', b'ef'] [b'ab', b'cd\t\nef  '] [b'  ab  cd', b'ef'] [b'', b'', b'ab', b'', b'cd\t\nef', b'', b''] [b'', b'ab', b'cd\t\nef', b''] b'ab  cd\t\nef' b'ab  cd\t\nef  ' b'  ab  cd\t\nef' b'ab  cd\t\nef' b'ab' b'abc' b''
+[b'a', b'b', b'', b'c'] [b'a', b'b,,c'] [b'a,b,', b'c'] [b'', b''] [b''] [b'', b''] [b'a', b'b'] [b'abc'] []
+[b'line1', b'line2', b'line3', b'line4'] [b'line1\n', b'line2\r\n', b'line3\n'] [] [b'', b''] [b'a\x0bb\x0cc\x1cd']
+(b'key', b'=', b'value=x') (b'key=value', b'=', b'x') (b'nothing', b'', b'') (b'', b'', b'nothing') (b'', b'=', b'')
+ValueError empty separator
+TypeError a bytes-like object is required, not 'str'
+TypeError a bytes-like object is required, not 'str'
+ValueError empty separator
+TypeError a bytes-like object is required, not 'str'
+TypeError sequence item 0: expected a bytes-like object, str found
+TypeError can only join an iterable

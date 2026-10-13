@@ -1,0 +1,4 @@
+{b'apple': 5, b'banana': 6, b'cherry': 6, b'date': 4} {b'a': b'apple', b'b': b'banana', b'c': b'cherry', b'd': b'date'} {'apple': b'APPLE', 'banana': b'BANANA', 'cherry': b'CHERRY', 'date': b'DATE'} {b'apple': 5, b'banana': 6, b'cherry': 6} {b'apple': 0, b'banana': 1, b'cherry': 2, b'date': 3} {b'x': 2} 4 False [b'apple', b'banana', b'cherry', b'date'] [b'date', b'apple', b'banana', b'cherry'] b'banana'
+{5: [b'apple'], 6: [b'banana', b'cherry'], 4: [b'date']} {5: b'apple', 6: b'banana+cherry', 4: b'date'} [(4, [b'date']), (5, [b'apple']), (6, [b'banana', b'cherry'])] 21 b'applebananacherrydate' [b'elppa', b'ananab', b'yrrehc', b'etad'] [b'Apple', b'Banana', b'Cherry', b'Date'] True 12
+{(1, b'a'): 'x', (2, b'b'): 'y', (1, b'a', 1180591620717411303424): 'z'} x z True [(1, b'a'), (2, b'b'), (1, b'a', 1180591620717411303424)]
+{b'm': 1, b'i': 4, b's': 4, b'p': 2} [(b'i', 4), (b's', 4), (b'p', 2), (b'm', 1)] {'m': 1, 'i': 4, 's': 4, 'p': 2}

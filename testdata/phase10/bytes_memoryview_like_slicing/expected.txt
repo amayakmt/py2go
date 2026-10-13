@@ -1,0 +1,5 @@
+b'\x00\x01\x02\x03\x04\x05\x06\x07' 18191a1b1c1d1e1f 4 True [28, 92, 156, 220]
+bytearray(b'\x07\x06\x05\x04\x03\x02\x01\x00\x0f\x0e\r\x0c\x0b\n\t\x08') 07060504 03020100 0f0e0d0c 0b0a0908
+0xcafebabe 7 b'payload' payload b'oad' b'payl'
+99162322 131194896 0x314bf5dd
+['00', '01', '7f', '8001', 'ac02', '808001', '808080808020']

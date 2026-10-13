@@ -1,0 +1,11 @@
+b'' 0 True
+b'Zg==' 4 True
+b'Zm8=' 4 True
+b'Zm9v' 4 True
+b'Zm9vYg==' 8 True
+b'Zm9vYmE=' 8 True
+b'Zm9vYmFy' 8 True
+b'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwd' 344 True
+00000000  48 65 6c 6c 6f 2c 20 57 6f 72 6c 64 21 00 01 02  |Hello, World!...|
+00000010  20 ff fe 20 61 6e 64 20 6d 6f 72 65 20 62 79 74  | .. and more byt|
+00000020  65 73 20 68 65 72 65                             |es here|

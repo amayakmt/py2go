@@ -1,0 +1,7 @@
+2 5 -1 0.5 1 -1 -2 -1 8 1 3 False 1 0 1 1.0 (1+0j) True False True True 0 1 0
+True True False True bool int bool bool bool int int bool
+2 3 [True, True, True] 2 b 10 {True: 'b'} x 1 3 True True [0, False, True, 1] True True 1 (0, 1) 1 0b1 0x1 1 True     1| True 1 True True True
+False False False False False False False False False True True True True True True True True False False False True True True 0
+1 1 0 1 1 1 b'\x01' bool 1 1 [True, False] True False True False True False
+AttributeError 'bool' object has no attribute 'foo'
+AttributeError type object 'int' has no attribute 'nope'

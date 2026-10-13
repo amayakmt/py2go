@@ -1,0 +1,5 @@
+for n in (0, 1, -1, 7, -7, 255, 256, -256, 2 ** 31, 2 ** 32 - 1, 2 ** 63, 2 ** 64, -2 ** 64, 10 ** 30, 12345678901234567890123):
+    print(n, n.bit_length(), n.bit_count(), n.real, n.imag, n.numerator, n.denominator, n.conjugate(), n.as_integer_ratio(), n.__index__() if hasattr(n, "__index__") else n, abs(n).bit_length() == n.bit_length(), n.to_bytes(max(1, (n.bit_length() + 8) // 8), "big", signed=True).hex())
+print((1).__add__(2) if hasattr(1, "__add__") else 3, int.__name__, (5).__class__.__name__ if False else "int", int("12"), int(12.9), int(-12.9), int(True), int(" 7 "), int("1_0"), int(b"42"), int(bytearray(b"9")), int("0"), int("-0"), int("+5"))
+print(divmod(2 ** 70, 3), divmod(-2 ** 70, 3), divmod(2 ** 70, -3), divmod(-2 ** 70, -3), divmod(2 ** 70, 2 ** 35), divmod(7, 2 ** 70), divmod(-7, 2 ** 70), 2 ** 70 // 7, 2 ** 70 % 7, -2 ** 70 // 7, -2 ** 70 % 7)
+print(pow(2, 100), pow(2, 100, 1000), pow(-3, 5), pow(0, 0), abs(-2 ** 70), -(-2 ** 63), round(2 ** 70), round(2 ** 70, -20), round(-15, -1), round(25, -1), round(35, -1), 2 ** 70 * 0.5, 2 ** 70 / 2 ** 69, 2 ** 70 // 0.5, 7 ** 0, (-7) ** 0, 0 ** 5)

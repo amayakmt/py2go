@@ -1,0 +1,10 @@
+{97: 120, 98: 121, 99: 122} {97: '1', 98: None, 233: 'ee', 99: 100} {97: 99, 98: 100, 101: None} xxyyzzee bc aBBc abc heo ab😀
+ValueError the first two maketrans arguments must have equal length
+TypeError if you give only one argument to maketrans it must be a dict
+ValueError string keys in translate table must be of length 1
+TypeError maketrans() argument 2 must be str, not int
+TypeError maketrans() argument 3 must be str, not int
+ValueError character mapping must be in range(0x110000)
+ValueError character mapping must be in range(0x110000)
+TypeError 'int' object is not subscriptable
+th qck brwn fx He001, W1r0d! impz True 3

@@ -1,0 +1,6 @@
+123 123.45 True False Money(-12345) Money(12345) Money(5) Money(12400) Money(12545) 123.45 USD 123.5 USD 123.45 USD Money(12345) Money(12345) Money(12300)
+[Money(1), Money(2), Money(3)] Money(1) Money(3) True True True
+TypeError int() argument must be a string, a bytes-like object or a real number, not 'object'
+TypeError float() argument must be a string or a real number, not 'object'
+ValueError invalid literal for int() with base 10: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+AttributeError 'int' object has no attribute 'cents'

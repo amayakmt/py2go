@@ -1,0 +1,19 @@
+a,b a,b k a,b,c 0,1,2  x cba 日é本 b'a,b' bytearray(b'a,b') 0-1-2-3
+sequence item 0: expected str instance, int found
+sequence item 0: expected str instance, bytes found
+sequence item 0: expected a bytes-like object, str found
+can only join an iterable
+can only join an iterable
+sequence item 1: expected str instance, NoneType found
+sequence item 0: expected a bytes-like object, int found
+sequence item 0: expected str instance, list found
+ab ab b'ab' b'ab' bytearray(b'ab') [1, 2] (1, 2) xxy 12.5NoneTrue11805916207174113034241jb'b'[1]{1}(1,)
+can only concatenate str (not "int") to str
+unsupported operand type(s) for +: 'int' and 'str'
+can only concatenate str (not "NoneType") to str
+can only concatenate str (not "bytes") to str
+can't concat str to bytes
+can only concatenate list (not "tuple") to list
+can only concatenate tuple (not "list") to tuple
+can only concatenate str (not "list") to str
+can't concat str to bytearray

@@ -1,0 +1,7 @@
+256 120 100 b'xxyyzz dd' b'heo' b'ello' b'abc'
+b'Uryyb, Jbeyq!' True
+ValueError maketrans arguments must have same length
+ValueError translation table must be 256 characters long
+TypeError a bytes-like object is required, not 'str'
+{109: 1, 105: 4, 115: 4, 112: 2} {'i': 4, 'm': 1, 'p': 2, 's': 4} b'imps'
+b'\x18\x00\x1a\x19\x00\rJD' b'secret!!'

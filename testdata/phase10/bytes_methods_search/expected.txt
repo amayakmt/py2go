@@ -1,0 +1,14 @@
+1 8 -1 3 -1 0 4 10 5 2 12 3 True True True False True
+ValueError subsection not found
+ValueError subsection not found
+TypeError argument should be integer or bytes-like object, not 'str'
+TypeError argument should be integer or bytes-like object, not 'str'
+TypeError startswith first arg must be bytes or a tuple of bytes, not str
+ValueError byte must be in range(0, 256)
+ValueError subsection not found
+b'AbrAcAdAbrA' b'brcadabra' b'-a-b-r-a-c-a-d-a-b-r-a-' b'Xcadabra' (b'abra', b'c', b'adabra') (b'abracadabr', b'a', b'') (b'abracadabra', b'', b'') (b'', b'', b'abracadabra')
+[b'', b'br', b'c', b'd', b'br', b''] [b'', b'br', b'cadabra'] [b'abracad', b'br', b''] [b'a', b'b'] [b'', b'a', b'b', b''] [b'a', b'b', b'c', b'd'] [b'a', b'b'] [] [b''] [b'', b'']
+[b'a', b'b', b'c', b'd'] [b'a\n', b'b\r\n', b'c'] [] [b'x']
+b'racadabr' b'racadabra' b'abracadabr' b'x' b'hi' b'c' b'a' b'abc'
+b'ABRACADABRA' b'abc' b'Abc' b'Hello world' b'aBc' True True True True True True True False False b'CAF\xc3\xa9'
+b'**ab**' b'ab---' b'   ab' b'00042' b'-00042' b'+004' b'a   b' b'abc'

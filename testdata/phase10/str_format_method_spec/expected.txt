@@ -1,0 +1,19 @@
+1 2 b a b 1-2 5 6 3.0 4.0 {} {7}     a|b    |  c  |***d***|00042|+5| 5
+1010 12 ff FF 0b1010 0o12 0xff 0XFF 00000101 1_0000_0000_0000_0000_0000 1,234,567 1_234_567
+10000000000000000000000000000000000000000000000000000000000000000000000 400000000000000000 1,180,591,620,717,411,303,424 -0x400000000000000000 40_0000_0000_0000_0000          1267650600228229401496703205376|   1,000,000,000,000,000,000,000,000,000,000  | +36893488147419103232 -00000000036893488147419103232
+A 😀 'é' é '\xe9' abcd      | | x     1|2    | ab   | 1.234500e+04 25.000000% 100.0%
+IndexError Replacement index 0 out of range for positional args tuple
+IndexError Replacement index 1 out of range for positional args tuple
+KeyError 'x'
+ValueError Single '{' encountered in format string
+ValueError Single '}' encountered in format string
+ValueError Unknown format code 'd' for object of type 'str'
+ValueError Unknown format code 's' for object of type 'int'
+ValueError Cannot specify ',' with 'x'.
+OverflowError %c arg not in range(0x110000)
+ValueError Precision not allowed in integer format specifier
+ValueError '=' alignment not allowed in string format specifier
+AttributeError 'int' object has no attribute 'x'
+TypeError 'int' object is not subscriptable
+ValueError Negative zero coercion (z) not allowed in integer format specifier
+   5|    3.14|  7    x y   a and b x-5   3.1|ab      |+0042|ff|10|1.234500e+03|A|%|'q'

@@ -1,0 +1,18 @@
+3 -3 7 None [1, 'a'] "it's" 1 (1, 2) 3 1 -ff 0xff 0o10    ab|cd   |xy     1|2   | 3.14
+Hi é '\xe9'        abc| -02.5 +1.23e+04 1E-10 50%   1|2  |003  5 -5 ok 0 2 2 1180591620717411303424 400000000000000000 1.180592e+21 1180591620717411303424 123
+TypeError %d format: a real number is required, not str
+TypeError not enough arguments for format string
+TypeError not all arguments converted during string formatting
+TypeError not enough arguments for format string
+TypeError format requires a mapping
+KeyError 'a'
+ValueError unsupported format character 'z' (0x7a) at index 1
+ValueError incomplete format
+OverflowError %c arg not in range(0x110000)
+TypeError %c requires int or char
+TypeError %c requires int or char
+TypeError must be real number, not str
+TypeError not enough arguments for format string
+{'a': 1}
+TypeError %x format: an integer is required, not float
+TypeError %x format: an integer is required, not str

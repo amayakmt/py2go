@@ -1,0 +1,37 @@
+1 1 int True
+-1 -1 int True
+18446744073709551616 18446744073709551616 int True
+-18446744073709551616 -18446744073709551616 int True
+1.5 1.5 float True
+-0.0 -0.0 float False
+inf inf float True
+nan nan float nan-bool
+1e+22 1e+22 float True
+1e-07 1e-07 float True
+3j 3j complex True
+(1+2j) (1+2j) complex True
+(-0-1j) (-0-1j) complex True
+True True bool True
+None None NoneType False
+b'by\x00tes' b'by\x00tes' bytes True
+bytearray(b'ba') bytearray(b'ba') bytearray True
+"s'q" s'q str True
+'d"q' d"q str True
+'both\'"' both'" str True
+frozenset({1}) frozenset({1}) frozenset True
+frozenset() frozenset() frozenset False
+() () tuple False
+(1,) (1,) tuple True
+(1, 2) (1, 2) tuple True
+[] [] list False
+{} {} dict False
+set() set() set False
+range(0, 3) range(0, 3) range True
+slice(1, 2, None) slice(1, 2, None) slice True
+Ellipsis Ellipsis ellipsis True
+NotImplemented NotImplemented NotImplementedType True
+[1, -1, 18446744073709551616, -18446744073709551616, 1.5, -0.0, inf, nan]
+{'a': 1, 'b': -1, 'c': 18446744073709551616, 'd': -18446744073709551616, 'e': 1.5, 'f': -0.0}
+[[18446744073709551616, -18446744073709551616, 1.5], ([-0.0, inf, nan], [1e+22, 1e-07])] {'k': [(1, 1180591620717411303424)], 5: {36893488147419103232: b'x'}} [[[]]] [(), ((),)] ((1, (2, (3,))),)
+[-18446744073709551616, -1, -0.0, 1e-07, 1, 1.5, 18446744073709551616, 1e+22, inf]
+[1, -1, 18446744073709551616, -18446744073709551616, 1.5, -0 ne), Ellipsis, NotImplemented] 297 -18446744073709551616 -18446744073709551616 d"q 'd"q'

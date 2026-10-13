@@ -1,0 +1,14 @@
+print(1, 2.0, 2 ** 70, 3j, True, None, b"b", sep="|")
+print("a", "b", end="")
+print("!", end="\n\n")
+print(*range(5), sep=",")
+print(*[2 ** i for i in range(0, 80, 10)], sep=" < ")
+print(1e16, 1e15, 123456789.123456789, 0.1 + 0.2, 1 / 3, -1e-5, 1e100, 12345678901234567890, float(12345678901234567890))
+print("tab\there", "nl\\n", 'q"q', "q'q", "é", " ", repr(" "), "\x1b[0m".encode(), ascii("é日"), repr("日本"))
+print(*"abc", *[1, 2], sep="-", end=";\n")
+print()
+print("", "", sep="x")
+print(None, True, False, sep="/")
+print(f"{2 ** 70:>25,}|{-2 ** 70:<25}|{2.5:^10}|{b'x'!r:>8}|{3j:>10}|{None!s:>6}")
+print("%s|%r|%d|%i|%f|%e|%g" % (2 ** 70, 2 ** 70, 2 ** 70, 2 ** 70, 2 ** 70, 2 ** 70, 2 ** 70))
+print(str(2 ** 70).zfill(30), str(-5).zfill(5), "{:030}".format(-2 ** 70), "{:+}".format(2 ** 70), format(2 ** 70, "e"), format(2 ** 70, ".3g"), format(10 ** 30, "f"), format(10 ** 30, ".2e"), format(-10 ** 30, ",.1f"))

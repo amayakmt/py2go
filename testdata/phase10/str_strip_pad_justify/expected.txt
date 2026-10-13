@@ -1,0 +1,11 @@
+'xyz' 'xyz \n ' '  \t xyz' hi hixx xxhi c abc  x x xyz a.b
+***ab** **ab** **ab* abc ab... ...ab 000ab -00ab +001 000 12 üüéüü  x   éxé
+The fill character must be exactly one character long
+The fill character must be exactly one character long
+'str' object cannot be interpreted as an integer
+The fill character must be a unicode character, not int
+'str' object cannot be interpreted as an integer
+strip arg must be None or str
+a       b a   b ab c  d a
+b   c  ab 日   b a        b
+llo hel hello hello hello aa 

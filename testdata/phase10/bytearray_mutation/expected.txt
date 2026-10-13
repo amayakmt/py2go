@@ -1,0 +1,18 @@
+bytearray(b'hello') 5 104 bytearray(b'el') bytearray bytearray(b'hello') bytearray(b'hello') True True True bytearray(b'') bytearray(b'\x00\x00\x00') bytearray(b'\x01\x02') bytearray(b'hi') False
+bytearray(b'HEYlo!??AB+HEYlo!??AB+') 22
+bytearray(b'HEYlo!??AB+HEYlo!??ABX') 89 90 43 bytearray(b'HEYlo!??AB+HEYlo!??ABX')
+bytearray(b'XBA??!olYEH+BA?!olYEH') True False 10 2
+bytearray(b'AlE+A!lE')
+bytearray(b'') 0
+bytearray(b'1X2Z3f')
+bytearray(b'1X!') bytearray(b'1X!') 1X! b'1X!' True
+ValueError byte must be in range(0, 256)
+ValueError byte must be in range(0, 256)
+TypeError 'str' object cannot be interpreted as an integer
+IndexError pop index out of range
+IndexError pop from empty bytearray
+ValueError value not found in bytearray
+ValueError byte must be in range(0, 256)
+TypeError 'str' object cannot be interpreted as an integer
+ValueError attempt to assign bytes of size 7 to extended slice of size 2
+TypeError unhashable type: 'bytearray'

@@ -1,0 +1,15 @@
+0 7 12 -1 0 -1 -1 16 4 15 7 3 17 2 5 0
+ValueError substring not found
+ValueError substring not found
+TypeError find() argument 1 must be str, not int
+TypeError count() argument 1 must be str, not int
+TypeError slice indices must be integers or None or have an __index__ method
+ValueError substring not found
+XcadX X Xcadabra abra abracadabra abra XcadX X brcdbr br -a-b-r-a-c-a-d-a-b-r-a- -a-b-r-a- -a-bc abracadabra abra ba x  月本月
+True False True True False True True False True True False
+TypeError startswith first arg must be str or a tuple of str, not int
+True
+TypeError endswith first arg must be str or a tuple of str, not list
+TypeError replace() takes at least 2 positional arguments (1 given)
+TypeError replace() argument 1 must be str, not int
+TypeError 'str' object cannot be interpreted as an integer

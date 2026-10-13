@@ -1,0 +1,31 @@
+20 8
+|In  1066 the Normans| 19
+|crossed the Channel,| 20
+|and   ünïcode  wörds| 17
+|like   Gëmütlichkeit| 18
+|and  日本語  appear  in| 17
+|the     middle    of| 13
+|English prose, which| 20
+|is   hard  to  wrap.| 16
+In 1066 the Normans.
+crossed the Channel,
+33 5
+|In  1066  the Normans crossed the| 31
+|Channel,  and  ünïcode wörds like| 31
+|Gëmütlichkeit  and  日本語 appear in| 31
+|the   middle  of  English  prose,| 28
+|which    is    hard    to   wrap.| 22
+.In 1066 the Normans crossed the.
+.Channel, and ünïcode wörds like.
+50 4
+|In  1066  the  Normans  crossed  the  Channel, and| 44
+|ünïcode wörds like Gëmütlichkeit and 日本語 appear in| 50
+|the  middle  of  English  prose,  which is hard to| 45
+|wrap.                                             | 5
+...In 1066 the Normans crossed the Channel, and...
+ünïcode wörds like Gëmütlichkeit and 日本語 appear in
+name        | qty | price
+widget      |   4 |   3.5
+gadget      |  12 | 10.25
+thingamajig | 100 |   0.5
+------------------------- ab      |    cd ----------- total ------------     1|2    

@@ -1,0 +1,51 @@
+'a' True False False False True False True True True False True False
+'Z' True False False False True False True True True True False True
+'5' False True True True True False True False True False False False
+'²' False True False True True False True False False False False False
+'½' False False False True True False True False False False False False
+'٣' False True True True True False True False False False False False
+'१' False True True True True False True False False False False False
+'Ⅷ' False False False True True False True True False True False True
+'①' False True False True True False True False False False False False
+' ' False False False False False True True False True False False False
+'\t' False False False False False True False False True False False False
+'\xa0' False False False False False True False False False False False False
+'\u2003' False False False False False True False False False False False False
+'\u200b' False False False False False False False False False False False False
+'\n' False False False False False True False False True False False False
+'_' False False False False False False True True True False False False
+'é' True False False False True False True True False False True False
+'日' True False False False True False True True False False False False
+'ǅ' True False False False True False True True False False False True
+'́' False False False False False False True False False False False False
+'€' False False False False False False True False False False False False
+'\x00' False False False False False False False False True False False False
+'\x7f' False False False False False False False False True False False False
+'\x85' False False False False False True False False False False False False
+'\u2028' False False False False False True False False False False False False
+'\ud7ff' False False False False False False False False False False False False
+'😀' False False False False False False True False False False False False
+'𝟎' False True True True True False True False False False False False
+'ª' True False False False True False True True False False True False
+'ʰ' True False False False True False True True False False True False
+'ℵ' True False False False True False True True False False False False
+'ⅎ' True False False False True False True True False False True False
+'\ufeff' False False False False False False False False False False False False
+'abc' True True True False
+'_x1' True True False False
+'1x' False True True False
+'' False True False False
+'x y' False True False False
+'é1' True True True False
+'日本' True True True False
+'class' True True True False
+'𝐱' True True True False
+'x́' True True False False
+'a-b' False True False False
+'__init__' True True False False
+'٣a' False True True False
+'ª' True True True False
+34 123 1.5 0 True False True True
+invalid literal for int() with base 10: '²'
+invalid literal for int() with base 10: '½'
+invalid literal for int() with base 10: 'Ⅷ'

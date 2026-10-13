@@ -1,0 +1,8 @@
+2 2 5 -1 -1 -2 0.5 1 1 1 16
+True True True True True True True True
+2 7 True True [0, False, True, 2] 1
+True False True int bool int True True False
+{True: 'one', 2: 'two'} 2 one one z 20 b 5
+True False False True False True False True 1 1.0 True False 5 7
+True 1     1|      0| 1 True True True 1 1
+2 int

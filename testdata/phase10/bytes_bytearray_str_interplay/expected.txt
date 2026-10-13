@@ -1,0 +1,11 @@
+abc xyz é b'h\xe9llo' bytearray(b'h\xc3\xa9llo') True True False False {b'a': 1, 'a': 2} 2
+True True False False True bytes bytearray bytes bytearray
+10 12 2 v b'\xc3\xaf' ï ['0x6e', '0x61', '0xc3', '0xaf', '0x76'] b'NA\xc3\xafVE CAF\xc3\xa9' b'NA\xc3\xafVE CAF\xc3\xa9'
+[b'the', b'quick', b'brown', b'fox'] [b'The', b'Quick', b'Brown', b'Fox'] b'eht kciuq nworb xof' b'the-fox-quick-brown' [3, 5, 5, 3] b'the' b'the'
+TypeError '<' not supported between instances of 'bytes' and 'str'
+TypeError str() argument 'encoding' must be str, not int
+TypeError encode() argument 'encoding' must be str, not int
+TypeError decode() argument 'encoding' must be str, not int
+TypeError cannot convert 'float' object to bytes
+b'ok'
+TypeError string argument without an encoding

@@ -1,0 +1,15 @@
+'plain' b'plain' True b'plain' b'plain' b'plain'
+'tab\t' b'tab\\t' True b'tab\t' b'tab\t' b'tab\t'
+'é' b'\\xe9' True b'\xe9' b'\\xe9' b'\xe9'
+'日本' b'\\u65e5\\u672c' True b'\\u65e5\\u672c' b'\\u65e5\\u672c' b'&#26085;&#26412;'
+'😀' b'\\U0001f600' True b'\\U0001f600' b'\\U0001f600' b'&#128512;'
+'\x00\x7f' b'\\x00\\x7f' True b'\x00\x7f' b'\x00\x7f' b'\x00\x7f'
+'a\\b' b'a\\\\b' True b'a\\b' b'a\\b' b'a\\b'
+'quote\'"' b'quote\'"' True b'quote\'"' b'quote\'"' b'quote\'"'
+'\u2028' b'\\u2028' True b'\\u2028' b'\\u2028' b'&#8232;'
+é
+A😀 skip \xe9 é
+'unicodeescape' codec can't decode bytes in position 0-2: truncated \xXX escape
+'unicodeescape' codec can't decode bytes in position 0-3: truncated \uXXXX escape
+'unicodeescape' codec can't decode bytes in position 0-9: illegal Unicode character
+'unicodeescape' codec can't decode bytes in position 0-1: truncated \xXX escape

@@ -1,0 +1,8 @@
+['', ' ', '10', '2', '9', 'A', 'Apple', 'Banana', 'Zebra', 'a', 'a b', 'a-b', 'a_b', 'ab', 'apple', 'banana', 'cherry', 'naive', 'naïve', 'zebra', 'Éclair', 'ångström', 'éclair', '中文', '日本', '😀']
+['', ' ', '10', '2', '9', 'a', 'A', 'a b', 'a-b', 'a_b', 'ab', 'Apple', 'apple', 'banana', 'Banana', 'cherry', 'naive', 'naïve', 'zebra', 'Zebra', 'ångström', 'éclair', 'Éclair', '中文', '日本', '😀']
+['😀', '日本', '中文', 'éclair', 'Éclair', 'ångström', 'zebra', 'Zebra', 'naïve', 'naive', 'cherry', 'banana', 'Banana', 'Apple', 'apple', 'ab', 'a_b', 'a-b', 'a b', 'a', 'A', '9', '2', '10', ' ', '']
+['', ' ', '2', '9', 'A', 'a', '😀', '10', 'ab', '中文', '日本', 'a b', 'a-b', 'a_b', 'Apple', 'Zebra', 'apple', 'naive', 'naïve', 'zebra', 'Banana', 'banana', 'cherry', 'Éclair', 'éclair', 'ångström']
+True
+ 😀  ångström True True True True True True True True True
+['éclair', 'Éclair', 'zebra', 'ångström', 'naïve'] ['banana', 'apple', 'a', 'a b', 'ab', 'a-b', 'a_b'] [98, 65, 99, 97, 66, 233, 201, 122, 90, 229, 110, 110] [b'9', b'2', b'a b'] [False, True, True]
+[('Apple', 1), ('apple', 3), ('banana', 0), ('Banana', 4), ('cherry', 2), ('éclair', 5)] [' ', '1', '2', '9', 'A', 'B', 'Z', 'a', 'b', 'c', 'n', 'z', 'É', 'å', 'é', '中', '日', '😀'] ['😀', '日本', '中文'] 12 ['a', 'b', 'C']
