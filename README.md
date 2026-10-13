@@ -13,6 +13,8 @@ Transpiler from Python 3.13 to Go.
 ## Usage
 
     py2go file.py        # writes file.go next to it
+    py2go build file.py  # joins the modules it imports and builds an executable (-o out)
+    py2go run file.py    # builds and runs; a directory with __main__.py works too
 
 Generated code imports `github.com/amayakmt/py2go/runtime`, so build it inside a
 module that requires py2go (or uses a `replace` directive pointing at a checkout).
@@ -22,7 +24,7 @@ Python 3.13 is resolved through `uv`.
 
     go test -count=1 ./...
 
-Each case under `testdata/phase2/` to `phase10/` runs under CPython 3.13 (committed
+Each case under `testdata/phase2/` to `phase11/` runs under CPython 3.13 (committed
 `expected.txt`) and as transpiled Go; stdout must match. Cases under
 `testdata/unsupported/` assert the exact error and line number.
 After adding a case, `scripts/regen_expected.sh testdata/phase2/<case>` records
