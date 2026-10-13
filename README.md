@@ -24,7 +24,7 @@ Python 3.13 is resolved through `uv`.
 
     go test -count=1 ./...
 
-Each case under `testdata/phase2/` to `phase12/` runs under CPython 3.13 (committed
+Each case under `testdata/phase2/` to `phase13/` runs under CPython 3.13 (committed
 `expected.txt`) and as transpiled Go; stdout must match. Cases under
 `testdata/unsupported/` assert the exact error and line number.
 After adding a case, `scripts/regen_expected.sh testdata/phase2/<case>` records
@@ -39,9 +39,11 @@ Python 3.13 only. Pinned in .python-version.
 
 ## Scope
 
+- `async`/`await`, threads (with a global interpreter lock), signals and `asyncio` work
+  as in CPython; `multiprocessing` does not exist yet
 - Standard library only; a first set of modules (`math`, `itertools`, `functools`,
-  `collections`, `re`, `json`, `random`, `enum`, `os`, `sys`, ... see
-  `stdlib/manifest.json`) is written in Python in `stdlib/` with Go natives in
+  `collections`, `re`, `json`, `random`, `enum`, `os`, `sys`, `asyncio`, `threading`,
+  `queue`, `concurrent.futures`, `signal`, `contextvars`, ... see `stdlib/manifest.json`) is written in Python in `stdlib/` with Go natives in
   `runtime/`, and joined into the program like a project module
 - `int` has any size in code without annotations; an annotated `int` is 64 bits and
   raises `OverflowError` on `*`, `**` and `<<` beyond that

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="101" height="20" role="img" aria-label="phases: 12 / 20" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+<svg xmlns="http://www.w3.org/2000/svg" width="101" height="20" role="img" aria-label="phases: 13 / 20" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
 <rect width="101" height="20" rx="3" fill="#555"/><rect x="44" width="57" height="20" rx="3" fill="#3c9d4e"/><rect x="44" width="4" height="20" fill="#3c9d4e"/>
-<text x="22" y="14" fill="#fff" text-anchor="middle">phases</text><text x="72" y="14" fill="#fff" text-anchor="middle">12 / 20</text>
+<text x="22" y="14" fill="#fff" text-anchor="middle">phases</text><text x="72" y="14" fill="#fff" text-anchor="middle">13 / 20</text>
 </svg>
