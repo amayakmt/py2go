@@ -1,0 +1,15 @@
+False True True False False
+RuntimeError release unlocked lock
+inside True
+False
+ValueError can't specify a timeout for a non-blocking call
+ValueError timeout value must be a non-negative number
+4000
+reentered
+RuntimeError cannot release un-acquired lock
+False
+['holder in', 'holder out', 'main in']
+True True []
+ValueError Semaphore released too many times
+True True False
+ValueError semaphore initial value must be >= 0

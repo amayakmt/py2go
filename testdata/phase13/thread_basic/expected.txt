@@ -1,0 +1,15 @@
+['Thread-1 (work)', 'Thread-2 (work)', 'Thread-3 (work)', 'Thread-4 (work)']
+[False, False, False, False] None
+[('t0', 9900), ('t1', 39800), ('t2', 89700), ('t3', 159600)]
+[False, False, False, False] True
+MainThread True False 1
+ABC!worker-abc worker-abc True
+True named
+RuntimeError cannot join thread before it is started
+RuntimeError threads can only be started once
+renamed False
+survived False
+[('ValueError', 'thread failure', 'g')]
+['fired']
+True 1
+True True

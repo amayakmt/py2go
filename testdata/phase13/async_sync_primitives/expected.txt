@@ -1,0 +1,10 @@
+False
+['a in', 'a out', 'b in', 'b out', 'c in', 'c out']
+False []
+True ['x released', 'y released', 'z released']
+False
+['active 1', 'active 2', 'active 1', 'active 2', 'active 1']
+['c0 took 2', 'c1 took 1']
+ValueError BoundedSemaphore released too many times
+RuntimeError Lock is not acquired.
+[(0, 0), (1, 1), (2, 2)]

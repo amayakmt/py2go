@@ -1,0 +1,17 @@
+var dflt other
+LookupError
+fallback
+one True True
+one two
+one
+dflt
+RuntimeError True
+ValueError True
+main True True none
+inner main inner
+RuntimeError True
+copy inner
+['dflt', 'thread'] main
+['main', 'thread'] main
+['var']
+True

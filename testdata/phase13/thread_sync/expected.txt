@@ -1,0 +1,10 @@
+['wait0', 'wait1', 'wait2'] False
+['go0', 'go1', 'go2', 'wait0', 'wait1', 'wait2'] True
+False False
+[('c0', 'x'), ('c1', 'y')]
+False False
+RuntimeError cannot notify on un-acquired lock
+[0, 1, 2] 3 0 False
+broken True
+False
+['False', 'False', 't0', 't1'] main

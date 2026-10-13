@@ -1,0 +1,5 @@
+5 False 1
+not queued
+['a', 'first', 'c', {'k': 1}] True
+True 4
+['two-first', 'two', 'five'] 5.0

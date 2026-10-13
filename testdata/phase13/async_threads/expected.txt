@@ -1,0 +1,7 @@
+[('main', 'child1'), ('main', 'child2')] main
+(42, True)
+(10, True)
+['from thread']
+('main', 'child3')
+[0, 2, 4]
+('main', 'child4')

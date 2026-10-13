@@ -1,0 +1,3 @@
+main done
+non-daemon thread finished
+bye third.

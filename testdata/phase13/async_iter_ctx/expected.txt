@@ -1,0 +1,30 @@
+[3, 2, 1]
+tick 10
+tick 20
+tick 30
+finally 0
+finally 1
+finally 0
+finally 1
+finally 2
+exhausted
+enter r1
+body r1
+exit r1 None
+enter r2
+enter r3
+both
+exit r3 None
+exit r2 None
+enter r4
+exit r4 KeyError
+enter r5
+exit r5 ValueError
+caught propagates
+2 1
+stop
+5
+closed
+async_generator
+[3, 2, 1]
+[8, 4]

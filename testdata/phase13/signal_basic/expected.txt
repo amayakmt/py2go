@@ -1,0 +1,16 @@
+2 <Signals.SIGINT: 2> 2 SIGTERM 9
+0 <Handlers.SIG_IGN: 1> 0
+15 1 Interrupt 65
+0 True
+[10, 10]
+True
+[10, 10]
+0
+14 1
+0
+keyboard interrupt
+from handler
+OSError [Errno 22] Invalid argument
+TypeError signal handler must be signal.SIG_IGN, signal.SIG_DFL, or a callable object
+True 4
+True

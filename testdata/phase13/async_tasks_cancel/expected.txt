@@ -1,0 +1,17 @@
+first False False
+s1 sleeping
+s1 cancelled
+s1 cleanup
+main saw cancel True True
+ignoring cancel
+survived
+s3 sleeping
+True 1
+s3 cancelled
+s3 cleanup
+msg ('because',)
+False
+True True
+future cancelled
+True 1
+shielded

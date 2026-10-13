@@ -1,0 +1,12 @@
+nested caught inside
+KeyError 'converted' RuntimeError
+InvalidStateError Result is not set.
+5 True None
+already set
+awaited bad
+True RuntimeError('inside')
+task raised
+TypeError object int can't be used in 'await' expression
+callback cb
+nested run asyncio.run() cannot be called from a running event loop
+after

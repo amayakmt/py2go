@@ -1,0 +1,8 @@
+['A', 'B', 'C']
+['start a', 'start b', 'start c', 'end b', 'end c', 'end a']
+D ValueError boom 0.02
+caught boom 0.01
+[]
+['F', 'G', 'F']
+1 1
+['K', 'L', 'J']

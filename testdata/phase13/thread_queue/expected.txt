@@ -1,0 +1,16 @@
+[0, 1, 4, 9, 16, 25] True 0
+True
+full
+full timeout
+1 2
+empty
+empty timeout
+[2, 1, 0]
+[(1, 'a'), (2, 'b'), (3, 'c')]
+a 1 False b True
+simple empty
+ValueError task_done() called too many times
+1
+shut down
+put shut down
+[0, 1, 2]

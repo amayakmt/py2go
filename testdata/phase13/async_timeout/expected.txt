@@ -1,0 +1,10 @@
+ok
+wait_for timeout
+timeout ctx TimeoutError
+False
+zero timeout
+x
+task cancelled: True
+1 1
+['soon', 'later']
+True True False
