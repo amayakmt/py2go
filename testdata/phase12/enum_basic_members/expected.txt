@@ -1,0 +1,9 @@
+Color.RED <Color.RED: 1> RED 1 Color.GREEN Color.BLUE True False True True Color True True
+[<Color.RED: 1>, <Color.GREEN: 2>, <Color.BLUE: 3>] ['RED', 'GREEN', 'BLUE'] 3 x ['RED:1', 'GREEN:2', 'BLUE:3'] green Color.GREEN r [<Color.BLUE: 3>, <Color.GREEN: 2>, <Color.RED: 1>]
+5.97e+24 3390000.0 9.82 3.73 [<Planet.EARTH: (5.97e+24, 6370000.0)>, <Planet.MARS: (6.42e+23, 3390000.0)>] EARTH
+north 1 True Dir.S [<Dir.N: 'north'>, <Dir.S: 'south'>, <Dir.OTHER: 1>] ['N', 'S', 'OTHER'] ['N', 'S', 'OTHER', 'ALIAS'] True
+ValueError 9 is not a valid Color
+KeyError 'PURPLE'
+ValueError 'up' is not a valid Dir
+['hot', 'meh', 'cold'] RED:1 Color.RED <Color.RED: 1> Dir.S Color.BLUE
+[(<Color.RED: 1>, 1), (<Color.GREEN: 2>, 2)] True False

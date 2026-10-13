@@ -1,0 +1,24 @@
+3.141592653589793 2.718281828459045 6.283185307179586 inf -inf True True True False
+1.4142135623730951 0.0 1e+150 2.0 1099511627776.0 1.0 2.718281828459045 1024.0 0.0
+-1 0 2 3 -2 2 7 1180591620717411303424 100000000000000000000 3.0 -3.0 2.0
+-1.0 1.0 1.5 1.0 -1.0 1.0 512.0 (0.5, 4) (0.0, 0) (-0.875, 2) (0.75, 3.0) (-0.75, -3.0)
+5.0 0.0 1.7320508075688772 5.0 5.0 5.0 180.0 3.141592653589793 0.7853981633974483 -2.356194490192345
+True False True True True False
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError factorial() not defined for negative values
+OverflowError math range error
+ValueError isqrt() argument must be nonnegative
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+ValueError math domain error
+must be real number, not str
+must be real number, not NoneType
+must be real number, not list
+must be real number, not complex

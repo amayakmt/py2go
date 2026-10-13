@@ -1,0 +1,3 @@
+abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 0123456789abcdefABCDEF 01234567
+'!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~' ' \t\n\r\x0b\x0c' 100 Hello World Foo-bar A,B c
+['H', 'e', 'l', 'l', 'o', 'W', 'o', 'r', 'l', 'd'] 3 abn 26

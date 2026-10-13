@@ -1,0 +1,30 @@
+[0.41661987254534116, 0.010169169457068361, 0.8252065092537432] [3, 3, 2, 3, 5, 4, 2, 3, 1, 4] [33, 71, 80, 22, 78] [20, 35, 15, 40, 20] [-3, -2, -4, -2, 0]
+3.2203881460071515 -0.08232292026999932 0 247 2193481764 8498874630 7664225158426101066 1237617275222778030891828165541293347879670111185207793182416 0
+0.8444218515250481 0.7579544029403025 198441737587687207744109680147 20 x 1
+1 0.13436424411240122 867
+-1 0.13436424411240122 867
+4294967296 0.11299430095636409 427
+18446744073709551621 0.5105783769365112 900
+'text' 0.8711565613554825 863
+'' 0.9602256525641875 609
+b'bytes' 0.37075677971469856 686
+bytearray(b'ba') 0.6102644558390378 600
+1.5 0.551763726942059 262
+-0.0 0.8444218515250481 776
+100000000000000000000000000000000000000000000000000 0.8266205292084633 759
+True True True
+True 3 3 625 None
+True True b'E|v\x9fdA' b''
+ValueError empty range for randrange()
+ValueError empty range in randrange(5, 5)
+ValueError zero step for randrange()
+ValueError empty range in randrange(10, 1)
+TypeError 'float' object cannot be interpreted as an integer
+IndexError Cannot choose from an empty sequence
+ValueError number of bits must be non-negative
+TypeError The only supported seed types are:
+None, int, float, str, bytes, and bytearray.
+ValueError empty range in randrange(5, 2)
+ValueError Sample larger than population or is negative
+TypeError Population must be a sequence.  For dicts or sets, use sorted(d).
+ValueError empty range in randrange(1, 10, -1)

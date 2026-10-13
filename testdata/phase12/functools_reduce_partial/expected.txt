@@ -1,0 +1,6 @@
+10 5040 abc 100 11 5 7
+reduce() of empty iterable with no initial value
+1024 1 11 [3, 2, 1] 9 ok
+['fig', 'pear', 'kiwi', 'banana'] ['banana', 'fig', 'kiwi', 'pear'] banana
+2880067194370816120 20100 49 [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+6 0

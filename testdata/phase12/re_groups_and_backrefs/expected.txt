@@ -1,0 +1,13 @@
+('a', None, 'c') ('a', '-', 'c') None ('a', 'c') (-1, -1) -1 -1 3 ((0, 2), (0, 1), (-1, -1), (1, 2))
+Jane Doe {'first': 'Jane', 'last': 'Doe'} (5, 8) last Jane Doe Doe, Jane (Jane) 0 9 (?P<first>\w+) (?P<last>\w+)
+aa None aa abcdefghijj aA
+[('a', ''), ('', 'b')] [('a', ''), ('a', 'b')] a ('b',) ('b', 'a', 'b')
+('a',) (None,) None (-1, -1) 1 2
+xa b 'ab' ab
+30 ['10-20', '10', '20'] 2 True 10-20 2
+IndexError no such group
+IndexError no such group
+IndexError no such group
+PatternError invalid group reference 2 at position 1
+IndexError no such group
+<re.Match object; span=(0, 5), match='10-20'> <re.Match object; span=(0, 1), match='a'> re.compile('x', re.IGNORECASE|re.MULTILINE) re.compile(b'b') True True

@@ -1,0 +1,27 @@
+a/b /b/c a/b x a/ /usr/lib
+'/usr/lib/python.py' python.py /usr/lib ('/usr/lib', 'python.py') ('/usr/lib/python', '.py') True
+'file.tar.gz' file.tar.gz  ('', 'file.tar.gz') ('file.tar', '.gz') False
+'/'  / ('/', '') ('/', '') True
+''   ('', '') ('', '') False
+'a/b/'  a/b ('a/b', '') ('a/b/', '') False
+'.hidden' .hidden  ('', '.hidden') ('.hidden', '') False
+'dir/.hidden.txt' .hidden.txt dir ('dir', '.hidden.txt') ('dir/.hidden', '.txt') False
+'noext' noext  ('', 'noext') ('noext', '') False
+'a.b/c' c a.b ('a.b', 'c') ('a.b/c', '') False
+'a/./b/../c' a/c
+'/../a' /a
+'//a///b' //a/b
+'' .
+'.' .
+'..' ..
+'a/b/../../..' ..
+'/a/b/./c/..' /a/b
+/usr/l /usr b/c ../.. .
+/ : True . .. posix / .
+True True False False True /b /x
+['b', 'one.txt', 'two.txt'] [('.', ['a'], []), ('./a', ['b'], ['one.txt', 'two.txt']), ('./a/b', [], [])]
+['b', 'two.txt', 'uno.txt']
+FileExistsError
+exists
+FileNotFoundError
+False None dflt True int True

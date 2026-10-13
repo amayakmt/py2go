@@ -1,0 +1,3 @@
+True False True False True False
+35 ['False', 'None', 'True', 'and', 'as'] ['while', 'with', 'yield'] True ['_', 'case', 'match', 'type']
+['def', 'class', 'while', 'lambda']

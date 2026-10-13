@@ -1,0 +1,48 @@
+'' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+' ' | Expecting value | 1 1 2 | Expecting value: line 1 column 2 (char 1) | True True
+'{' | Expecting property name enclosed in double quotes | 1 1 2 | Expecting property name enclosed in double quotes: line 1 column 2 (char 1) | True True
+'}' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'{"a"}' | Expecting ':' delimiter | 4 1 5 | Expecting ':' delimiter: line 1 column 5 (char 4) | True True
+'{"a":}' | Expecting value | 5 1 6 | Expecting value: line 1 column 6 (char 5) | True True
+'{"a" 1}' | Expecting ':' delimiter | 5 1 6 | Expecting ':' delimiter: line 1 column 6 (char 5) | True True
+'[1,]' | Illegal trailing comma before end of array | 2 1 3 | Illegal trailing comma before end of array: line 1 column 3 (char 2) | True True
+'[,1]' | Expecting value | 1 1 2 | Expecting value: line 1 column 2 (char 1) | True True
+'[1 2]' | Expecting ',' delimiter | 3 1 4 | Expecting ',' delimiter: line 1 column 4 (char 3) | True True
+'{"a": 1,}' | Illegal trailing comma before end of object | 7 1 8 | Illegal trailing comma before end of object: line 1 column 8 (char 7) | True True
+'tru' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'nul' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+"'x'" | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'"abc' | Unterminated string starting at | 0 1 1 | Unterminated string starting at: line 1 column 1 (char 0) | True True
+'"a\\x"' | Invalid \escape | 2 1 3 | Invalid \escape: line 1 column 3 (char 2) | True True
+'"a\\u12"' | Invalid \uXXXX escape | 3 1 4 | Invalid \uXXXX escape: line 1 column 4 (char 3) | True True
+'1 2' | Extra data | 2 1 3 | Extra data: line 1 column 3 (char 2) | True True
+'[1]]' | Extra data | 3 1 4 | Extra data: line 1 column 4 (char 3) | True True
+'{1: 2}' | Expecting property name enclosed in double quotes | 1 1 2 | Expecting property name enclosed in double quotes: line 1 column 2 (char 1) | True True
+'\n\n  x' | Expecting value | 4 3 3 | Expecting value: line 3 column 3 (char 4) | True True
+'-' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'01' | Extra data | 1 1 2 | Extra data: line 1 column 2 (char 1) | True True
+'1.' | Extra data | 1 1 2 | Extra data: line 1 column 2 (char 1) | True True
+'.5' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'+1' | Expecting value | 0 1 1 | Expecting value: line 1 column 1 (char 0) | True True
+'[1.e3]' | Expecting ',' delimiter | 2 1 3 | Expecting ',' delimiter: line 1 column 3 (char 2) | True True
+'"tab\there"' | Invalid control character at | 4 1 5 | Invalid control character at: line 1 column 5 (char 4) | True True
+'\ufeff[]' | Unexpected UTF-8 BOM (decode using utf-8-sig) | 0 1 1 | Unexpected UTF-8 BOM (decode using utf-8-sig): line 1 column 1 (char 0) | True True
+'NaN1' | Extra data | 3 1 4 | Extra data: line 1 column 4 (char 3) | True True
+'[' | Expecting value | 1 1 2 | Expecting value: line 1 column 2 (char 1) | True True
+'{"a": [1, 2}' | Expecting ',' delimiter | 11 1 12 | Expecting ',' delimiter: line 1 column 12 (char 11) | True True
+'00' | Extra data | 1 1 2 | Extra data: line 1 column 2 (char 1) | True True
+the JSON object must be str, bytes or bytearray, not int
+the JSON object must be str, bytes or bytearray, not NoneType
+[{"thing": 1}, {"k": {"thing": [2]}}] {"a": 1}
+TypeError Object of type Thing is not JSON serializable
+TypeError keys must be str, int, float, bool or None, not Thing
+TypeError Object of type set is not JSON serializable
+TypeError Object of type object is not JSON serializable
+TypeError Object of type bytes is not JSON serializable
+NaN
+-Infinity
+ValueError Out of range float values are not JSON compliant: nan
+[NaN, {}]
+Circular reference detected
+{"x": "custom:Thing"} [1, "a"] {'q': [1]}
+'{\n "a": [\n  1,\n  2\n ]\n}' {'z': 1}

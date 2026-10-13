@@ -1,0 +1,12 @@
+OrderedDict({'a': 10, 'b': 2, 'c': 3}) ['a', 'b', 'c'] [('a', 10), ('b', 2), ('c', 3)] 3 10 True 0 OrderedDict() OrderedDict({'x': 1})
+['b', 'c', 'a']
+['c', 'b', 'a']
+('a', 10) ('c', 3) ['b'] True False True
+OrderedDict() 0
+KeyError 'dictionary is empty'
+KeyError 'nope'
+blue guest none True False 2 ['color', 'user'] [('color', 'blue'), ('user', 'guest')]
+{'color': 'green', 'new': 1} {'color': 'red', 'user': 'guest'} [{'color': 'green', 'new': 1}, {'color': 'red', 'user': 'guest'}]
+child guest 3 green
+{'color': 'green'}
+KeyError 'missing'

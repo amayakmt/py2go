@@ -1,0 +1,10 @@
+1 <Pri.MID: 5> 11 True True True 10 5 [<Pri.LOW: 1>, <Pri.MID: 5>, <Pri.HIGH: 10>] 10 10 [1, 5, 10]   10 True skip
+r <Mode.WRITE: 'w'> auto True R w r rx 1 [<Mode.READ: 'r'>, <Mode.WRITE: 'w'>, <Mode.AUTO: 'auto'>] True
+Perm.R|W <Perm.R|W: 3> 3 True False Perm.R Perm(0) <Perm.W: 2> False Perm.R|X Perm.R|W|X [<Perm.R: 1>, <Perm.W: 2>, <Perm.X: 4>] [<Perm.R: 1>, <Perm.W: 2>] Perm.W|X True True
+5 <Bits.A|C: 5> 5 True 4 3 3 5 5 False [<Bits.A: 1>, <Bits.B: 2>, <Bits.C: 4>] False
+ValueError 2 is not a valid Pri
+ValueError 'x' is not a valid Mode
+ValueError <flag 'Perm'> invalid value 16
+    given 0b0 10000
+  allowed 0b0 00111
+KeyError 'NOPE'

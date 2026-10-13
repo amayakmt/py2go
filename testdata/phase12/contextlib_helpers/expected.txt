@@ -1,0 +1,14 @@
+['open a', 'open b', 'AB', 'close b', 'close a']
+['open c', 'close c', "caught 'k'"]
+['swallowed']
+after
+True False
+True
+enter
+enter one
+enter two
+body
+callback one two
+exit two
+exit one
+end

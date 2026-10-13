@@ -1,0 +1,13 @@
+7 1
+b'\x00\x01\xfe\xffabc!' 8 bytes b'' 8
+b'\x00\x01\xfe' b'\xffa' 1 b'\x01' 6 b'c!'
+b'\x00\x01XYabc!'
+8 stat
+FileNotFoundError [Errno 2] No such file or directory: '/tmp/py2go_does_not_exist/x.txt'
+FileExistsError
+IsADirectoryError
+write() argument must be str, not bytes
+a bytes-like object is required, not 'str'
+invalid mode: 'z'
+read of closed file
+FileNotFoundError [Errno 2] No such file or directory

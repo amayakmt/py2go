@@ -1,0 +1,5 @@
+Point(x=1, y=2) Point(x=4, y=5) 1 2 1 2 2 2 [1, 2] (1, 2) True True True True 2 3 True
+{'x': 1, 'y': 2} Point(x=10, y=2) Point(x=7, y=8) ('x', 'y') ('name', 'age', 'city') 1 1
+Person(name='ann', age=30, city='nowhere') nowhere rome Person(name='bob', age=5, city='x') ('name', 'age', 'city') Triple(a=1, b=2, c=3)
+[Point(x=1, y=1), Point(x=1, y=2), Point(x=3, y=4)] Point(x=1, y=1) [3, 1, 1] 1 3 True 15
+5.0 2

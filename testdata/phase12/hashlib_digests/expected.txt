@@ -1,0 +1,15 @@
+md5 ['d41d8cd98f00b204e980', '900150983cd24fb0d696', '5eb63bbbe01eeed093cb', 'e2c865db4162bed963bf', 'cabe45dcc9ae5b66ba86'] 16 64 md5
+sha1 ['da39a3ee5e6b4b0d3255', 'a9993e364706816aba3e', '2aae6c35c94fcfb415db', '4916d6bdb7f78e680369', '291e9a6c66994949b57b'] 20 64 sha1
+sha224 ['d14a028c2a3a2bc94761', '23097d223405d8228642', '2f05477fc24bb4faefd8', '88702e63237824c4eb0d', '4e8f0ce90b64661a2b5e'] 28 64 sha224
+sha256 ['e3b0c44298fc1c149afb', 'ba7816bf8f01cfea4141', 'b94d27b9934d3e08a52e', '40aff2e9d2d8922e47af', '41edece42d63e8d9bf51'] 32 64 sha256
+sha384 ['38b060a751ac96384cd9', 'cb00753f45a35e8bb5a0', 'fdbd8e75a67f29f701a4', 'ffdaebff65ed05cf400f', 'f54480689c6b0b11d030'] 48 128 sha384
+sha512 ['cf83e1357eefb8bdf154', 'ddaf35a193617abacc41', '309ecc489c12d6eb4cc4', '1e7b80bc8edc552c8fee', '67ba5535a46e3f86dbfb'] 64 128 sha512
+sha3_256 ['a7ffc6f8bf1ed76651c1', '3a985da74fe225b2045c', '644bcc7e564373040999', '9b04c091da96b997afb8', '8f3934e6f7a15698fe0f'] 32 136 sha3_256
+sha3_512 ['a69f73cca23a9ac5c8b5', 'b751850b1a57168a5693', '840006653e9ac9e95117', '3a843af1f872928f0bbb', 'ac7e95cc95aa7f24aaa9'] 64 72 sha3_512
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad True 32 True
+True 900150983cd24fb0d6963f7d28e17f72 bf15be717ac1b080b4f1c456692825891ff5073d
+True skip True
+TypeError Strings must be encoded before hashing
+ValueError unsupported hash type nope
+TypeError Strings must be encoded before hashing
+TypeError object supporting the buffer API required

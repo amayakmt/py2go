@@ -1,0 +1,18 @@
+deque([0, 1, 2, 3, 4]) 5 0 4 [0, 1, 2, 3, 4] True False 1 2 True False True False
+4 0 deque([1, 2, 3]) deque([1, 2, 3]) True [3, 2, 1]
+deque([-2, -1, 1, 2, 3, 7, 8]) deque([-2, -1, 1, 2, 3, 7, 8, 'a', 'b']) 14
+deque([7, 8, -2, -1, 1, 2, 3])
+deque([-1, 1, 2, 3, 7, 8, -2])
+deque([-2, 7, 3, 2, 1, 'x', -1]) None
+deque([3, 4, 5], maxlen=3) 3 3
+deque([99, 3, 4], maxlen=3)
+deque([2, 3, 4], maxlen=3) deque([1, 2], maxlen=5)
+deque(['first', 3, 2, 1, 'x', -1])
+0 1 2 
+IndexError pop from an empty deque
+IndexError pop from an empty deque
+IndexError deque index out of range
+ValueError 9 is not in deque
+ValueError 9 is not in deque
+ValueError maxlen must be non-negative
+TypeError can only concatenate deque (not "list") to deque

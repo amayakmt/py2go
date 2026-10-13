@@ -1,0 +1,41 @@
+'(' missing ), unterminated subpattern 0 missing ), unterminated subpattern at position 0
+')' unbalanced parenthesis 0 unbalanced parenthesis at position 0
+'(a' missing ), unterminated subpattern 0 missing ), unterminated subpattern at position 0
+'a)' unbalanced parenthesis 1 unbalanced parenthesis at position 1
+'[a' unterminated character set 0 unterminated character set at position 0
+'a**' multiple repeat 2 multiple repeat at position 2
+'a+*' multiple repeat 2 multiple repeat at position 2
+'*a' nothing to repeat 0 nothing to repeat at position 0
+'+' nothing to repeat 0 nothing to repeat at position 0
+'?' nothing to repeat 0 nothing to repeat at position 0
+'{1}a' nothing to repeat 0 nothing to repeat at position 0
+'a{2,1}' min repeat greater than max repeat 2 min repeat greater than max repeat at position 2
+'\\' bad escape (end of pattern) 0 bad escape (end of pattern) at position 0
+'\\q' bad escape \q 0 bad escape \q at position 0
+'(?P<n>a)(?P<n>b)' redefinition of group name 'n' as group 2; was group 1 12 redefinition of group name 'n' as group 2; was group 1 at position 12
+'(?P=zz)' unknown group name 'zz' 4 unknown group name 'zz' at position 4
+'\\1' invalid group reference 1 1 invalid group reference 1 at position 1
+'(?<=a*)b' look-behind requires fixed-width pattern None look-behind requires fixed-width pattern
+'[b-a]' bad character range b-a 1 bad character range b-a at position 1
+'(?z)' unknown extension ?z 1 unknown extension ?z at position 1
+'(?P<1a>x)' bad character in group name '1a' 4 bad character in group name '1a' at position 4
+'(?P<>x)' missing group name 4 missing group name at position 4
+'a{1' ok
+'(?i' missing -, : or ) 3 missing -, : or ) at position 3
+'(?#c' missing ), unterminated comment 0 missing ), unterminated comment at position 0
+'\\x4' incomplete escape \x4 0 incomplete escape \x4 at position 0
+'\\u12' incomplete escape \u12 0 incomplete escape \u12 at position 0
+'(?(1)a)' invalid group reference 1 3 invalid group reference 1 at position 3
+'(?P<n' missing >, unterminated name 4 missing >, unterminated name at position 4
+'[\\d-z]' bad character range \d-z 1 bad character range \d-z at position 1
+'x{1,2}{3}' multiple repeat 6 multiple repeat at position 6
+'a|*' nothing to repeat 2 nothing to repeat at position 2
+a\.b\*c\?d\+e\(f\)g\[h\]i\{j\}k\|l\^m\$n\\o\ p\-q\#r\&s\~t abc_123  é日 b'a\\.b' a\
+b\	
+True True True True True
+expected string or bytes-like object, got 'int'
+first argument must be string or compiled pattern
+cannot use a bytes pattern on a string-like object
+cannot use a string pattern on a bytes-like object
+cannot process flags argument with a compiled pattern
+a True PatternError

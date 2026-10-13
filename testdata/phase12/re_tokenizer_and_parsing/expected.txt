@@ -1,0 +1,9 @@
+[('NAME', 'x'), ('OP', '='), ('NUMBER', '3.14'), ('OP', '*'), ('OP', '('), ('NAME', 'y'), ('OP', '+'), ('NUMBER', '42'), ('OP', ')')]
+bad char '$' at 2
+2024-01-15 ERROR db Connection failed 500 500
+2024-01-16 INFO web Started in 35ms None -
+2024-01-17 ERROR web Timeout 504 504
+['bob@example.com', 'ann.lee+x@sub.site.org'] ['192.168.0.1', '10.0.0.255'] (555) 123-4567
+['a', '"b,c"', 'd', '"e ""q"" f"'] ['a', '"b,c"', 'd', '"e ""q"" f"']
+some_variable_name_h_t_t_p_server some Variable Name HTTPServer ['some', 'Variable', 'Name', 'HTTP', 'Server']
+[('x.html', 'One'), ('y.html', 'Two')] One Two

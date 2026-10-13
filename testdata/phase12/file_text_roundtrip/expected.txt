@@ -1,0 +1,15 @@
+6 11
+'alpha\nbeta\ngamma\ndelta\népsilon\nprinted line\n' 44
+['alpha', 'beta', 'gamma', 'delta', 'épsilon', 'printed line']
+alpha
+ beta
+ gamma
+ ['delta\n', 'épsilon\n'] True
+7 appended 52
+2 'beta\n'
+True r False UTF-8
+True
+I/O operation on closed file.
+3456 7
+01
+False

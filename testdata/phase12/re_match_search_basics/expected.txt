@@ -1,0 +1,53 @@
+'a' 'a' (0, 1) 'a'
+'a' 'b' None None
+'a*' 'aaab' (0, 3) 'aaa'
+'a+' 'baaa' (1, 4) 'aaa'
+'a?b' 'ab' (0, 2) 'ab'
+'a{2}' 'aaa' (0, 2) 'aa'
+'a{2,3}' 'aaaa' (0, 3) 'aaa'
+'a{,2}' 'aaa' (0, 2) 'aa'
+'a{2,}' 'aaaaa' (0, 5) 'aaaaa'
+'a{0}' 'a' (0, 0) ''
+'.' '\n' None None
+'..' 'ab' (0, 2) 'ab'
+'^a' 'a' (0, 1) 'a'
+'a$' 'a\n' (0, 1) 'a'
+'\\Aa\\Z' 'a' (0, 1) 'a'
+'\\Aa\\Z' 'a\n' None None
+'[abc]+' 'xxabcabcxx' (2, 8) 'abcabc'
+'[^abc]+' 'abcxyzabc' (3, 6) 'xyz'
+'[a-c]' 'b' (0, 1) 'b'
+'[a-]' '-' (0, 1) '-'
+'[-a]' '-' (0, 1) '-'
+'[]a]' ']' (0, 1) ']'
+'[\\]]' ']' (0, 1) ']'
+'[\\w.]+' 'foo.bar baz' (0, 7) 'foo.bar'
+'\\d+' 'abc123' (3, 6) '123'
+'\\D+' '123abc' (3, 6) 'abc'
+'\\w+' '  hello_1 ' (2, 9) 'hello_1'
+'\\W+' 'ab-- cd' (2, 5) '-- '
+'\\s+' 'ab \t\ncd' (2, 5) ' \t\n'
+'\\S+' '  ab  ' (2, 4) 'ab'
+'\\bfoo\\b' 'a foo b' (2, 5) 'foo'
+'\\Bfoo' 'afoo' (1, 4) 'foo'
+'a|b|c' 'xcx' (1, 2) 'c'
+'(a|b)+' 'abba!' (0, 4) 'abba'
+'(?:ab)+' 'ababx' (0, 4) 'abab'
+'a.*b' 'axxbxxb' (0, 7) 'axxbxxb'
+'a.*?b' 'axxbxxb' (0, 4) 'axxb'
+'a+?' 'aaa' (0, 1) 'a'
+'a*?b' 'aab' (0, 3) 'aab'
+'x{2,3}?' 'xxxx' (0, 2) 'xx'
+'a++b' 'aaab' (0, 4) 'aaab'
+'(?>a+)b' 'aaab' (0, 4) 'aaab'
+'a*+a' 'aaa' None None
+'\\x41B\\103' 'ABC' (0, 3) 'ABC'
+'\\.' 'a.b' (1, 2) '.'
+'\\\\' 'a\\b' (1, 2) '\\'
+'\\n' '\n' (0, 1) '\n'
+'\\t\\r' '\t\r' (0, 2) '\t\r'
+a <re.Match object; span=(0, 1), match='a'> None
+b None None
+ab <re.Match object; span=(0, 2), match='ab'> <re.Match object; span=(0, 2), match='ab'>
+a|ab <re.Match object; span=(0, 1), match='a'> <re.Match object; span=(0, 2), match='ab'>
+(a|ab)(c|bcd) <re.Match object; span=(0, 4), match='abcd'> <re.Match object; span=(0, 4), match='abcd'>

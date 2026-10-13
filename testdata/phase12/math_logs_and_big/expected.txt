@@ -1,0 +1,17 @@
+0.0 1.0 3.0 2.0 3.0 10.0 0.0
+693.1471805599454 2000.0 400.0 499.99999999999983 True 70.0 21.072099696478684
+1180591620717411303424 100000000000000000000 1208925819614629174706176 10000000000.0 0.0 8.218407461554972e+307 1024.0 6.25 0 1.0 0.25
+ValueError math domain error
+ValueError math domain error
+OverflowError math range error
+ZeroDivisionError float division by zero
+ValueError math domain error
+ValueError math domain error
+OverflowError math range error
+skip
+floor OverflowError cannot convert float infinity to integer
+ceil OverflowError cannot convert float infinity to integer
+trunc OverflowError cannot convert float infinity to integer
+floor ValueError cannot convert float NaN to integer
+ceil ValueError cannot convert float NaN to integer
+trunc ValueError cannot convert float NaN to integer

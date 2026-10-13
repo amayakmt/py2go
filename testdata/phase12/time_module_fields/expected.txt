@@ -1,0 +1,7 @@
+time.struct_time(tm_year=1970, tm_mon=1, tm_mday=1, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=3, tm_yday=1, tm_isdst=0) 1970 1 1 0 3 1 0 (1970, 1, 1) 9 1970
+time.struct_time(tm_year=2023, tm_mon=11, tm_mday=14, tm_hour=22, tm_min=13, tm_sec=20, tm_wday=1, tm_yday=318, tm_isdst=0) 2023-11-14 22:13:20 Tue Nov 14 318 23 PM 10 Tuesday November 14|%|2213 Tue Nov 14 22:13:20 2023
+time.struct_time(tm_year=2000, tm_mon=1, tm_mday=1, tm_hour=12, tm_min=0, tm_sec=0, tm_wday=5, tm_yday=1, tm_isdst=0) True
+float True True int True True int True
+True True
+ValueError
+TypeError

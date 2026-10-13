@@ -1,0 +1,3 @@
+<re.Match object; span=(0, 7), match=b'abc 123'> b'abc 123' (b'abc', b'123') (0, 7) bytes [b'1', b'2'] b'a#b#' [b'a', b'b'] b'a\\.b' True
+[b'\xc3\xa9'] b'baanaanaa' b'ABC' None 0 b'a'
+[b'one', b'two'] [b'', b'a', b'', b'b', b''] (b'AA', 2)

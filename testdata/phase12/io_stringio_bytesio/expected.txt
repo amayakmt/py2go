@@ -1,0 +1,14 @@
+6 12 18 'hello world\nline2\n'
+'hello world\n' 'lin' 'e2\n' '' True
+'hello WORLD\nline2\n' 11
+'hello'
+['a\n', 'b\n', 'c'] True ['x\n', 'y\n'] ['1\n', '2\n']
+ctx
+ False
+True
+I/O operation on closed file
+string argument expected, got 'int'
+b'bytes' 5 b' data' b'bytes data' 0 b'bytes data' 6 b'data'
+2 2 b'abcd' 1 1 b'aXcd' [b'l1\n', b'l2']
+a bytes-like object is required, not 'str'
+'to buffer 42\nsecond'

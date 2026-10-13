@@ -1,0 +1,15 @@
+10 10 10 ['The quick', 'brown fox']
+20 5 19 ['The quick brown fox', 'jumps over the lazy']
+35 3 34 ['The quick brown fox jumps over the', 'lazy dog. Pack my box with five']
+80 2 79 ['The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor', 'jugs.']
+The quick brown fox jumps over
+the lazy dog. Pack my box with
+five dozen liquor jugs.
+  * The quick brown fox jumps
+    over the lazy dog. Pack my
+    box with five dozen liquor
+    jugs.
+['a-very-', 'long-hyphe', 'nated-word', 'and normal'] ['abcde', 'fghij', 'klmno', 'p'] ['abcdefghijklmnop'] [] [] ['one two     three']
+Hello world, [...] short [...] Hello...
+'line1\n  line2\nline3\n' 'a\n\nb\n' 'a\n  b' 'x\n y'
+'  a\n  b\n\n  c' '> a\n  \n> b' 'x\n+y'

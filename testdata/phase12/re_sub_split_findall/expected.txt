@@ -1,0 +1,16 @@
+bbnbnb bbnbna <hi> <there> a2b4c6 > a
+> b -a-b-c- -a-b--d-
+[a|b] [a|] abc b a\c a
+c aabbcc aa dog concat dog
+('bbnbnb', 3) ('banana', 0) ('ba dc', 2)
+['a', 'b', '', 'c'] ['a', 'b', ',c'] ['a', ',', 'b'] ['', 'a', '', 'b', ''] ['a', ' ', 'b', ''] ['abc'] ['', 'a', 'b', 'c', ''] ['a', 'b', 'c', ''] [''] ['a', 'ba', 'b']
+['one', 'two', 'three'] [('1', 'a'), ('2', 'b')] ['', '12', '', ''] ['', '', ''] ['', ''] ['ab', 'bc'] ['', 'a', '', '']
+[(1, '1'), (3, '22'), (6, '333')] [(0, 0), (1, 1), (2, 2)] ['a', 'b'] []
+The Quick Brown Fox a-b-c T Q B F th qck brwn fx 2
+PatternError bad escape \q at position 0
+TypeError decoding to str: need a bytes-like object, int found
+TypeError expected string or bytes-like object, got 'int'
+PatternError invalid group reference 9 at position 3
+IndexError unknown group name 'x'
+TypeError sequence item 0: expected a bytes-like object, str found
+TypeError sequence item 0: expected str instance, bytes found

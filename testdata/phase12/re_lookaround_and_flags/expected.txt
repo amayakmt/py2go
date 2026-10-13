@@ -1,0 +1,6 @@
+['a', 'b'] ['5', '10'] ['10'] ['ab1', 'cd'] 1,234,567
+['c', 'f'] True None
+['Hello', 'HELLO', 'hello'] ['Hello', 'HELLO'] ['a', 'b', 'c'] ['a', 'b', 'c'] ['a'] None True
+[('10', 'kg'), ('20', 'm')] ['ab'] Ab None skip ['\n'] None
+['É', 'é'] ['héllo', 'wörld'] ['h', 'llo', 'w', 'rld'] ['٣٤', '12'] ['12'] ['\xa0'] [] ['àéü']
+re.IGNORECASE re.IGNORECASE re.MULTILINE|re.DOTALL 64 re.ASCII|re.IGNORECASE 34 32 0

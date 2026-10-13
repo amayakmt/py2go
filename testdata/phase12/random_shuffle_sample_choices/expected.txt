@@ -1,0 +1,14 @@
+[0, 2, 16, 1, 10, 19, 17, 18, 7, 3, 8, 4, 14, 11, 12, 13, 6, 9, 5, 15]
+['e', 'a', 'c', 'g', 'd', 'h', 'f', 'b']
+[] [1]
+[888, 421, 59, 789, 357] [6, 7, 1, 5, 9, 8, 2, 4, 3, 0] ['l', ' ', 'w', 'r'] [] [331826, 595264, 224455, 949005, 909954, 426744, 240231, 214424] [5, 95, 28, 2, 33, 64, 40, 72, 90, 53, 78, 14, 42, 83, 77, 29, 30, 59, 46, 17, 25, 47, 63, 76, 18, 98, 49, 43, 87, 82]
+['a', 'c', 'c', 'a'] [4, 1, 4]
+['blue', 'red', 'blue', 'green', 'red', 'red', 'red', 'red'] ['red', 'red', 'red', 'green', 'red', 'red', 'green', 'red'] ['blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'blue', 'green'] [4] []
+ValueError The number of weights does not match the population
+ValueError Total of weights must be greater than zero
+TypeError Cannot specify both weights and cumulative weights
+IndexError list index out of range
+TypeError 'str' object does not support item assignment
+[('5', 'S'), ('9', 'C'), ('T', 'D'), ('2', 'D'), ('K', 'S')] 52 [('2', 'D'), ('5', 'S')]
+[(1, 260), (2, 245), (3, 241), (4, 254)] 1000
+0.19377868244548757 7.087120985854987 2 True True

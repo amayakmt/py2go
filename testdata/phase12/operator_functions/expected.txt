@@ -1,0 +1,12 @@
+5 -1 6 3.5 3 1 1024 -5 -5 7 -6 -1 1180591620717411303424 4 8 14 6
+True True True True False True True False True True True True False
+abcd [1, 2] 3 2 6 1 ab
+[10, 3] {'k': 1, 'z': 2} [1, 2] 3 12 ab {1, 2}
+[('bob', 25, 'x'), ('carl', 25, 'z'), ('alice', 30, 'y')] [('bob', 25, 'x'), ('carl', 25, 'z'), ('alice', 30, 'y')] ('bob', 'x') ['bob', 'alice', 'carl'] 9
+3 (4, 4) 1 ABC bbnbnb ['a', 'b']
+TypeError unsupported operand type(s) for +: 'int' and 'str'
+IndexError list index out of range
+ZeroDivisionError division by zero
+TypeError '<' not supported between instances of 'int' and 'str'
+ValueError sequence.index(x): x not in sequence
+TypeError bad operand type for unary -: 'str'

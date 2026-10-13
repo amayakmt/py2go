@@ -1,0 +1,5 @@
+594 [|  {|    "id": 0,|    "name": "item0",|    "price": 0.0,|  
+True ['item0', 'item1', 'item2', 'item3', 'item4'] 12.5 None {'ok': True}
+{"id": 2, "meta": {"ok": true}, "name": "item2", "price": 2.5, "tags": ["t0", "t1", "extra"]} [0, 1, 2, 3, 4] ['0', '1', '2', '3', '4']
+{"debug": true, "paths": {"root": "/", "tmp": "/tmp"}, "ports": [80, 443, 8080]} /tmp dflt bool
+{"unicode": "\u00e9", "emoji": "\ud83d\ude00", "quote": "\"", "nul": "\u0000"} True

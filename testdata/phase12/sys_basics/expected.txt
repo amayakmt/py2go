@@ -1,0 +1,13 @@
+True (3, 13) 3 13 linux 9223372036854775807 True little 1114111
+1000 True 1.7976931348623157e+308 2.220446049250313e-16 15 4300 True
+5000 utf-8 True
+direct write
+count
+6
+to stdout
+a-b!
+<stdout> False True True
+recursion limit must be greater or equal than 1
+exiting
+SystemExit 0
+('bye',)

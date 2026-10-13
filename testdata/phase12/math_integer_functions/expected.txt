@@ -1,0 +1,14 @@
+1 120 2432902008176640000 15511210043330985984000000 2568
+10 126410606437752 1 0 20 120 3628800 0
+6 5 0 6 1073741824 0 6 12 0 1 19168799962237375610880
+0 3 4 100000000000000000000 1267650600228229401496703205376 24 1 2.0 2432902008176640000 60
+1.0 1.0 0.0 6.0 32 2.0
+TypeError 'float' object cannot be interpreted as an integer
+TypeError 'str' object cannot be interpreted as an integer
+ValueError n must be a non-negative integer
+ValueError k must be a non-negative integer
+ValueError factorial() not defined for negative values
+TypeError 'float' object cannot be interpreted as an integer
+TypeError 'float' object cannot be interpreted as an integer
+TypeError 'str' object cannot be interpreted as an integer
+ValueError Inputs are not the same length
