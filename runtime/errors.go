@@ -11,54 +11,77 @@ import (
 // parents maps every supported exception class to its base class, following
 // CPython's hierarchy. BaseException is the root.
 var parents = map[string]string{
-	"BaseException":       "",
-	"Exception":           "BaseException",
-	"ArithmeticError":     "Exception",
-	"ZeroDivisionError":   "ArithmeticError",
-	"OverflowError":       "ArithmeticError",
-	"FloatingPointError":  "ArithmeticError",
-	"LookupError":         "Exception",
-	"IndexError":          "LookupError",
-	"KeyError":            "LookupError",
-	"ValueError":          "Exception",
-	"UnicodeError":        "ValueError",
-	"TypeError":           "Exception",
-	"AssertionError":      "Exception",
-	"AttributeError":      "Exception",
-	"FrozenInstanceError": "AttributeError",
-	"EOFError":            "Exception",
-	"ImportError":         "Exception",
-	"MemoryError":         "Exception",
-	"NameError":           "Exception",
-	"UnboundLocalError":   "NameError",
-	"OSError":             "Exception",
-	"FileNotFoundError":   "OSError",
-	"PermissionError":     "OSError",
-	"TimeoutError":        "OSError",
-	"ConnectionError":     "OSError",
-	"IsADirectoryError":   "OSError",
-	"ModuleNotFoundError": "ImportError",
-	"SyntaxError":         "Exception",
-	"IndentationError":    "SyntaxError",
-	"UnicodeDecodeError":  "UnicodeError",
-	"UnicodeEncodeError":  "UnicodeError",
-	"BufferError":         "Exception",
-	"ReferenceError":      "Exception",
-	"SystemError":         "Exception",
-	"StopAsyncIteration":  "Exception",
-	"Warning":             "Exception",
-	"UserWarning":         "Warning",
-	"DeprecationWarning":  "Warning",
-	"RuntimeWarning":      "Warning",
-	"StopIteration":       "Exception",
-	"RuntimeError":        "Exception",
-	"NotImplementedError": "RuntimeError",
-	"RecursionError":      "RuntimeError",
-	"GeneratorExit":       "BaseException",
-	"BaseExceptionGroup":  "BaseException",
-	"ExceptionGroup":      "Exception",
-	"KeyboardInterrupt":   "BaseException",
-	"SystemExit":          "BaseException",
+	"BaseException":                    "",
+	"Exception":                        "BaseException",
+	"ArithmeticError":                  "Exception",
+	"ZeroDivisionError":                "ArithmeticError",
+	"OverflowError":                    "ArithmeticError",
+	"FloatingPointError":               "ArithmeticError",
+	"LookupError":                      "Exception",
+	"IndexError":                       "LookupError",
+	"KeyError":                         "LookupError",
+	"ValueError":                       "Exception",
+	"UnicodeError":                     "ValueError",
+	"TypeError":                        "Exception",
+	"AssertionError":                   "Exception",
+	"AttributeError":                   "Exception",
+	"FrozenInstanceError":              "AttributeError",
+	"EOFError":                         "Exception",
+	"ImportError":                      "Exception",
+	"MemoryError":                      "Exception",
+	"NameError":                        "Exception",
+	"UnboundLocalError":                "NameError",
+	"OSError":                          "Exception",
+	"FileNotFoundError":                "OSError",
+	"PermissionError":                  "OSError",
+	"TimeoutError":                     "OSError",
+	"ConnectionError":                  "OSError",
+	"IsADirectoryError":                "OSError",
+	"NotADirectoryError":               "OSError",
+	"FileExistsError":                  "OSError",
+	"InterruptedError":                 "OSError",
+	"ChildProcessError":                "OSError",
+	"ProcessLookupError":               "OSError",
+	"BlockingIOError":                  "OSError",
+	"BrokenPipeError":                  "ConnectionError",
+	"ConnectionAbortedError":           "ConnectionError",
+	"ConnectionRefusedError":           "ConnectionError",
+	"ConnectionResetError":             "ConnectionError",
+	"UnicodeTranslateError":            "UnicodeError",
+	"TabError":                         "IndentationError",
+	"FutureWarning":                    "Warning",
+	"ImportWarning":                    "Warning",
+	"PendingDeprecationWarning":        "Warning",
+	"ResourceWarning":                  "Warning",
+	"SyntaxWarning":                    "Warning",
+	"UnicodeWarning":                   "Warning",
+	"BytesWarning":                     "Warning",
+	"EncodingWarning":                  "Warning",
+	"PythonFinalizationError":          "RuntimeError",
+	"ModuleNotFoundError":              "ImportError",
+	"SyntaxError":                      "Exception",
+	"IndentationError":                 "SyntaxError",
+	"UnicodeDecodeError":               "UnicodeError",
+	"UnicodeEncodeError":               "UnicodeError",
+	"BufferError":                      "Exception",
+	"ReferenceError":                   "Exception",
+	"SystemError":                      "Exception",
+	"StopAsyncIteration":               "Exception",
+	"Warning":                          "Exception",
+	"UserWarning":                      "Warning",
+	"DeprecationWarning":               "Warning",
+	"RuntimeWarning":                   "Warning",
+	"StopIteration":                    "Exception",
+	"RuntimeError":                     "Exception",
+	"NotImplementedError":              "RuntimeError",
+	"RecursionError":                   "RuntimeError",
+	"GeneratorExit":                    "BaseException",
+	"BaseExceptionGroup":               "BaseException",
+	"ExceptionGroup":                   "Exception",
+	"KeyboardInterrupt":                "BaseException",
+	"SystemExit":                       "BaseException",
+	"re_pm_PatternError":               "Exception",
+	"json__decoder_pm_JSONDecodeError": "ValueError",
 }
 
 // IsExceptionClass reports whether name is a supported built-in exception
@@ -124,6 +147,10 @@ type PyError struct {
 	// when this one was raised. Both appear in the report of an uncaught error.
 	Cause, Context  *PyError
 	SuppressContext bool
+
+	// Attrs holds the attributes of errors that have more than args: the
+	// range of a UnicodeError, the errno of an OSError.
+	Attrs map[string]any
 
 	// Excs holds the exceptions of an ExceptionGroup, and Msg its message.
 	Excs    []*PyError
@@ -304,6 +331,9 @@ func Report() {
 	if !ok {
 		panic(r)
 	}
+	if IsSubclass(e.Type, "SystemExit") {
+		os.Exit(exitCode(e))
+	}
 	fmt.Fprint(os.Stderr, report(e, map[*PyError]bool{}))
 	os.Exit(1)
 }
@@ -358,4 +388,21 @@ func unboundName(name string) *PyError {
 		return newError("AttributeError", "module '"+mod+"' has no attribute '"+name[i+len(modMarker):]+"'")
 	}
 	return newError("NameError", "name '"+name+"' is not defined")
+}
+
+// exitCode is the status of a program that ended with SystemExit: the
+// integer it was given, 0 for none, and 1 after printing any other value to
+// standard error.
+func exitCode(e *PyError) int {
+	if len(e.Args) == 0 || IsNone(e.Args[0]) {
+		return 0
+	}
+	switch c := Unbox(e.Args[0]).(type) {
+	case int64:
+		return int(c & 0xff)
+	case bool:
+		return int(b2i(c))
+	}
+	fmt.Fprintln(os.Stderr, Str(e.Args[0]))
+	return 1
 }

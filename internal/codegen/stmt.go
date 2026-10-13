@@ -921,7 +921,7 @@ func (g *generator) enterLoopElse(b *strings.Builder, hasElse bool) string {
 	flag := ""
 	if hasElse {
 		flag = g.tmp("broke")
-		fmt.Fprintf(b, "{\nvar %s bool\n_ = %s\n", flag, flag)
+		fmt.Fprintf(b, "var %s bool\n_ = %s\n", flag, flag)
 	}
 	g.elseFlags = append(g.elseFlags, flag)
 	return flag
@@ -935,7 +935,7 @@ func (g *generator) leaveLoopElse(b *strings.Builder, flag string, orelse []pyas
 	if err := g.block(b, orelse); err != nil {
 		return err
 	}
-	b.WriteString("}\n}\n")
+	b.WriteString("}\n")
 	return nil
 }
 

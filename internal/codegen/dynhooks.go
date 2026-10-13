@@ -69,7 +69,7 @@ func (g *generator) funcInfoWith(name string, sig *funcSig, snapshot bool) strin
 		}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "&%s{Name: %s, Params: []string{%s}", g.rt("FuncInfo"), strconv.Quote(name), strings.Join(params, ", "))
+	fmt.Fprintf(&b, "&%s{Name: %s, Params: []string{%s}", g.rt("FuncInfo"), strconv.Quote(pyName(name)), strings.Join(params, ", "))
 	if len(defaults) > 0 {
 		fmt.Fprintf(&b, ", Defaults: map[string]func() any{%s}", strings.Join(defaults, ", "))
 	}
@@ -104,7 +104,7 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 
 // dynDunders are the special methods the runtime calls by name, as the
 // built-ins round(), bytes() and the like do.
-var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true}
+var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true}
 
 func isDunder(name string) bool {
 	return strings.HasPrefix(name, "__") && strings.HasSuffix(name, "__")

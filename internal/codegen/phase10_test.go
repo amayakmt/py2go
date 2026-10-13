@@ -26,6 +26,7 @@ func TestGeneratePhase10Output(t *testing.T) {
 		{"a float constant sum stays a constant", "print(0.1 + 0.2)\n", []string{"float64(0.1) + float64(0.2)"}, []string{"func() float64"}},
 		{"a hash of any size is reduced", "class A:\n    def __hash__(self):\n        return 2 ** 70\n", []string{"runtime.HashResult("}, nil},
 		{"a big index slices through the runtime", "xs = [1, 2, 3]\nprint(xs[10 ** 30:])\n", []string{"runtime.DynGetItem("}, nil},
+		{"a class with its own __hash__ is a dict key as an object", "class A:\n    def __eq__(self, o):\n        return True\n    def __hash__(self):\n        return 1\n\n\nd = {A(): 1}\n", []string{"runtime.NewDict[any, int64]"}, nil},
 		{"complex literal", "z = 3 + 4j\nprint(z)\n", []string{"complex128(complex(0.0, 4.0))"}, nil},
 		{"bytes literal", "b = b'ab'\nprint(b)\n", []string{`runtime.Bytes("ab")`}, nil},
 		{"ellipsis literal", "print(...)\n", []string{"runtime.Ellipsis"}, nil},
@@ -54,7 +55,6 @@ func TestGeneratePhase10Output(t *testing.T) {
 
 func TestPhase10Errors(t *testing.T) {
 	tests := []struct{ name, src, want string }{
-		{"a user class with __eq__ and __hash__ is not a dict key yet", "class A:\n    def __eq__(self, o):\n        return True\n    def __hash__(self):\n        return 1\n\n\nd = {A(): 1}\n", "not hashable"},
 		{"memoryview is not there", "print(memoryview(b'a'))\n", "memoryview"},
 		{"the operand of ~ must be an int", "print(~1.5)\n", "operator ~ on float"},
 	}

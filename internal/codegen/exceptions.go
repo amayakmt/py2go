@@ -33,7 +33,7 @@ func (g *generator) attribute(n *pyast.Attribute) (value, error) {
 				return value{}, err
 			}
 			if v.typ == tExc {
-				return value{code: v.at(precAtom) + ".Type", typ: tStr, prec: precAtom}, nil
+				return value{code: g.rt("BaseTypeName") + "(" + v.at(precAtom) + ".Type)", typ: tStr, prec: precAtom}, nil
 			}
 			return value{}, unsupported(fmt.Sprintf("type() of %s", v.typ), n.Line())
 		}

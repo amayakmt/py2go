@@ -46,7 +46,7 @@ func Load(entry string, load Loader) (*pyast.Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}}
+	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}, enums: map[string]*enumInfo{}}
 	m := &module{name: "__main__", file: abs, ast: mod, entry: true}
 	l.mods[m.name] = m
 	l.begin(m)
@@ -63,6 +63,7 @@ type module struct {
 	pkg       bool // a package (its file is __init__.py or it is a directory)
 	namespace bool // a directory without __init__.py
 	entry     bool
+	builtins  bool // the module of the built-in names
 	ast       *pyast.Module
 	prefix    string
 	bound     map[string]bool // names bound at the top level
@@ -80,9 +81,10 @@ type alias struct {
 }
 
 type linker struct {
-	root string
-	load Loader
-	mods map[string]*module
+	root  string
+	load  Loader
+	mods  map[string]*module
+	enums map[string]*enumInfo
 }
 
 func (m *module) pkgName() string {
@@ -106,27 +108,41 @@ func (l *linker) begin(m *module) {
 	m.bound = map[string]bool{}
 	m.aliases = map[string]alias{}
 	collectBound(m.ast.Body, m.bound)
+	l.scanEnums(m)
 	m.allNames = allList(m.ast.Body)
 	for _, name := range globalNames(m.ast.Body) {
 		m.bound[name] = true
 	}
 }
 
-// find locates the module with the given dotted name on the project's path.
+// find locates the module with the given dotted name on the project's path,
+// then among the modules py2go ships.
 func (l *linker) find(name string) (*module, error) {
 	if m, ok := l.mods[name]; ok {
 		return m, nil
 	}
+	if name == "builtins" {
+		// The built-in names: nothing is renamed and nothing runs.
+		m := &module{name: name, ast: &pyast.Module{}, builtins: true, started: true, finished: true, defined: map[string]bool{}}
+		m.bound, m.aliases = map[string]bool{}, map[string]alias{}
+		l.mods[name] = m
+		return m, nil
+	}
 	parts := strings.Split(name, ".")
-	dir := l.root
+	root := l.root
+	if !existsIn(root, parts[0]) {
+		root = stdlibRoot()
+		if root == "" || !existsIn(root, parts[0]) {
+			return nil, nil
+		}
+	}
+	dir := root
 	for i, part := range parts {
 		last := i == len(parts)-1
 		sub := filepath.Join(dir, part)
-		var m *module
 		pkgName := strings.Join(parts[:i+1], ".")
-		if existing, ok := l.mods[pkgName]; ok {
-			m = existing
-		} else {
+		if _, ok := l.mods[pkgName]; !ok {
+			var m *module
 			switch {
 			case fileExists(filepath.Join(sub, "__init__.py")):
 				m = &module{name: pkgName, file: filepath.Join(sub, "__init__.py"), pkg: true}
@@ -155,6 +171,11 @@ func (l *linker) find(name string) (*module, error) {
 		dir = sub
 	}
 	return l.mods[name], nil
+}
+
+func existsIn(dir, top string) bool {
+	p := filepath.Join(dir, top)
+	return fileExists(p+".py") || dirExists(p)
 }
 
 func fileExists(p string) bool {
@@ -228,6 +249,11 @@ type rewriter struct {
 	l      *linker
 	m      *module
 	scopes []*scope
+
+	// Inside a classmethod of an enum, cls names the class.
+	enumCls       string
+	enumOf        *enumInfo
+	enumClassBody *enumInfo // the enum whose body is being rewritten
 }
 
 type scope struct {
@@ -385,7 +411,7 @@ func (r *rewriter) absolute(n *pyast.ImportFrom) (string, bool) {
 // provides reports whether the module binds the name at its top level or
 // imports it from another module of the project.
 func (m *module) provides(l *linker, name string) bool {
-	if m.bound[name] {
+	if m.builtins || m.bound[name] {
 		return true
 	}
 	_, ok := m.aliases[name]
@@ -638,6 +664,9 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 		return x, nil
 	case *pyast.Attribute:
 		if res, ok, err := r.attribute(x); ok || err != nil {
+			if err == nil {
+				res = r.enumUse(res)
+			}
 			return res, err
 		}
 	case *pyast.FunctionDef:
@@ -654,6 +683,14 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 		return x, r.comprehension(x.Generators, []*pyast.Node{&x.Elt})
 	case *pyast.DictComp:
 		return x, r.comprehension(x.Generators, []*pyast.Node{&x.Key, &x.Value})
+	case *pyast.Assign:
+		if err := r.children(x); err != nil {
+			return nil, err
+		}
+		if cls, ok, err := r.expandNamedTuple(x); ok || err != nil {
+			return cls, err
+		}
+		return x, nil
 	case *pyast.Global:
 		for i, nm := range x.Names {
 			x.Names[i] = r.mangleGlobal(nm)
@@ -676,7 +713,10 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 			x.Rest = r.bindName(x.Rest)
 		}
 	}
-	return n, r.children(n)
+	if err := r.children(n); err != nil {
+		return nil, err
+	}
+	return r.enumUse(n), nil
 }
 
 func (r *rewriter) mangleGlobal(name string) string {
@@ -687,7 +727,7 @@ func (r *rewriter) mangleGlobal(name string) string {
 }
 
 func (m *module) prefixOf() string {
-	if m.entry {
+	if m.entry || m.builtins {
 		return ""
 	}
 	return m.prefix
@@ -716,6 +756,11 @@ func (r *rewriter) attribute(x *pyast.Attribute) (pyast.Node, bool, error) {
 	}
 	cur := a
 	for i, attr := range chain {
+		if cur.name != "" && cur.mod.bound[cur.name+"__"+attr] {
+			// chain.from_iterable: the module defines it as chain__from_iterable.
+			cur = alias{mod: cur.mod, name: cur.name + "__" + attr}
+			continue
+		}
 		if cur.name != "" {
 			// A name of a module: the rest is attribute access on it.
 			var node pyast.Node = &pyast.Name{ID: cur.mod.prefixOf() + cur.name, Lineno: x.Lineno}
@@ -885,6 +930,15 @@ func (r *rewriter) function(x *pyast.FunctionDef) (pyast.Node, error) {
 	}
 	r.push(names, false)
 	defer r.pop()
+	if r.enumClassBody != nil && len(x.Args.Positional()) > 0 {
+		for _, d := range x.Decorators {
+			if nm, ok := d.(*pyast.Name); ok && nm.ID == "classmethod" {
+				savedCls, savedOf := r.enumCls, r.enumOf
+				r.enumCls, r.enumOf = x.Args.Positional()[0].Name, r.enumClassBody
+				defer func() { r.enumCls, r.enumOf = savedCls, savedOf }()
+			}
+		}
+	}
 	if err := r.list(&x.Body); err != nil {
 		return nil, err
 	}
@@ -1010,8 +1064,17 @@ func (r *rewriter) class(x *pyast.ClassDef) (pyast.Node, error) {
 	collectBound(x.Body, names)
 	r.push(names, true)
 	defer r.pop()
-	if err := r.list(&x.Body); err != nil {
+	savedBody := r.enumClassBody
+	r.enumClassBody = r.l.enums[x.Name]
+	err := r.list(&x.Body)
+	r.enumClassBody = savedBody
+	if err != nil {
 		return nil, err
+	}
+	if info := r.l.enums[x.Name]; info != nil && len(r.scopes) == 1 {
+		r.pop()
+		defer r.push(names, true)
+		return r.enumClass(x, info)
 	}
 	return x, nil
 }
@@ -1043,7 +1106,7 @@ func (r *rewriter) comprehension(gens []*pyast.Comprehension, elts []*pyast.Node
 			if err != nil {
 				return err
 			}
-			g.Iter = n
+			g.Iter = r.enumIter(n)
 			r.push(names, false)
 			defer r.pop()
 		} else {
@@ -1051,7 +1114,7 @@ func (r *rewriter) comprehension(gens []*pyast.Comprehension, elts []*pyast.Node
 			if err != nil {
 				return err
 			}
-			g.Iter = n
+			g.Iter = r.enumIter(n)
 		}
 		t, err := r.node(g.Target)
 		if err != nil {

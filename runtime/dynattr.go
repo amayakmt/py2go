@@ -105,6 +105,15 @@ func callClass(c *ClassRef, args []any, kw []KW) any {
 // the parameter's type, and boxes the result.
 func callReflect(fv reflect.Value, info *FuncInfo, args []any, kw []KW) any {
 	t := fv.Type()
+	if info == nil && t.NumIn() > 0 && !t.IsVariadic() && strings.HasPrefix(t.In(t.NumIn()-1).Name(), "VarTuple[") {
+		// A function with *args and no registered signature: its last
+		// parameter takes the extra arguments.
+		params := make([]string, t.NumIn()-1)
+		for i := range params {
+			params[i] = fmt.Sprintf("arg%d", i+1)
+		}
+		info = &FuncInfo{Params: params, VarArgs: "args"}
+	}
 	name := "function"
 	if info != nil && info.Name != "" {
 		name = info.Name
@@ -355,8 +364,11 @@ func DynGetAttr(obj any, name string) any {
 		}
 		switch name {
 		case "__name__", "__qualname__":
-			return c.Name
+			return BaseTypeName(c.Name)
 		case "__module__":
+			if i := strings.LastIndex(c.Name, modMarker); i >= 0 {
+				return strings.ReplaceAll(c.Name[:i], "__", ".")
+			}
 			if c.Builtin {
 				return "builtins"
 			}
@@ -406,7 +418,28 @@ func DynDelAttr(obj any, name string) {
 }
 
 func excAttr(e *PyError, name string) (any, bool) {
+	if v, ok := e.Attrs[name]; ok {
+		return v, true
+	}
 	switch name {
+	case "code":
+		if IsSubclass(e.Type, "SystemExit") {
+			switch len(e.Args) {
+			case 0:
+				return nil, true
+			case 1:
+				return e.Args[0], true
+			}
+			return NewVarTuple[any](e.Args...), true
+		}
+	case "errno", "strerror", "filename", "filename2":
+		if IsSubclass(e.Type, "OSError") {
+			return nil, true
+		}
+	case "name", "path":
+		if IsSubclass(e.Type, "ImportError") {
+			return nil, true
+		}
 	case "args":
 		return NewVarTuple[any](e.Args...), true
 	case "__cause__":
@@ -1199,4 +1232,13 @@ func isNumberVal(v any) bool {
 		return true
 	}
 	return false
+}
+
+// ExcAttr is e.name for the attributes of the built-in exceptions that the
+// compiler does not know the type of.
+func ExcAttr(e *PyError, name string) any {
+	if v, ok := excAttr(e, name); ok {
+		return v
+	}
+	panic(NoAttribute(TypeName(e), name))
 }

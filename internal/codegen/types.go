@@ -535,7 +535,7 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		if !g.hashable(elem) {
 			return "", unsupported(fmt.Sprintf("set element type %s (not hashable)", elem), n.Line())
 		}
-		return setOf(elem), nil
+		return setOf(g.keyType(elem)), nil
 
 	case "dict":
 		if len(args) != 2 {
@@ -552,7 +552,7 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		if !g.hashable(key) {
 			return "", unsupported(fmt.Sprintf("dict key type %s (not hashable)", key), n.Line())
 		}
-		return dictOf(key, val), nil
+		return dictOf(g.keyType(key), val), nil
 
 	case "tuple":
 		if len(args) == 2 {

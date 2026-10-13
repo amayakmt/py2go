@@ -35,6 +35,10 @@ func (g *generator) operatorMethod(c *classInfo, name string, arg pyType) *membe
 // left operand's method, then the reflected method of the right operand.
 func (g *generator) classBinary(op string, l, r value, line int) (value, error) {
 	name := dunderName[op]
+	if op == "Mod" && l.typ == tStr {
+		// "%s" % instance formats with the instance's str().
+		return value{code: g.rt("Cast") + "[string](" + g.rt("DynBinary") + `("Mod", ` + l.typed().code + ", " + r.typed().code + "))", typ: tStr, prec: precAtom}, nil
+	}
 	if name == "" {
 		return value{}, unsupported("operator "+opSymbols[op]+" on instances of classes", line)
 	}
@@ -511,6 +515,14 @@ func (g *generator) isinstanceCall(n *pyast.Call) (value, error) {
 		return value{}, err
 	}
 	specs, err := g.typeSpecs(n.Args[1])
+	if err != nil && strings.Contains(err.Error(), "that is not a class name") {
+		// The classes are held in a variable: decided when the program runs.
+		b, cerr := g.classesObject(n.Args[1])
+		if cerr != nil {
+			return value{}, cerr
+		}
+		return g.dynValue(g.rt("DynIsInstance")+"("+g.boxed(x)+", "+b+")", tBool), nil
+	}
 	if err != nil {
 		return value{}, err
 	}
@@ -612,7 +624,7 @@ func (g *generator) typeOperand(n pyast.Node) (code string, ok bool, err error) 
 				case arg.typ == tObject:
 					return g.rt("TypeName") + "(" + arg.code + ")", true, nil
 				case arg.typ == tExc:
-					return arg.at(precAtom) + ".Type", true, nil
+					return g.rt("BaseTypeName") + "(" + arg.at(precAtom) + ".Type)", true, nil
 				case !arg.typ.isClass():
 					return strconv.Quote(pythonTypeName(arg.typ)), true, nil
 				}
@@ -873,9 +885,29 @@ func (g *generator) hashable(t pyType) bool {
 	}
 	if c := g.classOf(t); c != nil {
 		mode, _ := c.hashMode()
-		return mode == "identity"
+		return mode == "identity" || mode == "user"
 	}
 	return false
+}
+
+// userHashed reports whether t is a class with its own __hash__: its
+// instances are dict keys and set elements as objects, which the runtime
+// compares with __hash__ and __eq__.
+func (g *generator) userHashed(t pyType) bool {
+	c := g.classOf(t)
+	if c == nil {
+		return false
+	}
+	mode, _ := c.hashMode()
+	return mode == "user"
+}
+
+// keyType is the type a dict or set holds for keys of type t.
+func (g *generator) keyType(t pyType) pyType {
+	if g.userHashed(t) {
+		return tObject
+	}
+	return t
 }
 
 // sumInstances is sum() over instances: start + x0 + x1 + ..., with the

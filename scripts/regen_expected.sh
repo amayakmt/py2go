@@ -14,16 +14,19 @@ cd "$(dirname "$0")/.."
 
 dirs=("$@")
 if [ ${#dirs[@]} -eq 0 ]; then
-	dirs=(testdata/phase[2-9]/*/ testdata/phase10/*/)
+	dirs=(testdata/phase[2-9]/*/ testdata/phase1[0-9]/*/)
 fi
 
 for dir in "${dirs[@]}"; do
 	dir=${dir%/}
-	rm -f "$dir/expected.err"
+	rm -f "$dir/expected.err" "$dir/expected.exit"
 	if uv run --python 3.13 python "$dir/input.py" >"$dir/expected.txt" 2>"$dir/.stderr"; then
 		:
 	else
+		code=$?
 		tail -n 1 "$dir/.stderr" >"$dir/expected.err"
+		# A program that ends with sys.exit(n) has status n.
+		if [ "$code" != 1 ]; then echo "$code" >"$dir/expected.exit"; fi
 	fi
 	rm -f "$dir/.stderr"
 done

@@ -1,1 +1,1 @@
-unsupported: keyword argument 'file' of print() at line 1
+unsupported: keyword argument 'foo' of print() at line 1

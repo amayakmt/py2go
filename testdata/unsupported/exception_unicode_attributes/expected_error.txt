@@ -1,1 +1,0 @@
-unsupported: attribute '.start' of an exception at line 4

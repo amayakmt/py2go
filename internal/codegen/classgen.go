@@ -497,6 +497,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 	switch mode, m := c.hashMode(); mode {
 	case "user":
 		fmt.Fprintf(out, "func %s PyHash() int64 { return self.M___hash____%s() }\n", recv, m.owner.name)
+		fmt.Fprintf(out, "func %s PyUserHash() {}\n", recv)
 	case "none":
 		fmt.Fprintf(out, "func %s PyHash() int64 { panic(%s(%q)) }\n", recv, g.rt("UnhashableType"), c.name)
 	default:

@@ -112,6 +112,7 @@ func (g *generator) setComp(n *pyast.SetComp, want pyType) (value, error) {
 	if elem == "" {
 		return value{}, unsupported("comprehension whose element could not be compiled", n.Line())
 	}
+	elem = g.keyType(elem)
 	t := setOf(elem)
 	return g.literalFunc(t, out, fmt.Sprintf("%s[%s]()", g.rt("NewSet"), g.goType(elem)), code), nil
 }
@@ -145,6 +146,7 @@ func (g *generator) dictComp(n *pyast.DictComp, want pyType) (value, error) {
 	if key == "" {
 		return value{}, unsupported("comprehension whose element could not be compiled", n.Line())
 	}
+	key = g.keyType(key)
 	t := dictOf(key, val)
 	return g.literalFunc(t, out, fmt.Sprintf("%s[%s]()", g.rt("NewDict"), g.dictGoArgs(t)), code), nil
 }

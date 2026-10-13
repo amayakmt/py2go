@@ -66,3 +66,21 @@ func FloatRepr(f float64) string {
 	}
 	return sign + digits[:exp+1] + "." + digits[exp+1:]
 }
+
+// PrintTo is print(*args, sep=sep, end=end, file=file): the text goes to
+// file.write; a file of None is standard output.
+func PrintTo(file any, sep, end string, args ...any) {
+	var b strings.Builder
+	for i, a := range args {
+		if i > 0 {
+			b.WriteString(sep)
+		}
+		b.WriteString(Str(a))
+	}
+	b.WriteString(end)
+	if IsNone(file) {
+		os.Stdout.WriteString(b.String())
+		return
+	}
+	DynCallMethod(file, "write", []any{b.String()}, nil)
+}

@@ -173,7 +173,8 @@ func encodeLimited(s, name string, limit rune, errs string) string {
 			} else {
 				what = fmt.Sprintf("character '%s' in position %d", strings.Trim(charEscapeRepr(r), "'"), i)
 			}
-			panic(newError("UnicodeEncodeError", fmt.Sprintf("'%s' codec can't encode %s: ordinal not in range(%d)", name, what, limit)))
+			panic(unicodeErr("UnicodeEncodeError", name, s, i, j, fmt.Sprintf("ordinal not in range(%d)", limit),
+				fmt.Sprintf("'%s' codec can't encode %s: ordinal not in range(%d)", name, what, limit)))
 		}
 		i = j - 1
 	}
@@ -211,7 +212,8 @@ func DecodeBytes(s, encoding, errs string) string {
 			case "backslashreplace":
 				fmt.Fprintf(&b, `\x%02x`, s[i])
 			default:
-				panic(newError("UnicodeDecodeError", fmt.Sprintf("'ascii' codec can't decode byte 0x%02x in position %d: ordinal not in range(128)", s[i], i)))
+				panic(unicodeErr("UnicodeDecodeError", "ascii", Bytes(s), i, i+1, "ordinal not in range(128)",
+					fmt.Sprintf("'ascii' codec can't decode byte 0x%02x in position %d: ordinal not in range(128)", s[i], i)))
 			}
 		}
 		return b.String()
@@ -372,9 +374,11 @@ func decodeUTF8(s, errs string) string {
 			}
 		default:
 			if end-i == 1 {
-				panic(newError("UnicodeDecodeError", fmt.Sprintf("'utf-8' codec can't decode byte 0x%02x in position %d: %s", s[i], i, reason)))
+				panic(unicodeErr("UnicodeDecodeError", "utf-8", Bytes(s), i, end, reason,
+					fmt.Sprintf("'utf-8' codec can't decode byte 0x%02x in position %d: %s", s[i], i, reason)))
 			}
-			panic(newError("UnicodeDecodeError", fmt.Sprintf("'utf-8' codec can't decode bytes in position %d-%d: %s", i, end-1, reason)))
+			panic(unicodeErr("UnicodeDecodeError", "utf-8", Bytes(s), i, end, reason,
+				fmt.Sprintf("'utf-8' codec can't decode bytes in position %d-%d: %s", i, end-1, reason)))
 		}
 		i = end
 	}
@@ -498,7 +502,17 @@ func decodeFailure(b *strings.Builder, codec string, data []byte, off, start, en
 // decodeError is the UnicodeDecodeError with CPython's message.
 func decodeError(codec string, bad []byte, start int, reason string) *PyError {
 	if len(bad) == 1 {
-		return newError("UnicodeDecodeError", fmt.Sprintf("'%s' codec can't decode byte 0x%02x in position %d: %s", codec, bad[0], start, reason))
+		return unicodeErr("UnicodeDecodeError", codec, Bytes(bad), 0, 1, reason,
+			fmt.Sprintf("'%s' codec can't decode byte 0x%02x in position %d: %s", codec, bad[0], start, reason))
 	}
-	return newError("UnicodeDecodeError", fmt.Sprintf("'%s' codec can't decode bytes in position %d-%d: %s", codec, start, start+len(bad)-1, reason))
+	return unicodeErr("UnicodeDecodeError", codec, Bytes(bad), 0, len(bad), reason,
+		fmt.Sprintf("'%s' codec can't decode bytes in position %d-%d: %s", codec, start, start+len(bad)-1, reason))
+}
+
+// unicodeErr builds a UnicodeDecodeError or UnicodeEncodeError with the
+// attributes CPython gives it.
+func unicodeErr(class, encoding string, object any, start, end int, reason, msg string) *PyError {
+	e := newError(class, msg)
+	e.Attrs = map[string]any{"encoding": encoding, "object": object, "start": int64(start), "end": int64(end), "reason": reason}
+	return e
 }

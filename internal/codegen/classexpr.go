@@ -324,7 +324,7 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 				return value{code: g.rt("TypeName") + "(" + arg.code + ")", typ: tStr, prec: precAtom}, true, nil
 			}
 			if arg.typ == tExc {
-				return value{code: arg.at(precAtom) + ".Type", typ: tStr, prec: precAtom}, true, nil
+				return value{code: g.rt("BaseTypeName") + "(" + arg.at(precAtom) + ".Type)", typ: tStr, prec: precAtom}, true, nil
 			}
 			if arg.typ == tOptExc {
 				return value{code: g.rt("ExcTypeName") + "(" + arg.code + ")", typ: tStr, prec: precAtom}, true, nil
@@ -404,6 +404,10 @@ func (g *generator) excAttr(recv value, attr string, line int) (value, error) {
 		return value{code: recv.at(precAtom) + ".Context", typ: tOptExc, prec: precAtom}, nil
 	case "__suppress_context__":
 		return value{code: recv.at(precAtom) + ".SuppressContext", typ: tBool, prec: precAtom}, nil
+	}
+	switch attr {
+	case "code", "errno", "strerror", "filename", "filename2", "name", "path", "encoding", "object", "start", "end", "reason", "msg", "pos", "lineno", "colno", "doc", "pattern":
+		return g.dynValue(g.rt("ExcAttr")+"("+recv.at(precAtom)+", "+strconv.Quote(attr)+")", tObject), nil
 	}
 	return value{}, unsupported("attribute '."+attr+"' of an exception", line)
 }
@@ -990,5 +994,8 @@ func (g *generator) classObject(v value) value {
 		code = g.rt("ClassOf") + "(" + v.at(precAtom) + ".PyClassName())"
 	}
 	v.code, v.prec = code, precAtom
+	if v.typ.isClassRef() {
+		v.typ = tObject
+	}
 	return v
 }

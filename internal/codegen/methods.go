@@ -271,6 +271,7 @@ func (g *generator) dictClassMethod(n *pyast.Call, m *pyast.Attribute) (value, e
 	if err != nil {
 		return value{}, err
 	}
+	elem = g.keyType(elem)
 	t := dictOf(elem, val.typ)
 	return value{code: call(g.rt("FromKeys")+"["+g.dictGoArgs(t)+"]", keys, val.code), typ: t, prec: precAtom}, nil
 }

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -921,10 +922,47 @@ func dynKey(v any) any {
 		}
 		Hash(x)
 		return x
+	case userHasher:
+		return internUserKey(x)
 	default:
 		Hash(x) // raises TypeError for an unhashable value
 		return x
 	}
+}
+
+// userHasher is implemented by the instances of a class that defines
+// __hash__.
+type userHasher interface {
+	Hasher
+	PyUserHash()
+}
+
+// userKey stands for an object with its own __hash__ among the keys of a
+// dict or the elements of a set: equal objects (by __eq__) get one key.
+type userKey struct {
+	h int64
+	n int
+}
+
+var (
+	userKeysMu sync.Mutex
+	userKeys   = map[int64][]any{}
+)
+
+func internUserKey(x userHasher) userKey {
+	h := Hash(x)
+	userKeysMu.Lock()
+	reps := userKeys[h]
+	userKeysMu.Unlock()
+	for i, rep := range reps {
+		if Eq(rep, x) {
+			return userKey{h, i}
+		}
+	}
+	userKeysMu.Lock()
+	defer userKeysMu.Unlock()
+	userKeys[h] = append(userKeys[h], x)
+	return userKey{h, len(userKeys[h]) - 1}
 }
 
 // bigKey stands for an int beyond 64 bits among the keys of a dict.
@@ -957,6 +995,8 @@ func canonKey(b *strings.Builder, v any) {
 		b.WriteString(string(x))
 	case bigKey:
 		b.WriteString("b" + string(x) + ";")
+	case userKey:
+		fmt.Fprintf(b, "u%d.%d;", x.h, x.n)
 	default:
 		fmt.Fprintf(b, "p%p;", x)
 	}

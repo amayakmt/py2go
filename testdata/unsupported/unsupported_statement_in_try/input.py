@@ -1,4 +1,4 @@
 try:
-    import os
+    import socket
 except ImportError:
     pass

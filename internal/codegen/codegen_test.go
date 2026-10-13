@@ -179,7 +179,7 @@ func TestGenerateExceptionOutput(t *testing.T) {
 		{"uncaught exceptions are reported", "print(1)\n", []string{"defer runtime.Report()"}, nil},
 		{"no runtime, no report", "x: int = 1\n", nil, []string{"Report", "import"}},
 		{"try body is a closure", "try:\n    print(1)\nexcept ValueError:\n    pass\n", []string{"runtime.Catch(func() {", `runtime.Match(_py1_exc, "ValueError")`, "panic(_py1_exc)"}, nil},
-		{"handler binds a name", "try:\n    pass\nexcept (KeyError, IndexError) as e:\n    print(e, type(e).__name__)\n", []string{`runtime.Match(_py1_exc, "KeyError", "IndexError")`, "var e *runtime.PyError = _py1_exc", "runtime.Print(e, e.Type)"}, nil},
+		{"handler binds a name", "try:\n    pass\nexcept (KeyError, IndexError) as e:\n    print(e, type(e).__name__)\n", []string{`runtime.Match(_py1_exc, "KeyError", "IndexError")`, "var e *runtime.PyError = _py1_exc", "runtime.Print(e, runtime.BaseTypeName(e.Type))"}, nil},
 		{"bare raise re-raises the caught exception", "try:\n    pass\nexcept ValueError:\n    raise\n", []string{"\"ValueError\") {\npanic(_py1_exc)"}, nil},
 		{"bare except has no match test", "try:\n    pass\nexcept:\n    pass\n", []string{"if _py1_exc != nil {\n{"}, []string{"Match"}},
 		{"finally runs after the closure", "try:\n    print(1)\nfinally:\n    print(2)\n", []string{"_py2_pending := runtime.Catch(func() {", "if _py2_pending != nil {\npanic(_py2_pending)"}, nil},

@@ -68,7 +68,22 @@ func renameReserved(mod *pyast.Module) bool {
 			}
 		}
 	})
-	bound := boundNames(mod, protected)
+	// A Go builtin such as min or len is renamed where the program binds it:
+	// at module level everywhere, in a function inside that function. A use
+	// of the builtin elsewhere keeps its name.
+	moduleBound := scopeBound(nil, mod.Body, protected)
+	var scopes []map[string]bool
+	active := func(name string) bool {
+		if moduleBound[name] {
+			return true
+		}
+		for _, sc := range scopes {
+			if sc[name] {
+				return true
+			}
+		}
+		return false
+	}
 	// A keyword of a call is renamed only when some def takes a parameter of
 	// that name; otherwise it belongs to a builtin or to a mapping.
 	params := map[string]bool{}
@@ -78,7 +93,7 @@ func renameReserved(mod *pyast.Module) bool {
 		}
 	})
 	rename := func(name string) string {
-		if goKeywords[name] || goTypeNames[name] || (goBuiltinFuncs[name] && bound[name]) {
+		if goKeywords[name] || goTypeNames[name] || (goBuiltinFuncs[name] && active(name)) {
 			return name + renameSuffix
 		}
 		return name
@@ -104,6 +119,14 @@ func renameReserved(mod *pyast.Module) bool {
 			}
 			if (v.Type().Implements(nodeType) || v.Type().Elem().Kind() == reflect.Struct) && !protected[v.Pointer()] {
 				renameFields(v.Elem(), rename, renameKeyword, &changed)
+			}
+			switch x := v.Interface().(type) {
+			case *pyast.FunctionDef:
+				scopes = append(scopes, scopeBound(x.Args, x.Body, protected))
+				defer func() { scopes = scopes[:len(scopes)-1] }()
+			case *pyast.Lambda:
+				scopes = append(scopes, scopeBound(x.Args, nil, protected))
+				defer func() { scopes = scopes[:len(scopes)-1] }()
 			}
 			visit(v.Elem())
 		case reflect.Struct:
@@ -210,4 +233,84 @@ func pyName(name string) string {
 		return base
 	}
 	return name
+}
+
+// scopeBound is the names a scope binds: its parameters, the targets of its
+// assignments and loops, and the names of the defs and classes in it, not
+// those of the functions and classes below.
+func scopeBound(args *pyast.Arguments, body []pyast.Node, protected map[uintptr]bool) map[string]bool {
+	bound := map[string]bool{}
+	if args != nil {
+		for _, a := range args.Positional() {
+			bound[a.Name] = true
+		}
+		for _, a := range args.Kwonly {
+			bound[a.Name] = true
+		}
+		if args.Vararg != nil {
+			bound[args.Vararg.Name] = true
+		}
+		if args.Kwarg != nil {
+			bound[args.Kwarg.Name] = true
+		}
+	}
+	var targets func(n pyast.Node)
+	targets = func(n pyast.Node) {
+		switch x := n.(type) {
+		case *pyast.Name:
+			if !protected[reflect.ValueOf(x).Pointer()] {
+				bound[x.ID] = true
+			}
+		case *pyast.Tuple:
+			for _, e := range x.Elts {
+				targets(e)
+			}
+		case *pyast.List:
+			for _, e := range x.Elts {
+				targets(e)
+			}
+		case *pyast.Starred:
+			targets(x.Value)
+		}
+	}
+	for _, st := range body {
+		walkPrune(st, func(n pyast.Node) bool {
+			switch x := n.(type) {
+			case *pyast.FunctionDef:
+				if !protected[reflect.ValueOf(x).Pointer()] {
+					bound[x.Name] = true
+				}
+				return false
+			case *pyast.ClassDef:
+				bound[x.Name] = true
+				return false
+			case *pyast.Lambda:
+				return false
+			case *pyast.Assign:
+				for _, t := range x.Targets {
+					targets(t)
+				}
+			case *pyast.AugAssign:
+				targets(x.Target)
+			case *pyast.AnnAssign:
+				targets(x.Target)
+			case *pyast.For:
+				targets(x.Target)
+			case *pyast.With:
+				for _, it := range x.Items {
+					if it.Vars != nil {
+						targets(it.Vars)
+					}
+				}
+			case *pyast.ExceptHandler:
+				if x.Name != "" {
+					bound[x.Name] = true
+				}
+			case *pyast.NamedExpr:
+				targets(x.Target)
+			}
+			return true
+		})
+	}
+	return bound
 }

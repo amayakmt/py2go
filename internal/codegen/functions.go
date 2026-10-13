@@ -501,6 +501,7 @@ func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header str
 	if sig.hasDoc {
 		stmts = stmts[1:]
 	}
+	g.hoistBlockLocals(&body, fn, stmts)
 	if err := g.predeclareDefs(&body, stmts); err != nil {
 		return "", err
 	}
@@ -1076,4 +1077,156 @@ func moduleAnnotated(mod *pyast.Module) bool {
 		}
 	})
 	return found
+}
+
+// hoistBlockLocals declares at the top of a function the variables that are
+// first assigned inside a compound statement. In Python they belong to the
+// function, so code after the block can read them; in Go a declaration in the
+// block would end with it. The type is the join found for the variable.
+func (g *generator) hoistBlockLocals(b *strings.Builder, fn *pyast.FunctionDef, stmts []pyast.Node) {
+	if g.annotatedNames == nil {
+		return
+	}
+	declared := map[string]bool{}
+	for _, p := range paramNamesOf(fn.Args) {
+		declared[p] = true
+	}
+	for _, name := range hasGlobalOrNonlocal(stmts) {
+		declared[name] = true
+	}
+	var order []string
+	seen := map[string]bool{}
+	var visitStmts func(list []pyast.Node, depth int)
+	bind := func(target pyast.Node, depth int) {
+		var names []string
+		var collect func(n pyast.Node)
+		collect = func(n pyast.Node) {
+			switch x := n.(type) {
+			case *pyast.Name:
+				names = append(names, x.ID)
+			case *pyast.Tuple:
+				for _, e := range x.Elts {
+					collect(e)
+				}
+			case *pyast.List:
+				for _, e := range x.Elts {
+					collect(e)
+				}
+			case *pyast.Starred:
+				collect(x.Value)
+			}
+		}
+		collect(target)
+		for _, nm := range names {
+			if depth == 0 {
+				declared[nm] = true
+			} else if !declared[nm] && !seen[nm] {
+				seen[nm] = true
+				order = append(order, nm)
+			}
+		}
+	}
+	visitStmts = func(list []pyast.Node, depth int) {
+		for _, st := range list {
+			switch x := st.(type) {
+			case *pyast.Assign:
+				for _, t := range x.Targets {
+					bind(t, depth)
+				}
+			case *pyast.AugAssign:
+				bind(x.Target, depth)
+			case *pyast.AnnAssign:
+				if nm, ok := x.Target.(*pyast.Name); ok {
+					declared[nm.ID] = true
+				}
+			case *pyast.For:
+				bind(x.Target, depth)
+				visitStmts(x.Body, depth+1)
+				visitStmts(x.Orelse, depth+1)
+			case *pyast.While:
+				visitStmts(x.Body, depth+1)
+				visitStmts(x.Orelse, depth+1)
+			case *pyast.If:
+				visitStmts(x.Body, depth+1)
+				visitStmts(x.Orelse, depth+1)
+			case *pyast.With:
+				for _, it := range x.Items {
+					if it.Vars != nil {
+						bind(it.Vars, depth)
+					}
+				}
+				visitStmts(x.Body, depth+1)
+			case *pyast.Try:
+				visitStmts(x.Body, depth+1)
+				for _, h := range x.Handlers {
+					visitStmts(h.Body, depth+1)
+				}
+				visitStmts(x.Orelse, depth+1)
+				visitStmts(x.Finalbody, depth+1)
+			case *pyast.Match:
+				for _, c := range x.Cases {
+					visitStmts(c.Body, depth+1)
+				}
+			case *pyast.FunctionDef:
+				declared[x.Name] = true
+			case *pyast.ClassDef:
+				declared[x.Name] = true
+			}
+		}
+	}
+	visitStmts(stmts, 0)
+	for _, name := range order {
+		if g.annotatedNames[g.joinScope][name] {
+			continue
+		}
+		t, ok := g.joins[g.joinScope][name]
+		if !ok || t == "" || t == tNone || t == tExc {
+			continue
+		}
+		if _, exists := g.env.lookup(name); exists {
+			continue
+		}
+		g.env.declare(name, t)
+		fmt.Fprintf(b, "var %s %s\n_ = %s\n", name, g.goType(t), name)
+	}
+}
+
+func paramNamesOf(a *pyast.Arguments) []string {
+	var out []string
+	if a == nil {
+		return out
+	}
+	for _, p := range a.Positional() {
+		out = append(out, p.Name)
+	}
+	if a.Vararg != nil {
+		out = append(out, a.Vararg.Name)
+	}
+	for _, p := range a.Kwonly {
+		out = append(out, p.Name)
+	}
+	if a.Kwarg != nil {
+		out = append(out, a.Kwarg.Name)
+	}
+	return out
+}
+
+// hasGlobalOrNonlocal lists the names a function body declares global or
+// nonlocal.
+func hasGlobalOrNonlocal(stmts []pyast.Node) []string {
+	var out []string
+	for _, st := range stmts {
+		walkPrune(st, func(n pyast.Node) bool {
+			switch x := n.(type) {
+			case *pyast.Global:
+				out = append(out, x.Names...)
+			case *pyast.Nonlocal:
+				out = append(out, x.Names...)
+			case *pyast.FunctionDef, *pyast.ClassDef, *pyast.Lambda:
+				return false
+			}
+			return true
+		})
+	}
+	return out
 }

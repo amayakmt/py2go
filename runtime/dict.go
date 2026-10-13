@@ -351,7 +351,31 @@ func (d *Dict[K, V]) pyRepr() string {
 
 func (d *Dict[K, V]) pyEq(other any) bool {
 	o, ok := other.(*Dict[K, V])
-	if !ok || d.live != o.live {
+	if !ok {
+		// A dict of other key or value types: compare through the objects.
+		od, isDict := other.(interface {
+			Len() int64
+			ContainsAny(any) bool
+			GetItemAny(any) any
+			IterAny() Cursor[any]
+		})
+		if _, isSeq := other.(Seq); !isDict || isSeq || od.Len() != int64(d.live) {
+			return false
+		}
+		if _, isSet := other.(interface{ Add(any) }); isSet {
+			return false
+		}
+		for _, e := range d.entries {
+			if e.dead {
+				continue
+			}
+			if !od.ContainsAny(e.key) || !Eq(e.val, od.GetItemAny(e.key)) {
+				return false
+			}
+		}
+		return true
+	}
+	if d.live != o.live {
 		return false
 	}
 	for _, e := range d.entries {

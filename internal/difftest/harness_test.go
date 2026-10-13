@@ -129,8 +129,12 @@ func runDiffCase(t *testing.T, dir string) {
 		if last := lines[len(lines)-1]; last != wantErr {
 			t.Errorf("last line of stderr: got %q, want %q\n--- stderr ---\n%s", last, wantErr, stderr)
 		}
-		if code != 1 {
-			t.Errorf("exit status: got %d, want 1 (CPython fails with %q)", code, wantErr)
+		wantCode := 1
+		if b, err := os.ReadFile(filepath.Join(dir, "expected.exit")); err == nil {
+			fmt.Sscanf(string(b), "%d", &wantCode)
+		}
+		if code != wantCode {
+			t.Errorf("exit status: got %d, want %d (CPython fails with %q)", code, wantCode, wantErr)
 		}
 	} else if code != 0 {
 		t.Fatalf("exit status %d, want 0\n%s\n--- generated ---\n%s", code, stderr, src)

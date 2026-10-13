@@ -76,6 +76,7 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 	if key != tObject && mentionsObject(key) {
 		key = tObject // a tuple holding objects is compared by the runtime
 	}
+	key = g.keyType(key)
 	t := dictOf(key, val)
 	args := g.dictGoArgs(t)
 	for i := range entries {
@@ -147,6 +148,7 @@ func (g *generator) setLit(n *pyast.Set, want pyType) (value, error) {
 	if elem != tObject && mentionsObject(elem) {
 		elem = tObject // a tuple holding objects is compared by the runtime
 	}
+	elem = g.keyType(elem)
 	for i, v := range vals {
 		codes[i] = g.relabel(v, elem).typed().code
 	}

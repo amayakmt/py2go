@@ -12,6 +12,29 @@ import (
 // functions of the same name are tried first, in namedCall.
 func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error) {
 	name := callee.ID
+	if name == "_native" && !g.isVariable(name) && g.sigs[name] == nil {
+		// _native("module.function", args...) calls a function the runtime
+		// implements; the modules of the standard library written in Python
+		// use it for the parts that are native.
+		args, kw, err := g.dynCallArgs(n)
+		if err != nil {
+			return value{}, err
+		}
+		if kw == "" {
+			return g.dynValue(g.rt("NativeCallPair")+"("+args+")", tObject), nil
+		}
+		return g.dynValue(g.rt("NativeCall")+"("+args+", "+kw+")", tObject), nil
+	}
+	if (name == "open" || name == "input") && !g.isVariable(name) && g.sigs[name] == nil {
+		args, kw, err := g.dynCallArgs(n)
+		if err != nil {
+			return value{}, err
+		}
+		if kw == "" {
+			return g.dynValue(g.rt("NativeBuiltinPair")+"("+strconv.Quote(name)+", "+args+")", tObject), nil
+		}
+		return g.dynValue(g.rt("NativeBuiltin")+"("+strconv.Quote(name)+", "+args+", "+kw+")", tObject), nil
+	}
 	if v, ok, err := g.dynBuiltin(name, n, false); ok || err != nil {
 		return v, err
 	}
@@ -563,7 +586,19 @@ func (g *generator) filterCall(n *pyast.Call) (value, error) {
 func (g *generator) printCall(n *pyast.Call) (value, error) {
 	sep, end := strconv.Quote(" "), strconv.Quote("\n")
 	custom := false
+	file := ""
 	for _, kw := range n.Keywords {
+		if kw.Arg == "file" || kw.Arg == "flush" {
+			v, err := g.typedExpr(kw.Value)
+			if err != nil {
+				return value{}, err
+			}
+			if kw.Arg == "file" {
+				file = g.boxed(v)
+				custom = true
+			}
+			continue
+		}
 		if kw.Arg != "sep" && kw.Arg != "end" {
 			return value{}, unsupported(fmt.Sprintf("keyword argument '%s' of print()", kw.Arg), kw.Line())
 		}
@@ -619,6 +654,9 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 		for _, seg := range segments[1:] {
 			all = "append(" + all + ", " + seg + "...)"
 		}
+		if file != "" {
+			return value{code: g.rt("PrintTo") + "(" + file + ", " + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, nil
+		}
 		return value{code: g.rt("PrintOpts") + "(" + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, nil
 	}
 
@@ -636,6 +674,9 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 	fn := "Print"
 	if custom {
 		fn = "PrintOpts"
+	}
+	if file != "" {
+		return value{code: g.rt("PrintTo") + "(" + file + ", " + strings.Join(args, ", ") + ")", typ: tNone, prec: precAtom}, nil
 	}
 	return value{code: call(g.rt(fn), args...), typ: tNone, prec: precAtom}, nil
 }
@@ -841,6 +882,9 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 		if err := g.hashableOrError(elem, "set element", n.Line()); err != nil {
 			return value{}, err
 		}
+		if g.userHashed(elem) {
+			return g.dynValue(g.rt("DynSet")+"("+g.boxed(v)+")", setOf(tObject)), nil
+		}
 		return value{code: call(g.rt("SetFrom")+"["+g.goType(elem)+"]", code), typ: setOf(elem), prec: precAtom}, nil
 	}
 	// dict
@@ -853,6 +897,9 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 	k, val := elem.elems()[0], elem.elems()[1]
 	if err := g.hashableOrError(k, "dict key", n.Line()); err != nil {
 		return value{}, err
+	}
+	if g.userHashed(k) {
+		return g.dynValue(g.rt("DynDict")+"("+g.boxed(v)+")", dictOf(tObject, tObject)), nil
 	}
 	t := dictOf(k, val)
 	return value{code: call(g.rt("DictFrom")+"["+g.dictGoArgs(t)+"]", code), typ: t, prec: precAtom}, nil

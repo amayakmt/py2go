@@ -820,7 +820,8 @@ func (d *Dict[K, V]) DynMethod(name string, args []any, kw []KW) (any, bool) {
 			if o, ok := src.(*Dict[K, V]); ok {
 				d.Update(o)
 			} else if m, ok := src.(interface{ IterAny() Cursor[any] }); ok {
-				if g, isDict := src.(interface{ GetItemAny(any) any }); isDict {
+				_, isSeq := src.(Seq)
+				if g, isDict := src.(interface{ GetItemAny(any) any }); isDict && !isSeq {
 					for c := m.IterAny(); c.Next(); {
 						d.Set(conv[K](c.Value()), conv[V](g.GetItemAny(c.Value())))
 					}

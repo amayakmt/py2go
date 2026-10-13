@@ -1,1 +1,1 @@
-print("a", file=None)
+print("a", foo=None)

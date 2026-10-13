@@ -1,2 +1,2 @@
-with open("f") as f:
+with 5 as f:
     pass
