@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -193,6 +194,12 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 	if err != nil {
 		return err
 	}
+	if c, ok := n.Value.(*pyast.Constant); ok && t != tObject {
+		// A literal that is not of the annotated type is plainly wrong.
+		if name := literalKind(c); name != "" && pyType(name) != t {
+			return mismatch(fmt.Sprintf("variable '%s'", target.ID), t, pyType(name), n.Line())
+		}
+	}
 	if cv, cerr := g.coerce(v, t, fmt.Sprintf("variable '%s'", target.ID), n.Line()); cerr != nil {
 		// Python does not check annotations: a value that is not what the
 		// hint says, because it is built at run time, keeps its own type.
@@ -269,7 +276,11 @@ func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
 			g.declare(b, target.ID, v.typ, v.typed().code)
 			return nil
 		}
+		// While joins are recorded an object assigned to a variable of another
+		// type widens the variable; it is not cast to the type it has so far.
+		g.keepObject = g.recordJoins && !g.annotatedNames[g.bindingScope(target.ID)][target.ID]
 		v, err := g.exprAs(n.Value, t)
+		g.keepObject = false
 		if err != nil {
 			return err
 		}
@@ -607,7 +618,9 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	if !declared {
 		return unsupported(fmt.Sprintf("augmented assignment to undeclared name '%s'", target.ID), n.Line())
 	}
+	g.keepObject = g.recordJoins && !g.annotatedNames[g.bindingScope(target.ID)][target.ID]
 	right, err := g.exprAs(n.Value, strip(t))
+	g.keepObject = false
 	if err != nil {
 		return err
 	}
@@ -640,7 +653,7 @@ func (g *generator) augName(b *strings.Builder, n *pyast.AugAssign, target *pyas
 	}
 
 	// Plain "x += y" when both sides already have the same type.
-	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && t != tObject && !t.isSet() && !t.isClass() {
+	if goOp, direct := map[string]string{"Add": "+", "Sub": "-", "Mult": "*", "BitAnd": "&", "BitOr": "|", "BitXor": "^"}[n.Op]; direct && right.typ == t && t != tBool && t != tObject && !(g.bigMode && t == tInt) && !(t == tInt && n.Op == "Mult") && !t.isSet() && !t.isClass() {
 		fmt.Fprintf(b, "%s %s= %s\n", target.ID, goOp, right.code)
 		g.afterAssign(b, target.ID, global)
 		return nil
@@ -705,7 +718,14 @@ func (g *generator) augItem(b *strings.Builder, n *pyast.AugAssign, target *pyas
 		return err
 	}
 	if res.typ != elem {
-		return mismatch("item", elem, res.typ, n.Line())
+		conv, cerr := g.coerce(res, elem, "item", n.Line())
+		if cerr != nil {
+			if g.widenVar(target.Value) {
+				return nil
+			}
+			return mismatch("item", elem, res.typ, n.Line())
+		}
+		res = conv
 	}
 	fmt.Fprintf(b, "%s.Set(%s, %s)\n", list, index, res.code)
 	return nil
@@ -748,6 +768,10 @@ func (g *generator) returnStmt(b *strings.Builder, n *pyast.Return) error {
 	v, err := g.exprAs(n.Value, g.ret)
 	if err != nil {
 		return err
+	}
+	if v.typ == tObject && g.ret == tInt && strings.HasSuffix(g.fnName, "__hash__") {
+		// A hash of any size is reduced the way hash() does.
+		v = value{code: g.rt("HashResult") + "(" + g.boxed(v) + ")", typ: tInt, prec: precAtom}
 	}
 	v, err = g.coerce(v, g.ret, dest, n.Line())
 	if err != nil {
@@ -1341,3 +1365,18 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 // typingKnown are the other names of typing and collections.abc that are
 // harmless to import.
 var typingKnown = map[string]bool{"Any": true, "Iterator": true, "Generator": true, "Optional": true, "Union": true, "ClassVar": true, "Iterable": true, "Callable": true, "Collection": true, "Sized": true, "Hashable": true}
+
+// literalKind names the type of a literal that has no Go type of its own.
+func literalKind(c *pyast.Constant) string {
+	switch c.PyType {
+	case "bytes", "complex":
+		return c.PyType
+	case "ellipsis":
+		return "ellipsis"
+	case "int":
+		if _, big := c.Value.(*big.Int); big {
+			return "int (beyond 64 bits)"
+		}
+	}
+	return ""
+}

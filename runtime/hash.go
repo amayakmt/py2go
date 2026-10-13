@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"math"
+	"math/big"
 	"math/bits"
 	"os"
 	"strconv"
@@ -211,18 +212,42 @@ func Hash(v any) int64 {
 		return hashInt(v)
 	case int:
 		return hashInt(int64(v))
+	case *big.Int:
+		return bigHash(v)
 	case bool:
 		return b2i(v)
 	case string:
 		return hashStr(v)
 	case float64:
 		return hashFloat(v)
+	case complex128:
+		return complexHash(v)
 	case Hasher:
-		return v.PyHash()
+		return fixHash(v.PyHash())
+	case nil, NoneT:
+		return 4238894112
+	case EllipsisT:
+		return 4238894113
+	case NotImplementedT:
+		return 4238894114
 	case Seq:
 		if v.Kind() == "tuple" {
 			return hashTuple(v)
 		}
 	}
 	panic(newError("TypeError", "unhashable type: '"+TypeName(v)+"'"))
+}
+
+// HashResult is what hash() makes of the value a __hash__ method returned:
+// an int of any size, reduced to a machine word, with -1 taken as -2.
+func HashResult(v any) int64 {
+	switch x := Unbox(v).(type) {
+	case int64:
+		return fixHash(x)
+	case bool:
+		return b2i(x)
+	case *big.Int:
+		return bigHash(x)
+	}
+	panic(newError("TypeError", "__hash__ method should return an integer"))
 }

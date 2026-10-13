@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 	"strings"
 )
 
@@ -22,6 +24,14 @@ func (s Slice) Bounds() Bounds {
 			return
 		}
 		n, ok := intOf(v)
+		if !ok {
+			if bi, isBig := v.(*big.Int); isBig {
+				n, ok = 1<<62, true
+				if bi.Sign() < 0 {
+					n = -(1 << 62)
+				}
+			}
+		}
 		if !ok {
 			panic(newError("TypeError", "slice indices must be integers or None or have an __index__ method"))
 		}
@@ -75,6 +85,9 @@ func conv[T any](v any) T {
 		if b, ok := v.(bool); ok {
 			return any(b2i(b)).(T)
 		}
+		if _, big := v.(*big.Int); big {
+			panic(overflowError("Python int too large to convert to C long"))
+		}
 	case any:
 		return any(v).(T)
 	}
@@ -88,6 +101,37 @@ func conv[T any](v any) T {
 func convOpt[T any](v any) (T, bool) {
 	var zero T
 	ok := true
+	// Numbers are equal across types when they are looked up: 1 == 1.0 == True.
+	switch any(zero).(type) {
+	case int64:
+		switch x := Unbox(v).(type) {
+		case float64:
+			if x == math.Trunc(x) && math.Abs(x) < 1<<62 {
+				return any(int64(x)).(T), true
+			}
+			return zero, false
+		case bool:
+			return any(b2i(x)).(T), true
+		}
+	case bool:
+		switch x := Unbox(v).(type) {
+		case int64:
+			if x == 0 || x == 1 {
+				return any(x == 1).(T), true
+			}
+			return zero, false
+		case float64:
+			if x == 0 || x == 1 {
+				return any(x == 1).(T), true
+			}
+			return zero, false
+		}
+	case float64:
+		switch x := Unbox(v).(type) {
+		case *big.Int:
+			return any(bigToFloatLoose(x)).(T), true
+		}
+	}
 	func() {
 		defer func() {
 			if recover() != nil {
@@ -102,6 +146,9 @@ func convOpt[T any](v any) (T, bool) {
 // indexArg reads the index of a subscript.
 func indexArg(key any) (int64, bool) {
 	key = Unbox(key)
+	if isBig(key) {
+		panic(indexError("cannot fit 'int' into an index-sized integer"))
+	}
 	n, ok := intOf(key)
 	return n, ok
 }
@@ -395,7 +442,33 @@ func (s *Set[T]) ContainsAny(item any) bool {
 	return ok && s.Has(k)
 }
 
+// anySet copies the set as a set of objects.
+func (s *Set[T]) anySet() *Set[any] {
+	out := NewSet[any]()
+	for c := s.Iter(); c.Next(); {
+		out.Add(c.Value())
+	}
+	return out
+}
+
 func (s *Set[T]) DynBinary(op string, other any, reflected bool) (any, bool) {
+	if fs, isFrozen := other.(*FrozenSet); isFrozen && !reflected {
+		// set op frozenset is a set, of the kind of the left operand.
+		r, ok := (&FrozenSet{s.anySet()}).PyBinop(op, fs, false)
+		if !ok {
+			return nil, false
+		}
+		res := r.(*FrozenSet).s
+		out := NewSet[T]()
+		for c := res.Iter(); c.Next(); {
+			k, ok := convOpt[T](c.Value())
+			if !ok {
+				return res, true
+			}
+			out.Add(k)
+		}
+		return out, true
+	}
 	o, ok := other.(*Set[T])
 	if !ok {
 		return nil, false
@@ -460,8 +533,15 @@ func (t VarTuple[T]) DynBinary(op string, other any, reflected bool) (any, bool)
 
 func (r *Range) IterAny() Cursor[any] { return anyCursor[int64]{r.Iter()} }
 func (r *Range) ContainsAny(item any) bool {
-	n, ok := intOf(Unbox(item))
-	return ok && r.Has(n)
+	v := Unbox(item)
+	if f, isFloat := v.(float64); isFloat {
+		if math.IsInf(f, 0) || math.IsNaN(f) || f != math.Trunc(f) || math.Abs(f) >= 1<<62 {
+			return false
+		}
+		v = int64(f)
+	}
+	n, ok := intOf(v)
+	return ok && !isBig(v) && r.Has(n)
 }
 func (r *Range) GetItemAny(key any) any {
 	if s, isSlice := key.(Slice); isSlice {
@@ -564,8 +644,54 @@ func DynSum(items any, start any) any {
 	if acc == nil {
 		acc = int64(0)
 	}
+	switch Unbox(acc).(type) {
+	case string:
+		panic(newError("TypeError", "sum() can't sum strings [use ''.join(seq) instead]"))
+	case Bytes:
+		panic(newError("TypeError", "sum() can't sum bytes [use b''.join(seq) instead]"))
+	case *ByteArray:
+		panic(newError("TypeError", "sum() can't sum bytearray [use b''.join(seq) instead]"))
+	}
+	// Floats are added with Neumaier's compensation, as CPython 3.12+ does.
+	var f, comp float64
+	fmode := false
+	flush := func() {
+		if comp != 0 && !math.IsInf(comp, 0) && !math.IsNaN(comp) {
+			f += comp
+		}
+		acc, comp, fmode = f, 0, false
+	}
 	for c := DynIter(items).Iter(); c.Next(); {
-		acc = DynBinary("Add", acc, c.Value())
+		v := Unbox(c.Value())
+		if !fmode {
+			if x, ok := Unbox(acc).(float64); ok {
+				f, comp, fmode = x, 0, true
+			}
+		}
+		if fmode {
+			switch x := v.(type) {
+			case float64:
+				t := f + x
+				if math.Abs(f) >= math.Abs(x) {
+					comp += (f - t) + x
+				} else {
+					comp += (x - t) + f
+				}
+				f = t
+				continue
+			case int64:
+				f += float64(x)
+				continue
+			case bool:
+				f += float64(b2i(x))
+				continue
+			}
+			flush()
+		}
+		acc = DynBinary("Add", acc, v)
+	}
+	if fmode {
+		flush()
 	}
 	return acc
 }

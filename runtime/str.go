@@ -62,8 +62,8 @@ func StrContains(s, sub string) bool { return strings.Contains(s, sub) }
 // plus the four ASCII separators 0x1c to 0x1f that Python also counts.
 func isSpace(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }
 
-func StrUpper(s string) string { return strings.ToUpper(s) }
-func StrLower(s string) string { return strings.ToLower(s) }
+func StrUpper(s string) string { return FullUpper(s) }
+func StrLower(s string) string { return FullLower(s) }
 
 func StrStrip(s string) string { return strings.TrimFunc(s, isSpace) }
 

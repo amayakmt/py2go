@@ -96,6 +96,9 @@ func (g *generator) convertInit(code string, from, to pyType) string {
 		return code
 	}
 	switch {
+	case to == tObject && (from == tInt || from == tFloat || from == tBool || from == tStr):
+		// A constant gets its Go type before it is boxed.
+		return g.goType(from) + "(" + code + ")"
 	case from.isList() && to.isList(), from.isSet() && to.isSet(), from.isDict() && to.isDict():
 		return g.rt("DynDeepAs") + "[" + g.goType(to) + "](" + code + ")"
 	}

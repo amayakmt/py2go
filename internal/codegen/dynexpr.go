@@ -51,6 +51,21 @@ func involvesObject(l, r value) bool { return l.typ == tObject || r.typ == tObje
 // dynBuiltin handles a call of a builtin function that has an object among its
 // arguments. It reports false when no argument is an object.
 func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, bool, error) {
+	switch name {
+	case "bytes", "bytearray", "complex", "frozenset", "slice", "object":
+		if g.isVariable(name) || g.sigs[name] != nil {
+			return value{}, false, nil
+		}
+		args, kw, err := g.dynCallArgs(n)
+		if err != nil {
+			return value{}, true, err
+		}
+		cls := g.rt("BuiltinClassOf") + "(" + strconv.Quote(name) + ")"
+		if kw == "" {
+			return g.dynValue(g.rt("DynCallPair")+"("+cls+", "+args+")", tObject), true, nil
+		}
+		return g.dynValue(g.rt("DynCallKw")+"("+cls+", "+args+", "+kw+")", tObject), true, nil
+	}
 	if (name == "getattr" || name == "setattr" || name == "hasattr" || name == "delattr") && !g.isVariable(name) && g.sigs[name] == nil && !n.HasKeywords {
 		args := make([]value, len(n.Args))
 		for i, a := range n.Args {
@@ -88,8 +103,8 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 	}
 	switch name {
 	case "len", "int", "float", "abs", "round", "sum", "list", "tuple", "set", "dict", "sorted", "reversed",
-		"enumerate", "any", "all", "min", "max", "hash", "map", "filter", "zip",
-		"ord", "chr", "bin", "hex", "oct", "pow", "divmod", "format":
+		"enumerate", "any", "all", "min", "max", "hash", "id", "map", "filter", "zip",
+		"ord", "chr", "bin", "hex", "oct", "pow", "divmod", "format", "ascii", "str":
 	default:
 		return value{}, false, nil
 	}
@@ -103,6 +118,9 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 			"max": tObject, "min": tObject, "sum": tObject, "any": tObject, "all": tObject, "len": tObject,
 			"enumerate": tObject, "dict": tObject}
 		rt, known := results[name]
+		if !known && runtime.BuiltinFunc(name) != nil {
+			rt, known = tObject, true
+		}
 		if !known || g.isVariable(name) || g.sigs[name] != nil {
 			return value{}, false, nil
 		}
@@ -152,9 +170,9 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 		return one("DynLen", tInt)
 	case "int":
 		if len(args) == 2 && len(kw) == 0 {
-			return g.dynValue(rt("DynIntBase")+"("+g.boxed(args[0])+", "+g.boxed(args[1])+")", tInt), true, nil
+			return g.dynValue(rt("DynIntBase")+"("+g.boxed(args[0])+", "+g.boxed(args[1])+")", tObject), true, nil
 		}
-		return one("DynInt", tInt)
+		return one("DynIntAny", tObject)
 	case "float":
 		return one("DynFloat", tFloat)
 	case "list":
@@ -173,6 +191,8 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 		return one("DynAll", tBool)
 	case "hash":
 		return one("Hash", tInt)
+	case "id":
+		return one("Id", tInt)
 	case "abs":
 		if len(args) == 1 {
 			return g.dynUnary("Abs", args[0]), true, nil
@@ -189,6 +209,13 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 			start = g.boxed(args[1])
 		}
 		return g.dynValue(rt("DynSum")+"("+g.boxed(args[0])+", "+start+")", tObject), true, nil
+	case "ascii":
+		return one("Ascii", tStr)
+	case "str":
+		if len(args) < 2 || len(args) > 3 || len(kw) != 0 {
+			return value{}, false, nil
+		}
+		return g.dynValue(rt("StrDecode")+"("+g.dynArgs(args)+")", tStr), true, nil
 	case "ord":
 		return one("DynOrd", tInt)
 	case "chr":
@@ -339,7 +366,15 @@ func (g *generator) dynSubscript(base value, index pyast.Node) (value, error) {
 
 // indexIsObject reports whether the index expression is an object.
 func (g *generator) indexIsObject(index pyast.Node) bool {
-	if _, isSlice := index.(*pyast.Slice); isSlice {
+	if sl, isSlice := index.(*pyast.Slice); isSlice {
+		for _, b := range []pyast.Node{sl.Lower, sl.Upper, sl.Step} {
+			if b == nil {
+				continue
+			}
+			if v, err := g.typedExpr(b); err == nil && v.typ == tObject {
+				return true
+			}
+		}
 		return false
 	}
 	v, err := g.typedExpr(index)
@@ -439,10 +474,31 @@ func (g *generator) dynMethodCall(n *pyast.Call, m *pyast.Attribute, recv value)
 	if err != nil {
 		return value{}, err
 	}
+	var code string
 	if kw == "" {
-		return g.dynValue(g.rt("DynMethodPair")+"("+g.boxed(recv)+", "+strconv.Quote(m.Attr)+", "+args+")", tObject), nil
+		code = g.rt("DynMethodPair") + "(" + g.boxed(recv) + ", " + strconv.Quote(m.Attr) + ", " + args + ")"
+	} else {
+		code = g.rt("DynCallMethod") + "(" + g.boxed(recv) + ", " + strconv.Quote(m.Attr) + ", " + args + ", " + kw + ")"
 	}
-	return g.dynValue(g.rt("DynCallMethod")+"("+g.boxed(recv)+", "+strconv.Quote(m.Attr)+", "+args+", "+kw+")", tObject), nil
+	if recv.typ == tStr {
+		// The result of a str method has a known type.
+		if t, ok := strMethodResults[m.Attr]; ok {
+			return g.dynValue(g.rt("Cast")+"["+g.goType(t)+"]("+code+")", t), nil
+		}
+	}
+	return g.dynValue(code, tObject), nil
+}
+
+// strMethodResults are the types str methods return.
+var strMethodResults = map[string]pyType{
+	"capitalize": tStr, "title": tStr, "swapcase": tStr, "casefold": tStr, "expandtabs": tStr, "zfill": tStr,
+	"center": tStr, "ljust": tStr, "rjust": tStr, "translate": tStr, "format_map": tStr, "removeprefix": tStr,
+	"removesuffix": tStr, "lower": tStr, "upper": tStr, "strip": tStr, "lstrip": tStr, "rstrip": tStr,
+	"replace": tStr, "join": tStr, "format": tStr,
+	"isalpha": tBool, "isdigit": tBool, "isalnum": tBool, "isspace": tBool, "isupper": tBool, "islower": tBool,
+	"istitle": tBool, "isidentifier": tBool, "isprintable": tBool, "isascii": tBool, "isnumeric": tBool,
+	"isdecimal": tBool, "startswith": tBool, "endswith": tBool,
+	"find": tInt, "rfind": tInt, "index": tInt, "rindex": tInt, "count": tInt,
 }
 
 // augDynItem is "base[index] op= value" where the base or the index is an
@@ -507,7 +563,7 @@ func (g *generator) runtimeTruth(v value) string { return g.truth(v).code }
 // dynMethodOK reports whether a method call on recv can go to the run time.
 func (g *generator) dynMethodOK(recv value) bool {
 	t := recv.typ
-	return t == tObject || t == tStr || t.isList() || t.isDict() || t.isSet() || t.isVarTuple() || t == tInt || t == tFloat
+	return t == tObject || t == tStr || t.isList() || t.isDict() || t.isSet() || t.isVarTuple() || t == tInt || t == tFloat || t == tBool
 }
 
 // The built-ins that can be used as values.
@@ -521,6 +577,7 @@ var dynBuiltinValues = map[string]bool{
 
 var dynBuiltinTypes = map[string]bool{
 	"int": true, "float": true, "str": true, "bool": true, "list": true, "tuple": true, "set": true, "dict": true,
+	"bytes": true, "bytearray": true, "complex": true, "frozenset": true, "slice": true, "range": true, "object": true,
 }
 
 // boxable reports whether v can be handed to the dynamic operations.
@@ -576,6 +633,12 @@ func (g *generator) valueBoolOp(op string, values []pyast.Node) (value, error) {
 // the static rules do not cover, is decided when the program runs.
 func fallbackOK(err error) bool {
 	msg := err.Error()
+	// Numbers compare across types: [1.5, 2.0].count(2) is fine.
+	for _, pair := range []string{"bool, got int", "int, got bool", "float, got int", "int, got float", "float, got bool", "bool, got float"} {
+		if strings.Contains(msg, "expects "+pair) {
+			return true
+		}
+	}
 	return !strings.Contains(msg, " expects ") || strings.Contains(msg, "object")
 }
 

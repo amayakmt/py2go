@@ -1,6 +1,9 @@
 package runtime
 
-import "math"
+import (
+	"math"
+	"math/big"
+)
 
 // Div is Python's / when either operand is a float. It always yields a
 // float and raises on a zero divisor, where Go would return +Inf, -Inf or NaN.
@@ -11,13 +14,24 @@ func Div(a, b float64) float64 {
 	return a / b
 }
 
-// DivInt is Python's / on two ints. Both convert to float64 first, so
-// operands beyond 2**53 can round differently from CPython's exact division.
+// DivInt is Python's / on two ints, correctly rounded as CPython does.
 func DivInt(a, b int64) float64 {
 	if b == 0 {
 		panic(zeroDivision("division by zero"))
 	}
-	return float64(a) / float64(b)
+	if a > -(1<<53) && a < 1<<53 && b > -(1<<53) && b < 1<<53 {
+		return float64(a) / float64(b)
+	}
+	return bigTrueDiv(big.NewInt(a), big.NewInt(b))
+}
+
+// MulInt is a * b on ints; a product beyond 64 bits is an OverflowError
+// where the operands have a fixed size.
+func MulInt(a, b int64) int64 {
+	if r, ok := smallArith("Mult", a, b); ok {
+		return r.(int64)
+	}
+	panic(overflowError("int too large for a 64-bit int"))
 }
 
 // FloorDiv is Python's // on ints: the quotient rounds toward negative
@@ -93,8 +107,11 @@ func LShift(a, n int64) int64 {
 	if n < 0 {
 		panic(valueError("negative shift count"))
 	}
-	if n >= 64 {
+	if a == 0 {
 		return 0
+	}
+	if n >= 63 || (a<<uint(n))>>uint(n) != a {
+		panic(overflowError("int too large for a 64-bit int"))
 	}
 	return a << uint(n)
 }

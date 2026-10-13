@@ -11,6 +11,14 @@ import (
 // methodCall generates "receiver.name(args)" for the str and list methods
 // the transpiler knows.
 func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error) {
+	if (m.Attr == "startswith" || m.Attr == "endswith") && len(n.Args) > 0 && !n.HasKeywords {
+		// A tuple of prefixes is searched by the runtime.
+		if _, isTuple := n.Args[0].(*pyast.Tuple); isTuple {
+			if recv, err := g.recvExpr(m.Value, m.Attr); err == nil && recv.typ == tStr {
+				return g.dynMethodCall(n, m, recv)
+			}
+		}
+	}
 	v, err := g.methodCallTyped(n, m)
 	if err != nil && g.recordJoins && strings.Contains(err.Error(), " expects ") && g.widenVar(m.Value) {
 		// The variable holds other items than it was given: the next round
@@ -21,9 +29,11 @@ func (g *generator) methodCall(n *pyast.Call, m *pyast.Attribute) (value, error)
 			}
 		}
 	}
-	if err != nil && !g.infer && fallbackOK(err) {
+	if err != nil && (!g.infer || g.recordJoins) {
 		// A method the static rules do not know may still exist at run time.
-		if recv, rerr := g.recvExpr(m.Value, m.Attr); rerr == nil && g.dynMethodOK(recv) {
+		// So can a str method with arguments of the wrong type: Python raises
+		// the TypeError when the call runs.
+		if recv, rerr := g.recvExpr(m.Value, m.Attr); rerr == nil && g.dynMethodOK(recv) && (fallbackOK(err) || recv.typ == tStr) {
 			if dv, derr := g.dynMethodCall(n, m, recv); derr == nil {
 				return dv, nil
 			}

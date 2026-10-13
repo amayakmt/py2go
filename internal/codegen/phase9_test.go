@@ -13,7 +13,7 @@ func TestGeneratePhase9Output(t *testing.T) {
 	}{
 		{"unannotated parameters and result are objects", "def add(a, b):\n    return a + b\n", []string{"func add(a any, b any) any", `runtime.DynBinary("Add", a, b)`}, nil},
 		{"a function that returns nothing returns nothing", "def f(a):\n    print(a)\n", []string{"func f(a any) {"}, []string{"func f(a any) any"}},
-		{"an unannotated variable takes the type of its value", "x = 1\ny = 'a'\nprint(x + 1, y + 'b')\n", []string{"var x int64", "var y string"}, []string{"DynBinary"}},
+		{"an unannotated variable takes the type of its value", "x = 1\ny = 'a'\nprint(x, y + 'b')\n", []string{"var x int64", "var y string"}, []string{"DynBinary"}},
 		{"a variable assigned two types is an object", "x = 1\nx = 'a'\n", []string{"var x any"}, nil},
 		{"None and a value join to an Optional", "def f(a):\n    x = None\n    if a:\n        x = 1\n    return x\n", []string{"runtime.Opt[int64]"}, nil},
 		{"an empty list holds objects", "xs = []\nxs.append(1)\nxs.append('a')\n", []string{"runtime.NewList[any]()"}, nil},

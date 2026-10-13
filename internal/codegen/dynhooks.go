@@ -102,6 +102,10 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 	return fmt.Sprintf("%s(%s, %s)", g.rt("WithInfo"), fn, g.funcInfoLit(c.pyName()+"."+m.name, m.sig))
 }
 
+// dynDunders are the special methods the runtime calls by name, as the
+// built-ins round(), bytes() and the like do.
+var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true}
+
 func isDunder(name string) bool {
 	return strings.HasPrefix(name, "__") && strings.HasSuffix(name, "__")
 }
@@ -112,7 +116,7 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 	var gets, sets []string
 	for _, n := range c.visibleNames() {
 		m := c.lookup(n)
-		if m == nil || isDunder(n) {
+		if m == nil || isDunder(n) && !dynDunders[n] {
 			continue
 		}
 		switch {

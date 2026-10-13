@@ -188,6 +188,9 @@ func (g *generator) isinstanceNarrowing(call *pyast.Call) *narrowing {
 	if cur == tObject {
 		switch spec.ID {
 		case "int":
+			if g.bigMode {
+				return nil // the int may be beyond 64 bits: it stays an object
+			}
 			return &narrowing{name: arg.ID, to: tInt, expr: g.rt("AsInt") + "(" + src + ")"}
 		case "str":
 			return &narrowing{name: arg.ID, to: tStr, expr: src + ".(string)"}

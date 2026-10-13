@@ -171,7 +171,7 @@ func TestDynBuiltins(t *testing.T) {
 	if DynBin(int64(5)) != "0b101" || DynHex(int64(-255)) != "-0xff" || DynOct(int64(8)) != "0o10" || DynChr(int64(65)) != "A" || DynOrd("a") != 97 {
 		t.Error("bin hex oct chr ord")
 	}
-	if DynPow(int64(3), int64(4), int64(5)) != int64(1) || DynIntBase("ff", int64(16)) != 255 || DynIntBase("0b101", int64(0)) != 5 {
+	if DynPow(int64(3), int64(4), int64(5)) != int64(1) || DynIntBase("ff", int64(16)) != any(int64(255)) || DynIntBase("0b101", int64(0)) != any(int64(5)) {
 		t.Error("pow and int with a base")
 	}
 	if Repr(DynDivmod(int64(-17), int64(5))) != "(-4, 3)" {

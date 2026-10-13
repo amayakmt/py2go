@@ -2,12 +2,11 @@ package runtime
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 )
 
 // Seq is what lists and tuples have in common: the runtime can print,
@@ -60,16 +59,47 @@ func Eq(a, b any) bool {
 		}
 		return true
 	}
+	if isBig(a) || isBig(b) {
+		return bigEq(a, b)
+	}
+	if isComplexVal(a) || isComplexVal(b) {
+		x, okx := toComplex(a)
+		y, oky := toComplex(b)
+		return okx && oky && x == y
+	}
 	if ka, ia, fa := numeric(a); ka != notNum {
 		if kb, ib, fb := numeric(b); kb != notNum {
 			if ka == isInt && kb == isInt {
 				return ia == ib
+			}
+			if c, ok := mixedCompare(ka, ia, fa, kb, ib, fb); ok {
+				return c == 0
 			}
 			return asFloat(ka, ia, fa) == asFloat(kb, ib, fb)
 		}
 		return false
 	}
 	return a == b
+}
+
+// bigEq compares an int of more than 64 bits with an int or a float.
+func bigEq(a, b any) bool {
+	if isIntVal(a) && isIntVal(b) {
+		return bigCompare(a, b) == 0
+	}
+	if x, ok := a.(*big.Int); ok {
+		if f, ok := b.(float64); ok {
+			c, ok := bigFloatCompare(x, f)
+			return ok && c == 0
+		}
+	}
+	if y, ok := b.(*big.Int); ok {
+		if f, ok := a.(float64); ok {
+			c, ok := bigFloatCompare(y, f)
+			return ok && c == 0
+		}
+	}
+	return false
 }
 
 // eqer, reprer and subsetter are implemented by the container types that are
@@ -129,10 +159,19 @@ func order(a, b any, op string) bool {
 		// For sets, "<" and "<=" mean proper subset and subset.
 		return s.pySubset(b, op == "<")
 	}
+	if isBig(a) || isBig(b) {
+		return bigOrder(a, b, op)
+	}
 	if ka, ia, fa := numeric(a); ka != notNum {
 		if kb, ib, fb := numeric(b); kb != notNum {
 			if ka == isInt && kb == isInt {
 				return compareScalar(ia, ib, op)
+			}
+			if c, ok := mixedCompare(ka, ia, fa, kb, ib, fb); ok {
+				if op == "<" {
+					return c < 0
+				}
+				return c <= 0
 			}
 			return compareScalar(asFloat(ka, ia, fa), asFloat(kb, ib, fb), op)
 		}
@@ -480,10 +519,14 @@ func Repr(v any) string {
 		return "False"
 	case int64:
 		return strconv.FormatInt(v, 10)
+	case *big.Int:
+		return BigString(v)
 	case int:
 		return strconv.Itoa(v)
 	case float64:
 		return FloatRepr(v)
+	case complex128:
+		return ComplexRepr(v)
 	case string:
 		return quote(v)
 	case *PyError:
@@ -535,7 +578,7 @@ func quote(s string) string {
 			fmt.Fprintf(&b, `\x%02x`, r)
 		case r < 0x7f:
 			b.WriteRune(r)
-		case r == utf8.RuneError || !unicode.IsPrint(r):
+		case !printableRanges.has(r):
 			switch {
 			case r <= 0xff:
 				fmt.Fprintf(&b, `\x%02x`, r)
@@ -566,6 +609,9 @@ func (l *List[T]) Items() []T { return l.items }
 // orderable reports whether Python orders a and b: numbers with numbers,
 // strings with strings, lists with lists, tuples with tuples, sets with sets.
 func orderable(a, b any) bool {
+	if isBig(a) || isBig(b) {
+		return (isIntVal(a) || isFloatValue(a)) && (isIntVal(b) || isFloatValue(b))
+	}
 	if ka, _, _ := numeric(a); ka != notNum {
 		kb, _, _ := numeric(b)
 		return kb != notNum
@@ -582,4 +628,48 @@ func orderable(a, b any) bool {
 		return ok
 	}
 	return false
+}
+
+// bigOrder is a < b or a <= b where an operand is an int beyond 64 bits.
+func bigOrder(a, b any, op string) bool {
+	var c int
+	switch {
+	case isIntVal(a) && isIntVal(b):
+		c = bigCompare(a, b)
+	case isBig(a):
+		var ok bool
+		if c, ok = bigFloatCompare(a.(*big.Int), b.(float64)); !ok {
+			return false
+		}
+	default:
+		var ok bool
+		if c, ok = bigFloatCompare(b.(*big.Int), a.(float64)); !ok {
+			return false
+		}
+		c = -c
+	}
+	if op == "<" {
+		return c < 0
+	}
+	return c <= 0
+}
+
+// mixedCompare compares an int with a float without rounding the int: ok is
+// false when both are floats or when NaN makes the order undefined (the plain
+// float comparison then gives the right answer).
+func mixedCompare(ka numKind, ia int64, fa float64, kb numKind, ib int64, fb float64) (int, bool) {
+	switch {
+	case ka == isInt && kb == isFloat:
+		if ia > -(1<<53) && ia < 1<<53 {
+			return 0, false
+		}
+		return bigFloatCompare(big.NewInt(ia), fb)
+	case ka == isFloat && kb == isInt:
+		if ib > -(1<<53) && ib < 1<<53 {
+			return 0, false
+		}
+		c, ok := bigFloatCompare(big.NewInt(ib), fa)
+		return -c, ok
+	}
+	return 0, false
 }

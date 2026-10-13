@@ -1,1 +1,1 @@
-unsupported: ellipsis constant at line 1
+unsupported: variable 'x' expects int, got ellipsis at line 1

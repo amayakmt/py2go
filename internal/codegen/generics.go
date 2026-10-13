@@ -746,7 +746,44 @@ func (g *generator) functionInstance(gf *genericFn, targs []pyType, line int) (*
 	if s := g.fnInst[key]; s != nil {
 		return s, nil
 	}
-	goName := g.instanceName(gf.name, full)
+	goName := g.instNames[key]
+	if goName == "" {
+		goName = g.instanceName(gf.name, full)
+		g.instNames[key] = goName
+	}
+	if g.recordJoins || g.infer {
+		// While the types of variables are being worked out nothing is
+		// written: the signature is enough to type the call, and the body
+		// is compiled when the code is generated for real.
+		if s := g.fnInstTent[key]; s != nil {
+			return s, nil
+		}
+		var tent *funcSig
+		cp := *gf.node
+		cp.Name = goName
+		cp.TypeParams = nil
+		cp.HasTypeParams = false
+		err = g.inModuleContext(func() error {
+			return g.withSubst(subst, func() error {
+				var e error
+				tent, e = g.buildSig(&cp, gf.name, false)
+				if e != nil {
+					return e
+				}
+				tent.goName, tent.display = goName, gf.name
+				ps, _ := tent.defaultNodes()
+				for i, p := range ps {
+					p.defaultVar = fmt.Sprintf("_pyd_%s_%d", goName, i)
+				}
+				return nil
+			})
+		})
+		if err != nil {
+			return nil, err
+		}
+		g.fnInstTent[key] = tent
+		return tent, nil
+	}
 	cp := *gf.node
 	cp.Name = goName
 	cp.TypeParams = nil

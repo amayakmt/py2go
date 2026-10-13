@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/amayakmt/py2go/runtime"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -85,6 +86,46 @@ func operands(l, r value) (value, value) {
 	return l, r
 }
 
+// guardConst keeps Go from folding a float operation on two constants that
+// overflows float64, which Go rejects where Python has inf: the right side
+// becomes a run-time value.
+func guardConst(op string, l, r value) value {
+	lf, ok1 := floatConstOf(l)
+	rf, ok2 := floatConstOf(r)
+	if !ok1 || !ok2 {
+		return r
+	}
+	var res float64
+	switch op {
+	case "+":
+		res = lf + rf
+	case "-":
+		res = lf - rf
+	case "*":
+		res = lf * rf
+	case "/":
+		if rf == 0 {
+			return r
+		}
+		res = lf / rf
+	default:
+		return r
+	}
+	if math.IsInf(res, 0) {
+		return value{code: "func() float64 { return " + r.code + " }()", typ: tFloat, prec: precAtom}
+	}
+	return r
+}
+
+// floatConstOf reads the value of float64(literal).
+func floatConstOf(v value) (float64, bool) {
+	if !v.konst || v.typ != tFloat || !strings.HasPrefix(v.code, "float64(") || !strings.HasSuffix(v.code, ")") {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(v.code[len("float64("):len(v.code)-1], 64)
+	return f, err == nil
+}
+
 // toFloat converts an int to float64. Go will not promote on its own.
 func toFloat(v value) value {
 	if v.typ == tInt {
@@ -160,6 +201,8 @@ func (g *generator) typedExpr(n pyast.Node) (value, error) { return g.exprAs(n, 
 func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 	var v value
 	var err error
+	keepObject := g.keepObject
+	g.keepObject = false
 	target := want
 	if want.isOptional() {
 		// A display for an Optional[list[int]] is a list[int].
@@ -223,7 +266,7 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 	if target == tObject {
 		v = g.escape(v)
 	}
-	if target != "" {
+	if target != "" && !(keepObject && v.typ == tObject) {
 		v = g.relabel(v, target)
 	}
 	if v.fsig != nil && v.typ.isFunc() && !target.isFunc() && (v.fsig.hasDefaults() || !v.fsig.plain()) {
@@ -241,8 +284,18 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 func (g *generator) constant(n *pyast.Constant) (value, error) {
 	switch n.PyType {
 	case "int":
+		if b, ok := n.Value.(*big.Int); ok {
+			return value{code: g.rt("BigLit") + "(" + strconv.Quote(b.String()) + ")", typ: tObject, prec: precAtom}, nil
+		}
 		v := n.Value.(int64)
 		return value{code: strconv.FormatInt(v, 10), typ: tInt, prec: precAtom, konst: true, intLit: true, intVal: v}, nil
+	case "bytes":
+		return value{code: g.rt("Bytes") + "(" + strconv.Quote(n.Value.(string)) + ")", typ: tObject, prec: precAtom}, nil
+	case "complex":
+		z := n.Value.(complex128)
+		return value{code: fmt.Sprintf("complex128(complex(%s, %s))", floatLiteral(real(z)), floatLiteral(imag(z))), typ: tObject, prec: precAtom}, nil
+	case "ellipsis":
+		return value{code: g.rt("Ellipsis"), typ: tObject, prec: precAtom}, nil
 	case "float":
 		f := n.Value.(float64)
 		if math.IsInf(f, 1) {
@@ -308,6 +361,12 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 	}
 	if n.ID == "__name__" {
 		return value{code: `"__main__"`, typ: tStr, prec: precAtom}, nil
+	}
+	switch n.ID {
+	case "Ellipsis":
+		return value{code: g.rt("Ellipsis"), typ: tObject, prec: precAtom}, nil
+	case "NotImplemented":
+		return value{code: g.rt("NotImplementedV"), typ: tObject, prec: precAtom}, nil
 	}
 	if dynBuiltinValues[n.ID] {
 		return value{code: g.rt("BuiltinFunc") + "(" + strconv.Quote(n.ID) + ")", typ: tObject, prec: precAtom}, nil
@@ -498,6 +557,10 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 	if involvesObject(l, r) {
 		return g.dynBinary(op, l, r), nil
 	}
+	if g.bigMode && l.typ == tInt && r.typ == tInt && growthOp(op) {
+		// Ints in code without hints do not stop at 64 bits.
+		return g.dynBinary(op, l, r), nil
+	}
 	if l.typ.isOptional() || r.typ.isOptional() {
 		l, r = g.unwrapOperands(func(a, b string) string {
 			return fmt.Sprintf("unsupported operand type(s) for %s: '%s' and '%s'", opSymbols[op], a, b)
@@ -540,9 +603,14 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 			prec = precMul
 		}
 		if bothInt {
+			if op == "Mult" && !(l.konst && r.konst) {
+				// A product that does not fit raises OverflowError.
+				return value{code: g.rt("MulInt") + "(" + l.code + ", " + r.code + ")", typ: tInt, prec: precAtom}, nil
+			}
 			return infix(l, goOp, r, tInt, prec), nil
 		}
 		l, r = operands(toFloat(l), toFloat(r))
+		r = guardConst(goOp, l, r)
 		return infix(l, goOp, r, tFloat, prec), nil
 
 	case "Div":
@@ -637,11 +705,25 @@ func (g *generator) sequenceBinary(op string, l, r value) (value, bool) {
 func (g *generator) power(l, r value, line int) (value, error) {
 	if l.typ == tInt && r.typ == tInt {
 		switch {
+		case l.intLit && r.intLit && r.intVal >= 0 && r.intVal <= 4096:
+			// Both are literals: the power is computed now, as an int when it
+			// fits and as a big int otherwise.
+			p := new(big.Int).Exp(big.NewInt(l.intVal), big.NewInt(r.intVal), nil)
+			if p.IsInt64() {
+				return value{code: strconv.FormatInt(p.Int64(), 10), typ: tInt, prec: precAtom, konst: true, intLit: true, intVal: p.Int64()}, nil
+			}
+			return value{code: g.rt("BigLit") + "(" + strconv.Quote(p.String()) + ")", typ: tObject, prec: precAtom}, nil
 		case !r.intLit:
-			return value{}, unsupported("operator ** with a variable exponent on int operands", line)
+			return g.dynBinary("Pow", l, r), nil
 		case r.intVal >= 0:
 			return value{code: g.rt("PowInt") + "(" + l.code + ", " + r.code + ")", typ: tInt, prec: precAtom}, nil
 		}
+	}
+	// A negative base with a fractional exponent is a complex number, so the
+	// result type depends on the values unless the base is a positive literal
+	// or the exponent a whole number.
+	if !(l.konst && (l.typ == tInt && l.intVal > 0 || l.typ == tFloat && l.lit)) && !(r.typ == tInt) {
+		return g.dynBinary("Pow", l, r), nil
 	}
 	// The operands are function arguments, so Go does not fold them.
 	l, r = toFloat(l), toFloat(r)
@@ -668,7 +750,7 @@ func (g *generator) unaryOp(n *pyast.UnaryOp) (value, error) {
 	bad := func() (value, error) {
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s", opSymbols[n.Op], v.typ), n.Line())
 	}
-	if v.typ == tObject && n.Op != "Not" {
+	if (v.typ == tObject || v.typ == tBool) && n.Op != "Not" {
 		return g.dynUnary(n.Op, v), nil
 	}
 	if v.typ.isClass() && n.Op != "Not" {
@@ -1015,4 +1097,13 @@ func keysViewAndSet(a, b pyType) bool {
 	ea, oka := item(a)
 	eb, okb := item(b)
 	return oka && okb && ea == eb && (a.isKeysView() || b.isKeysView())
+}
+
+// growthOp is an operator whose result can need more bits than its operands.
+func growthOp(op string) bool {
+	switch op {
+	case "Add", "Sub", "Mult", "Pow", "LShift":
+		return true
+	}
+	return false
 }

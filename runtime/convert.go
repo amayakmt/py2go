@@ -3,6 +3,7 @@ package runtime
 import (
 	"cmp"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -50,7 +51,7 @@ func digitPart(s string) bool {
 
 // IntFromStr is int(s) in base 10.
 func IntFromStr(s string) int64 {
-	t := StrStrip(s)
+	t := asciiDigits(StrStrip(s))
 	neg := false
 	if t != "" && (t[0] == '+' || t[0] == '-') {
 		neg = t[0] == '-'
@@ -73,15 +74,17 @@ func IntFromStr(s string) int64 {
 // decimal number with optional fraction and exponent. Underscores may
 // separate digits. Go's parser alone is too permissive (hex floats).
 func FloatFromStr(s string) float64 {
-	t := StrStrip(s)
+	t := asciiDigits(StrStrip(s))
 	body := t
 	if body != "" && (body[0] == '+' || body[0] == '-') {
 		body = body[1:]
 	}
 	switch strings.ToLower(body) {
-	case "inf", "infinity", "nan":
+	case "inf", "infinity":
 		f, _ := strconv.ParseFloat(t, 64)
 		return f
+	case "nan":
+		return math.NaN()
 	}
 
 	mant, exp, hasExp := strings.Cut(strings.ToLower(body), "e")
@@ -186,18 +189,14 @@ func DivModFloat(a, b float64) Tuple2[float64, float64] {
 	return Tup2(div, mod)
 }
 
-// PowInt is base ** exp for a non-negative exp. Like all int arithmetic
-// it wraps at 64 bits instead of growing.
+// PowInt is base ** exp for a non-negative exp on ints of a fixed size; a
+// result beyond 64 bits is an OverflowError.
 func PowInt(base, exp int64) int64 {
-	result := int64(1)
-	for exp > 0 {
-		if exp&1 == 1 {
-			result *= base
-		}
-		base *= base
-		exp >>= 1
+	r, ok := bigPow(big.NewInt(base), big.NewInt(exp)).(int64)
+	if !ok {
+		panic(overflowError("int too large for a 64-bit int"))
 	}
-	return result
+	return r
 }
 
 // PowFloat is ** when either operand is a float, or an int raised to a

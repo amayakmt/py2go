@@ -1,1 +1,1 @@
-unsupported: complex constant at line 1
+unsupported: variable 'x' expects float, got complex at line 1

@@ -2,6 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	"hash/fnv"
+	"math"
+	"math/big"
 	"reflect"
 	"strings"
 )
@@ -41,16 +44,20 @@ func TypeName(v any) string {
 		return v.PyClassName()
 	case bool:
 		return "bool"
-	case int64, int:
+	case int64, int, *big.Int:
 		return "int"
 	case float64:
 		return "float"
+	case complex128:
+		return "complex"
 	case string:
 		return "str"
 	case *PyError:
 		return v.Type
 	case Seq:
 		return v.Kind()
+	case interface{ Boxed() any }:
+		return TypeName(v.Boxed()) // an Optional is the type of what it holds
 	}
 	t := reflect.TypeOf(v)
 	switch {
@@ -85,7 +92,31 @@ func InstanceOf[T any](v any) bool {
 }
 
 // Is is "a is b" for two instances: the same object.
-func Is(a, b any) bool { return a == b }
+func Is(a, b any) bool {
+	a, b = Unbox(a), Unbox(b)
+	switch x := a.(type) {
+	case nil:
+		return b == nil
+	case float64:
+		y, ok := b.(float64)
+		return ok && math.Float64bits(x) == math.Float64bits(y)
+	case int64, bool, string, complex128, Bytes:
+		// Equal numbers and strings are the same object where CPython shares
+		// them (small ints, interned strings, constants of one function); the
+		// answer for values that were computed separately is unknowable here.
+		return a == b
+	case *big.Int:
+		y, ok := b.(*big.Int)
+		return ok && x.Cmp(y) == 0
+	case Seq:
+		if x.Kind() == "tuple" {
+			y, ok := b.(Seq)
+			return ok && y.Kind() == "tuple" && Eq(a, b)
+		}
+	}
+	defer func() { recover() }()
+	return a == b
+}
 
 // UnsupportedOperand is the TypeError of a binary operator no operand
 // implements.
@@ -132,7 +163,7 @@ func NotCallable(class string) *PyError {
 // identity, which CPython derives from the address.
 func HashOf(v any) int64 {
 	if h, ok := v.(Hasher); ok {
-		return h.PyHash()
+		return fixHash(h.PyHash())
 	}
 	return Hash(v)
 }
@@ -193,8 +224,11 @@ func RawArgs(given int, all ...any) []any {
 // AsInt reads an object that isinstance found to be an int: a bool is an int
 // in Python.
 func AsInt(x any) int64 {
-	if b, ok := x.(bool); ok {
-		return b2i(b)
+	switch v := x.(type) {
+	case bool:
+		return b2i(v)
+	case *big.Int:
+		panic(overflowError("Python int too large to convert to C long"))
 	}
 	return x.(int64)
 }
@@ -275,4 +309,22 @@ func StopValue(e *PyError) any {
 		return nil
 	}
 	return e.Args[0]
+}
+
+// Id is id(x): the address of an object that has an identity, and a number
+// that depends on the value alone for the ones that compare as values here
+// (ints, strings, None, tuples...), so that id(1) == id(1) as it does in
+// CPython for small ints and constants.
+func Id(v any) int64 {
+	v = Unbox(v)
+	rv := reflect.ValueOf(v)
+	if v != nil {
+		switch rv.Kind() {
+		case reflect.Pointer, reflect.Map, reflect.Chan, reflect.Func, reflect.UnsafePointer:
+			return int64(rv.Pointer())
+		}
+	}
+	h := fnv.New64a()
+	fmt.Fprintf(h, "%T|%s", v, Repr(v))
+	return int64(h.Sum64()>>8) | 1<<55
 }

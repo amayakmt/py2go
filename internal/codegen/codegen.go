@@ -80,14 +80,19 @@ type generator struct {
 
 	// Variables without annotations, see joins.go.
 	joins              map[string]map[string]pyType
-	regLines           map[string]string // registrations of functions and classes for dynamic calls
-	regUsed            map[string]bool   // ... that are used as values
+	regLines           map[string]string   // registrations of functions and classes for dynamic calls
+	regUsed            map[string]bool     // ... that are used as values
+	instNames          map[string]string   // the Go name of each instantiation of a generic function
+	fnInstTent         map[string]*funcSig // signatures found while no code is written
 	buildingProperty   bool
+	bigMode            bool // int arithmetic is done on objects, so ints grow without limit
+	annotated          bool // the program has a type hint somewhere
 	moduleJoinsVersion int
 	valueMethods       map[string]bool // methods that some class defines with a return value
 	annotatedNames     map[string]map[string]bool
 	joinScope          string
 	recordJoins        bool
+	keepObject         bool // exprAs leaves an object value as it is
 	joinsChanged       bool
 	annotatedDecl      bool
 	elseFlags          []string         // per enclosing loop: the flag a break sets, if it has an else
@@ -134,10 +139,14 @@ func Generate(root pyast.Node) ([]byte, error) {
 		tempGenerators: true,
 		joins:          map[string]map[string]pyType{},
 		regLines:       map[string]string{},
+		instNames:      map[string]string{},
+		fnInstTent:     map[string]*funcSig{},
 		valueMethods:   map[string]bool{},
 		regUsed:        map[string]bool{},
 		annotatedNames: map[string]map[string]bool{},
 	}
+	g.annotated = moduleAnnotated(mod)
+	g.bigMode = !g.annotated
 	g.scanTypeVars(mod)
 	if err := g.registerClassNames(mod); err != nil {
 		return nil, err

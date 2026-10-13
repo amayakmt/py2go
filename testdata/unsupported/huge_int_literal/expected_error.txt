@@ -1,1 +1,1 @@
-unsupported: integer literal out of int64 range at line 1
+unsupported: variable 'x' expects int, got int (beyond 64 bits) at line 1

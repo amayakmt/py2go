@@ -218,7 +218,7 @@ func (t pyType) iterElem() (pyType, bool) {
 // element: the scalars, and tuples of hashable values.
 func (t pyType) hashable() bool {
 	switch {
-	case t == tInt, t == tBool, t == tStr, t == tFloat:
+	case t == tInt, t == tBool, t == tStr, t == tFloat, t == tNoneType:
 		return true
 	case t.isTuple():
 		for _, e := range t.elems() {
@@ -309,6 +309,13 @@ var typeTable = map[string]pyType{
 	"bool":  tBool,
 	"str":   tStr,
 	"range": tRange,
+	// Types without a Go type of their own are objects that the runtime
+	// knows how to operate on.
+	"complex":   tObject,
+	"bytes":     tObject,
+	"bytearray": tObject,
+	"frozenset": tObject,
+	"slice":     tObject,
 }
 
 // annotationType resolves a type annotation. allowNone permits the literal
@@ -508,6 +515,9 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		return lit, nil
 	case "Type", "Sequence":
 		return "", unsupported("type annotation '"+head.ID+"[...]' ("+typingNames[head.ID]+")", n.Line())
+	case "frozenset":
+		// A frozenset is an object whatever it holds.
+		return tObject, nil
 	}
 
 	switch name {
@@ -546,7 +556,7 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 
 	case "tuple":
 		if len(args) == 2 {
-			if u, ok := args[1].(*pyast.Unsupported); ok && u.Type == "ellipsis constant" {
+			if isEllipsis(args[1]) {
 				elem, err := resolve(args[0])
 				if err != nil {
 					return "", err
@@ -559,7 +569,7 @@ func (g *generator) containerType(n *pyast.Subscript) (pyType, error) {
 		}
 		elems := make([]pyType, 0, len(args))
 		for _, item := range args {
-			if u, ok := item.(*pyast.Unsupported); ok && u.Type == "ellipsis constant" {
+			if isEllipsis(item) {
 				return "", unsupported("tuple annotation with '...' after more than one item", n.Line())
 			}
 			t, err := resolve(item)
@@ -651,4 +661,15 @@ func (g *generator) unionType(parts []pyast.Node, line int) (pyType, error) {
 		return members[0], nil
 	}
 	return optionalOf(members[0]), nil
+}
+
+// isEllipsis reports whether a node is the literal "...".
+func isEllipsis(n pyast.Node) bool {
+	switch n := n.(type) {
+	case *pyast.Constant:
+		return n.PyType == "ellipsis"
+	case *pyast.Unsupported:
+		return n.Type == "ellipsis constant"
+	}
+	return false
 }

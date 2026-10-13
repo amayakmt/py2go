@@ -422,7 +422,7 @@ func (g *generator) classBody(c *classInfo) error {
 			if _, ok := n.Value.(*pyast.Constant); ok {
 				continue
 			}
-			if u, ok := n.Value.(*pyast.Unsupported); ok && u.Type == "ellipsis constant" {
+			if isEllipsis(n.Value) {
 				continue
 			}
 			return unsupported("expression statement in a class body", n.Line())

@@ -1,8 +1,10 @@
 package pyast
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -1163,8 +1165,14 @@ func decodeConstant(pytype string, raw json.RawMessage, line int) (Node, error) 
 	case "int":
 		v, err := strconv.ParseInt(string(raw), 10, 64)
 		if err != nil {
-			// Python ints are unbounded, int64 is not.
-			return &Unsupported{Type: "integer literal out of int64 range", Lineno: line}, nil
+			// Python ints are unbounded, int64 is not: the value is kept as a
+			// big.Int.
+			b, ok := new(big.Int).SetString(string(raw), 10)
+			if !ok {
+				return nil, fmt.Errorf("line %d: bad int constant %s", line, raw)
+			}
+			c.Value = b
+			return c, nil
 		}
 		c.Value = v
 	case "float":
@@ -1182,10 +1190,31 @@ func decodeConstant(pytype string, raw json.RawMessage, line int) (Node, error) 
 			return nil, fmt.Errorf("line %d: bad float constant %q: %w", line, text, err)
 		}
 		c.Value = v
+	case "bytes":
+		var hexText string
+		if err := json.Unmarshal(raw, &hexText); err != nil {
+			return nil, fmt.Errorf("line %d: bad bytes constant: %w", line, err)
+		}
+		data, err := hex.DecodeString(hexText)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: bad bytes constant: %w", line, err)
+		}
+		c.Value = string(data)
+	case "complex":
+		var parts [2]string
+		if err := json.Unmarshal(raw, &parts); err != nil {
+			return nil, fmt.Errorf("line %d: bad complex constant: %w", line, err)
+		}
+		re, err1 := strconv.ParseFloat(parts[0], 64)
+		im, err2 := strconv.ParseFloat(parts[1], 64)
+		if err1 != nil || err2 != nil {
+			return nil, fmt.Errorf("line %d: bad complex constant %v", line, parts)
+		}
+		c.Value = complex(re, im)
+	case "ellipsis":
 	case "":
 		return nil, fmt.Errorf("line %d: Constant has no pytype tag", line)
 	default:
-		// bytes, complex, ellipsis
 		return &Unsupported{Type: pytype + " constant", Lineno: line}, nil
 	}
 	return c, nil

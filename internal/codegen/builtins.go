@@ -73,7 +73,7 @@ func (g *generator) builtinCallTyped(n *pyast.Call, callee *pyast.Name) (value, 
 			args[i] = v
 		}
 		return g.minMax(name, n, args)
-	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod", "hash":
+	case "len", "int", "float", "str", "repr", "bool", "abs", "round", "sum", "divmod", "hash", "id":
 		if n.HasKeywords {
 			return value{}, unsupported("keyword arguments", n.Line())
 		}
@@ -111,6 +111,21 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		if v, ok, err := g.classBuiltin(name, n, args[0]); ok || err != nil {
 			return v, err
 		}
+	}
+	if g.bigMode && len(args) == 1 && (name == "int" || name == "round") && (args[0].typ == tStr || args[0].typ == tFloat) {
+		// The result can be any size.
+		fn := "DynIntAny"
+		if name == "round" {
+			fn = "DynRound"
+			return g.dynValue(g.rt(fn)+"("+g.boxed(args[0])+", nil)", tObject), nil
+		}
+		return g.dynValue(g.rt(fn)+"("+g.boxed(args[0])+")", tObject), nil
+	}
+	if name == "id" {
+		if err := arity(name, n, 1, 1); err != nil {
+			return value{}, err
+		}
+		return atom(call(g.rt("Id"), g.boxed(args[0])), tInt)
 	}
 	if name == "hash" {
 		if err := arity(name, n, 1, 1); err != nil {
@@ -249,6 +264,10 @@ func (g *generator) scalarBuiltin(name string, n *pyast.Call, args []value) (val
 		}
 		if g.classOf(a.typ.elem()) != nil || (start != nil && start.typ.isClass()) {
 			return g.sumInstances(n, a, start)
+		}
+		if start != nil && start.typ == tStr {
+			// Python refuses to sum into a string, with a message of its own.
+			return g.dynValue(g.rt("DynSum")+"("+g.boxed(a)+", "+g.boxed(*start)+")", tObject), nil
 		}
 		var total value
 		switch a.typ {
@@ -631,11 +650,23 @@ func (g *generator) rangeCall(n *pyast.Call) (value, error) {
 		return value{}, err
 	}
 	args := make([]string, len(n.Args))
+	vals := make([]value, len(n.Args))
+	anyObject := false
 	for i, a := range n.Args {
 		v, err := g.typedExpr(a)
 		if err != nil {
 			return value{}, err
 		}
+		vals[i] = v
+		anyObject = anyObject || v.typ == tObject
+	}
+	if anyObject && g.bigMode {
+		// The ends may not fit a machine word: the range is an object.
+		return g.dynValue(g.rt("DynRange")+"("+g.dynArgs(vals)+")", tObject), nil
+	}
+	for i, a := range n.Args {
+		v := vals[i]
+		var err error
 		if v.typ == tObject {
 			v, err = g.coerce(v, tInt, "range() argument", a.Line())
 			if err != nil {

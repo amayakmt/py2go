@@ -3,7 +3,11 @@ package runtime
 import (
 	"fmt"
 	"math"
+	"math/big"
+	"sort"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Dynamic operations. A value of static type object is a Go any holding an
@@ -86,6 +90,50 @@ func DynBinary(op string, a, b any) any {
 			return r
 		}
 	}
+	abool, aIsBool := a.(bool)
+	bbool, bIsBool := b.(bool)
+	if aIsBool && bIsBool {
+		switch op {
+		case "BitAnd":
+			return abool && bbool
+		case "BitOr":
+			return abool || bbool
+		case "BitXor":
+			return abool != bbool
+		}
+	}
+	if aIsBool {
+		a = b2i(abool)
+	}
+	if bIsBool {
+		b = b2i(bbool)
+	}
+	if isIntVal(a) && isIntVal(b) {
+		if r, ok := intArith(op, a, b); ok {
+			return r
+		}
+	}
+	if isComplexVal(a) || isComplexVal(b) {
+		x, okx := toComplex(a)
+		y, oky := toComplex(b)
+		if okx && oky {
+			if r := complexBinary(op, x, y); r != nil {
+				return r
+			}
+			panic(UnsupportedOperand(opSymbol(op), TypeName(a), TypeName(b)))
+		}
+	}
+	// A big int next to a float is a float.
+	if isBig(a) {
+		if f, ok := b.(float64); ok {
+			return DynBinary(op, bigToFloat(a.(*big.Int)), f)
+		}
+	}
+	if isBig(b) {
+		if f, ok := a.(float64); ok {
+			return DynBinary(op, f, bigToFloat(b.(*big.Int)))
+		}
+	}
 	ka, ia, fa := numeric(a)
 	kb, ib, fb := numeric(b)
 	if ka != notNum && kb != notNum {
@@ -128,7 +176,21 @@ func DynBinary(op string, a, b any) any {
 		for _, pair := range [][2]any{{a, b}, {b, a}} {
 			_, isSeq := pair[0].(Seq)
 			_, isStr := pair[0].(string)
-			if k, _, _ := numeric(pair[1]); (isSeq || isStr) && k != isInt {
+			bs, isBytes := bytesOf(pair[0])
+			if isBig(pair[1]) && (isSeq || isStr || isBytes) {
+				empty := isBytes && bs == ""
+				if str, ok := pair[0].(string); ok {
+					empty = str == ""
+				}
+				if sq, ok := pair[0].(Seq); ok {
+					empty = sq.Len() == 0
+				}
+				if empty {
+					return DynBinary(op, pair[0], int64(0))
+				}
+				panic(overflowError("cannot fit 'int' into an index-sized integer"))
+			}
+			if k, _, _ := numeric(pair[1]); (isSeq || isStr || isBytes) && k != isInt && !isBig(pair[1]) {
 				panic(newError("TypeError", "can't multiply sequence by non-int of type '"+TypeName(pair[1])+"'"))
 			}
 		}
@@ -263,6 +325,9 @@ func numericBinary(op string, ka numKind, ia int64, fa float64, kb numKind, ib i
 	case "Mod":
 		return ModFloat(x, y)
 	case "Pow":
+		if x < 0 && !math.IsInf(x, 0) && !math.IsInf(y, 0) && y != math.Trunc(y) {
+			return complexPow(complex(x, 0), complex(y, 0))
+		}
 		return PowFloat(x, y)
 	}
 	panic(UnsupportedOperand(opSymbol(op), kindName(ka), kindName(kb)))
@@ -303,6 +368,33 @@ func DynUnary(op string, a any) any {
 	if x, ok := a.(unaryOperand); ok {
 		if r, ok := x.PyUnop(op); ok {
 			return r
+		}
+	}
+	if i, ok := a.(int64); ok && i != math.MinInt64 {
+		switch op {
+		case "USub":
+			return -i
+		case "UAdd":
+			return i
+		case "Invert":
+			return ^i
+		case "Abs":
+			return AbsInt(i)
+		}
+	}
+	if isIntVal(a) {
+		if r, ok := intUnary(op, a); ok {
+			return r
+		}
+	}
+	if z, ok := a.(complex128); ok {
+		switch op {
+		case "USub":
+			return -z
+		case "UAdd":
+			return z
+		case "Abs":
+			return math.Hypot(real(z), imag(z))
 		}
 	}
 	switch k, i, f := numeric(a); k {
@@ -425,18 +517,54 @@ func DynLen(v any) int64 {
 	panic(newError("TypeError", "object of type '"+TypeName(v)+"' has no len()"))
 }
 
-// DynInt is int(x).
+// DynInt is int(x) for a result that fits a machine word; DynIntAny is the
+// full int(x).
 func DynInt(v any) int64 {
+	r := DynIntAny(v)
+	if n, ok := r.(int64); ok {
+		return n
+	}
+	panic(overflowError("Python int too large to convert to C long"))
+}
+
+// DynIntAny is int(x): ints of any size, floats, strings and objects with
+// __int__.
+func DynIntAny(v any) any {
 	v = Unbox(v)
 	switch x := v.(type) {
 	case int64:
 		return x
+	case *big.Int:
+		return x
 	case bool:
 		return b2i(x)
 	case float64:
-		return IntFromFloat(x)
+		switch {
+		case math.IsNaN(x):
+			panic(valueError("cannot convert float NaN to integer"))
+		case math.IsInf(x, 0):
+			panic(overflowError("cannot convert float infinity to integer"))
+		}
+		x = math.Trunc(x)
+		if x >= 1<<63 || x < -(1<<63) {
+			return bigFromFloat(x)
+		}
+		return int64(x)
 	case string:
-		return IntFromStr(x)
+		t := asciiDigits(StrStrip(x))
+		sign := ""
+		body := t
+		if body != "" && (body[0] == '+' || body[0] == '-') {
+			sign, body = body[:1], body[1:]
+		}
+		if !digitPart(body) {
+			panic(valueError("invalid literal for int() with base 10: " + quote(x)))
+		}
+		return IntFromText(sign+body, 10, x)
+	case Bytes:
+		return DynIntAny(string(x))
+	case *ByteArray:
+		return DynIntAny(string(x.b))
 	case interface{ PyInt() (int64, bool) }:
 		if n, ok := x.PyInt(); ok {
 			return n
@@ -449,6 +577,8 @@ func DynInt(v any) int64 {
 func DynFloat(v any) float64 {
 	v = Unbox(v)
 	switch x := v.(type) {
+	case *big.Int:
+		return bigToFloat(x)
 	case int64:
 		return float64(x)
 	case bool:
@@ -457,6 +587,10 @@ func DynFloat(v any) float64 {
 		return x
 	case string:
 		return FloatFromStr(x)
+	case Bytes:
+		return FloatFromStr(string(x))
+	case *ByteArray:
+		return FloatFromStr(string(x.b))
 	case interface{ PyFloat() (float64, bool) }:
 		if f, ok := x.PyFloat(); ok {
 			return f
@@ -468,9 +602,26 @@ func DynFloat(v any) float64 {
 // DynRound is round(x) and round(x, n).
 func DynRound(v any, digits any) any {
 	v = Unbox(v)
-	d, hasDigits := int64(0), digits != nil
+	d, hasDigits := int64(0), digits != nil && !IsNone(digits)
 	if hasDigits {
+		dv := Unbox(digits)
+		if _, isInt := intOf(dv); !isInt {
+			panic(newError("TypeError", "'"+TypeName(dv)+"' object cannot be interpreted as an integer"))
+		}
 		d = DynInt(digits)
+	}
+	if b, ok := v.(*big.Int); ok {
+		if !hasDigits || d >= 0 {
+			return b
+		}
+		p := new(big.Int).Exp(big.NewInt(10), big.NewInt(-d), nil)
+		q, r := bigFloorDivMod(b, p, "")
+		twice := new(big.Int).Lsh(r, 1)
+		switch c := twice.Cmp(p); {
+		case c > 0, c == 0 && q.Bit(0) == 1:
+			q.Add(q, bigOne)
+		}
+		return NormBig(q.Mul(q, p))
 	}
 	switch k, i, f := numeric(v); k {
 	case isInt:
@@ -481,7 +632,7 @@ func DynRound(v any, digits any) any {
 		return int64(math.RoundToEven(float64(i)/p) * p)
 	case isFloat:
 		if !hasDigits {
-			return RoundFloat(f)
+			return DynIntAny(math.RoundToEven(f))
 		}
 		p := math.Pow(10, float64(d))
 		if math.IsInf(f, 0) || math.IsNaN(f) || math.IsInf(p, 0) {
@@ -489,18 +640,45 @@ func DynRound(v any, digits any) any {
 		}
 		return RoundDigits(f, d)
 	}
+	if _, named := v.(Named); named && DynHasAttr(v, "__round__") {
+		if hasDigits {
+			return DynCall(DynGetAttr(v, "__round__"), digits)
+		}
+		return DynCall(DynGetAttr(v, "__round__"))
+	}
 	panic(newError("TypeError", "type "+TypeName(v)+" doesn't define __round__ method"))
 }
 
 // RoundDigits is round(x, n) for a float: correctly rounded to n decimal
 // digits, with ties going to even on the exact decimal value.
 func RoundDigits(f float64, n int64) float64 {
-	s := fmt.Sprintf("%.*f", int(max(n, 0)), f)
-	var out float64
-	fmt.Sscanf(s, "%g", &out)
-	if n < 0 {
-		p := math.Pow(10, float64(-n))
-		return math.RoundToEven(f/p) * p
+	if math.IsNaN(f) || math.IsInf(f, 0) || f == 0 {
+		return f
+	}
+	if n >= 0 {
+		if n > 400 {
+			return f
+		}
+		out, _ := strconv.ParseFloat(strconv.FormatFloat(f, 'f', int(n), 64), 64)
+		return out
+	}
+	// Round the exact value to a multiple of a power of ten, ties to even.
+	if -n > 400 {
+		return math.Copysign(0, f)
+	}
+	p := new(big.Int).Exp(big.NewInt(10), big.NewInt(-n), nil)
+	r := new(big.Rat).SetFloat64(f)
+	r.Quo(r, new(big.Rat).SetInt(p))
+	num, den := r.Num(), r.Denom()
+	q, rem := new(big.Int).DivMod(num, den, new(big.Int))
+	twice := new(big.Int).Lsh(rem, 1)
+	switch c := twice.Cmp(den); {
+	case c > 0, c == 0 && q.Bit(0) == 1:
+		q.Add(q, bigOne)
+	}
+	out, _ := new(big.Rat).SetInt(q.Mul(q, p)).Float64()
+	if out == 0 {
+		return math.Copysign(0, f)
 	}
 	return out
 }
@@ -557,6 +735,12 @@ func PercentFormat(format string, args any) string {
 				panic(valueError("incomplete format key"))
 			}
 			mapKey, hasKey = format[i+1:i+end], true
+			if seq, isSeq := args.(Seq); isSeq && seq.Kind() != "dict" {
+				panic(newError("TypeError", "format requires a mapping"))
+			}
+			if !isSeqOrMapping(args) {
+				panic(newError("TypeError", "format requires a mapping"))
+			}
 			usedMapping = true
 			i += end + 1
 			if i >= len(format) {
@@ -567,19 +751,28 @@ func PercentFormat(format string, args any) string {
 			if hasKey {
 				return DynGetItem(args, mapKey)
 			}
+			if usedMapping {
+				panic(newError("TypeError", "not enough arguments for format string"))
+			}
 			return take()
 		}
 		start := i
 		for i < len(format) && strings.IndexByte("-+ #0", format[i]) >= 0 {
 			i++
 		}
-		for i < len(format) && (format[i] >= '0' && format[i] <= '9' || format[i] == '.') {
+		spec := format[start:i]
+		for i < len(format) && (format[i] >= '0' && format[i] <= '9' || format[i] == '.' || format[i] == '*') {
+			if format[i] == '*' {
+				spec += strconv.FormatInt(DynInt(take()), 10)
+			} else {
+				spec += string(format[i])
+			}
 			i++
 		}
 		if i >= len(format) {
 			panic(valueError("incomplete format"))
 		}
-		spec, verb := format[start:i], format[i]
+		verb := format[i]
 		goSpec := "%" + spec
 		switch verb {
 		case '%':
@@ -588,10 +781,14 @@ func PercentFormat(format string, args any) string {
 			fmt.Fprintf(&b, goSpec+"s", Str(Unbox(take())))
 		case 'r':
 			fmt.Fprintf(&b, goSpec+"s", Repr(Unbox(take())))
-		case 'd', 'i':
+		case 'd', 'i', 'u':
 			v := Unbox(take())
 			if f, ok := v.(float64); ok {
 				v = IntFromFloat(f)
+			}
+			if bi, isBig := v.(*big.Int); isBig {
+				b.WriteString(FormatBig(bi, strings.Replace(strings.TrimLeft(goSpec, "%"), "-", "<", 1)+"d"))
+				break
 			}
 			n, ok := intOf(v)
 			if !ok {
@@ -600,23 +797,58 @@ func PercentFormat(format string, args any) string {
 			fmt.Fprintf(&b, goSpec+"d", n)
 		case 'f', 'F', 'e', 'E', 'g', 'G':
 			v := Unbox(take())
+			if bi, isBig := v.(*big.Int); isBig {
+				v = bigToFloat(bi)
+			}
 			k, i2, f := numeric(v)
 			if k == notNum {
 				panic(newError("TypeError", "must be real number, not "+TypeName(v)))
 			}
-			fmt.Fprintf(&b, goSpec+string(verb), asFloat(k, i2, f))
+			if ff := asFloat(k, i2, f); math.IsInf(ff, 0) || math.IsNaN(ff) {
+				b.WriteString(padNonFinite(goSpec[1:], ff, rune(verb)))
+				break
+			}
+			spec := goSpec
+			if (verb == 'g' || verb == 'G') && !strings.Contains(spec, ".") {
+				spec += ".6"
+			}
+			fmt.Fprintf(&b, spec+string(verb), asFloat(k, i2, f))
 		case 'x', 'X', 'o':
-			n, _ := intOf(Unbox(take()))
+			v := Unbox(take())
+			if bi, isBig := v.(*big.Int); isBig {
+				b.WriteString(FormatBig(bi, strings.Replace(strings.TrimLeft(goSpec, "%"), "-", "<", 1)+string(verb)))
+				break
+			}
+			n, ok := intOf(v)
+			if !ok {
+				panic(newError("TypeError", "%"+string(verb)+" format: an integer is required, not "+TypeName(v)))
+			}
+			if verb == 'o' && strings.Contains(goSpec, "#") {
+				sign := ""
+				if n < 0 {
+					sign = "-"
+				}
+				plain := strings.Replace(goSpec, "#", "", 1)
+				b.WriteString(fmt.Sprintf(plain[:len(plain)]+"s", sign+"0o"+strconv.FormatUint(absUint(n), 8)))
+				break
+			}
 			fmt.Fprintf(&b, goSpec+string(verb), n)
+		case 'a':
+			fmt.Fprintf(&b, goSpec+"s", Ascii(Unbox(take())))
 		case 'c':
 			v := Unbox(take())
-			if n, ok := intOf(v); ok {
+			if n, ok := intOf(v); ok && !isBig(v) {
+				if n < 0 || n > 0x10ffff {
+					panic(overflowError("%c arg not in range(0x110000)"))
+				}
 				b.WriteRune(rune(n))
+			} else if cs, isStr := v.(string); isStr && utf8.RuneCountInString(cs) == 1 {
+				b.WriteString(cs)
 			} else {
-				b.WriteString(Str(v))
+				panic(newError("TypeError", "%c requires int or char"))
 			}
 		default:
-			panic(valueError(fmt.Sprintf("unsupported format character '%c' (0x%x)", verb, verb)))
+			panic(valueError(fmt.Sprintf("unsupported format character '%c' (0x%x) at index %d", verb, verb, utf8.RuneCountInString(format[:i]))))
 		}
 	}
 	if next < len(list) && !usedMapping {
@@ -655,13 +887,32 @@ func dynKey(v any) any {
 	switch x := Unbox(v).(type) {
 	case bool:
 		return b2i(x)
+	case complex128:
+		if imag(x) == 0 {
+			return dynKey(real(x))
+		}
+		return x
 	case float64:
-		if x == math.Trunc(x) && math.Abs(x) < 1<<62 {
-			return int64(x)
+		if x == math.Trunc(x) && !math.IsInf(x, 0) {
+			if x >= -(1<<63) && x < 1<<63 {
+				return int64(x)
+			}
+			return bigKey(bigFromFloat(x).(*big.Int).String())
 		}
 		return x
 	case int64, string, nil:
 		return x
+	case *big.Int:
+		return bigKey(x.String())
+	case *FrozenSet:
+		var parts []string
+		for c := x.s.Iter(); c.Next(); {
+			var b strings.Builder
+			canonKey(&b, c.Value())
+			parts = append(parts, b.String())
+		}
+		sort.Strings(parts)
+		return tupleKey("F{" + strings.Join(parts, "") + "}")
 	case Seq:
 		if x.Kind() == "tuple" {
 			var b strings.Builder
@@ -675,6 +926,9 @@ func dynKey(v any) any {
 		return x
 	}
 }
+
+// bigKey stands for an int beyond 64 bits among the keys of a dict.
+type bigKey string
 
 // tupleKey stands for a tuple among the keys of a dict whose keys are objects:
 // the tuple itself cannot be a Go map key.
@@ -701,6 +955,8 @@ func canonKey(b *strings.Builder, v any) {
 		fmt.Fprintf(b, "s%d:%s;", len(x), x)
 	case tupleKey:
 		b.WriteString(string(x))
+	case bigKey:
+		b.WriteString("b" + string(x) + ";")
 	default:
 		fmt.Fprintf(b, "p%p;", x)
 	}
@@ -722,4 +978,50 @@ func kindName(k numKind) string {
 		return "int"
 	}
 	return "float"
+}
+
+// padNonFinite is %f, %e or %g of an infinity or a NaN: Python writes them as
+// inf and nan (INF and NAN for the upper-case verbs), where Go writes +Inf.
+func padNonFinite(spec string, f float64, verb rune) string {
+	text := "inf"
+	if math.IsNaN(f) {
+		text = "nan"
+	}
+	if verb == 'F' || verb == 'E' || verb == 'G' {
+		text = strings.ToUpper(text)
+	}
+	switch {
+	case math.IsNaN(f):
+	case f < 0:
+		text = "-" + text
+	case strings.Contains(spec, "+"):
+		text = "+" + text
+	case strings.Contains(spec, " "):
+		text = " " + text
+	}
+	i := 0
+	for i < len(spec) && strings.IndexByte("-+ #0", spec[i]) >= 0 {
+		i++
+	}
+	j := i
+	for j < len(spec) && spec[j] >= '0' && spec[j] <= '9' {
+		j++
+	}
+	width, _ := strconv.Atoi(spec[i:j])
+	if n := width - len(text); n > 0 {
+		if strings.Contains(spec[:i], "-") {
+			return text + strings.Repeat(" ", n)
+		}
+		return strings.Repeat(" ", n) + text
+	}
+	return text
+}
+
+// isSeqOrMapping is false for the plain scalars, which are not mappings.
+func isSeqOrMapping(v any) bool {
+	switch v.(type) {
+	case nil, int64, float64, bool, string, *big.Int, complex128:
+		return false
+	}
+	return true
 }

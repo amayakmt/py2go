@@ -412,6 +412,7 @@ func (g *generator) typeOfDecorator(n pyast.Node) (pyType, error) {
 
 // functionState is what changes when code generation enters a function.
 type functionState struct {
+	bigMode      bool
 	gen          *genInfo
 	genNone      bool
 	method       *methodCtx
@@ -429,11 +430,12 @@ type functionState struct {
 }
 
 func (g *generator) saveFunctionState() functionState {
-	return functionState{g.gen, g.genNone, g.method, g.specialRet, g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
+	return functionState{g.bigMode, g.gen, g.genNone, g.method, g.specialRet, g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers, g.fnGlobals, g.fnNonlocals,
 		g.loopDepth, g.compRoot, g.callsUnknown}
 }
 
 func (g *generator) restoreFunctionState(s functionState) {
+	g.bigMode = s.bigMode
 	g.gen, g.genNone = s.gen, s.genNone
 	g.method, g.specialRet = s.method, s.specialRet
 	g.env, g.fnName, g.topFn, g.ret, g.flow, g.handlers = s.env, s.fnName, s.top, s.ret, s.flow, s.handlers
@@ -461,6 +463,7 @@ func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header str
 	env := newScope(parent)
 	env.boundary = true
 	g.env = env
+	g.bigMode = !hasAnnotations(fn)
 	g.fnName, g.ret = fn.Name, sig.ret
 	g.flow, g.handlers, g.loopDepth, g.compRoot = nil, nil, 0, nil
 	g.fnGlobals, g.fnNonlocals = map[string]bool{}, map[string]bool{}
@@ -1036,3 +1039,41 @@ func hasPropertyDecorator(fn *pyast.FunctionDef) bool {
 
 // mentionsObject reports whether a type has an object in it.
 func mentionsObject(t pyType) bool { return strings.Contains(string(t), "object") }
+
+// hasAnnotations reports whether a def has a type hint on a parameter or on
+// its result. A def without any does its int arithmetic on objects.
+func hasAnnotations(fn *pyast.FunctionDef) bool {
+	if fn.Returns != nil {
+		return true
+	}
+	a := fn.Args
+	all := append(append([]*pyast.Arg{}, a.Positional()...), a.Kwonly...)
+	if a.Vararg != nil {
+		all = append(all, a.Vararg)
+	}
+	if a.Kwarg != nil {
+		all = append(all, a.Kwarg)
+	}
+	for _, p := range all {
+		if p.Annotation != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// moduleAnnotated reports whether a module has a type hint anywhere.
+func moduleAnnotated(mod *pyast.Module) bool {
+	found := false
+	walk(mod, func(n pyast.Node) {
+		switch n := n.(type) {
+		case *pyast.AnnAssign:
+			found = true
+		case *pyast.FunctionDef:
+			if hasAnnotations(n) {
+				found = true
+			}
+		}
+	})
+	return found
+}

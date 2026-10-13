@@ -1,1 +1,1 @@
-unsupported: bytes constant at line 1
+unsupported: variable 'x' expects int, got bytes at line 1

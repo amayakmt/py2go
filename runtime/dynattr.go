@@ -2,9 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -514,7 +514,27 @@ func callBuiltinType(name string, args []any, kw []KW) any {
 		if len(args) == 0 {
 			return int64(0)
 		}
-		return DynInt(args[0])
+		if len(args) > 1 {
+			return DynIntBase(args[0], args[1])
+		}
+		if v, ok := kwValue(kw, "base"); ok {
+			return DynIntBase(args[0], v)
+		}
+		return DynIntAny(args[0])
+	case "bytes":
+		return NewBytes(args, kw)
+	case "bytearray":
+		return NewByteArray(args, kw)
+	case "complex":
+		return NewComplex(args, kw)
+	case "frozenset":
+		return NewFrozenSet(args)
+	case "slice":
+		return NewSlice(args)
+	case "range":
+		return rangeFrom(args)
+	case "object":
+		return &PlainObject{}
 	case "float":
 		if len(args) == 0 {
 			return 0.0
@@ -611,6 +631,8 @@ func builtinFunc(name string) builtinFn {
 		return one(func(a any) any { return DynUnary("Abs", a) })
 	case "repr":
 		return one(func(a any) any { return DynRepr(a) })
+	case "ascii":
+		return one(func(a any) any { return Ascii(a) })
 	case "any":
 		return one(func(a any) any { return DynAny(a) })
 	case "all":
@@ -823,18 +845,27 @@ func unboundMethod(class, name string) func(args ...any) any {
 // ---- more built-in functions ----
 
 func DynOrd(v any) int64 {
-	s, ok := Unbox(v).(string)
-	if !ok {
-		panic(newError("TypeError", "ord() expected string of length 1, but "+TypeName(v)+" found"))
+	switch x := Unbox(v).(type) {
+	case string:
+		r := []rune(x)
+		if len(r) != 1 {
+			panic(newError("TypeError", "ord() expected a character, but string of length "+itoa(len(r))+" found"))
+		}
+		return int64(r[0])
+	case Bytes, *ByteArray:
+		bs, _ := bytesOf(x)
+		if len(bs) != 1 {
+			panic(newError("TypeError", "ord() expected a character, but string of length "+itoa(len(bs))+" found"))
+		}
+		return int64(bs[0])
 	}
-	r := []rune(s)
-	if len(r) != 1 {
-		panic(newError("TypeError", "ord() expected a character, but string of length "+itoa(len(r))+" found"))
-	}
-	return int64(r[0])
+	panic(newError("TypeError", "ord() expected string of length 1, but "+TypeName(Unbox(v))+" found"))
 }
 
 func DynChr(v any) string {
+	if isBig(Unbox(v)) {
+		panic(valueError("chr() arg not in range(0x110000)"))
+	}
 	n, ok := intOf(Unbox(v))
 	if !ok {
 		panic(newError("TypeError", "'"+TypeName(v)+"' object cannot be interpreted as an integer"))
@@ -846,15 +877,15 @@ func DynChr(v any) string {
 }
 
 func dynBase(v any, base int, prefix string) string {
-	n, ok := intOf(Unbox(v))
+	n, ok := bigOf(Unbox(v))
 	if !ok {
 		panic(newError("TypeError", "'"+TypeName(v)+"' object cannot be interpreted as an integer"))
 	}
 	sign := ""
-	if n < 0 {
+	if n.Sign() < 0 {
 		sign = "-"
 	}
-	return sign + prefix + strconv.FormatUint(absUint(n), base)
+	return sign + prefix + new(big.Int).Abs(n).Text(base)
 }
 
 func DynBin(v any) string { return dynBase(v, 2, "0b") }
@@ -863,38 +894,54 @@ func DynHex(v any) string { return dynBase(v, 16, "0x") }
 
 // DynPow is pow(a, b) and pow(a, b, mod).
 func DynPow(a, b, mod any) any {
-	if mod == nil {
+	if mod == nil || IsNone(mod) {
+		if !isNumberVal(a) || !isNumberVal(b) {
+			if _, ok := Unbox(a).(interface {
+				PyBinop(string, any, bool) (any, bool)
+			}); !ok {
+				panic(newError("TypeError", "unsupported operand type(s) for ** or pow(): '"+TypeName(a)+"' and '"+TypeName(b)+"'"))
+			}
+		}
 		return DynBinary("Pow", a, b)
 	}
-	x, ok1 := intOf(Unbox(a))
-	y, ok2 := intOf(Unbox(b))
-	m, ok3 := intOf(Unbox(mod))
+	x, ok1 := bigOf(Unbox(a))
+	y, ok2 := bigOf(Unbox(b))
+	m, ok3 := bigOf(Unbox(mod))
 	if !ok1 || !ok2 || !ok3 {
 		panic(newError("TypeError", "pow() 3rd argument not allowed unless all arguments are integers"))
 	}
-	if m == 0 {
+	if m.Sign() == 0 {
 		panic(valueError("pow() 3rd argument cannot be 0"))
 	}
-	if y < 0 {
-		panic(valueError("base is not invertible for the given modulus"))
-	}
-	result := int64(1)
-	base := Mod(x, m)
-	for ; y > 0; y >>= 1 {
-		if y&1 == 1 {
-			result = Mod(result*base, m)
+	absM := new(big.Int).Abs(m)
+	base := new(big.Int).Mod(x, absM) // non-negative, as Python's % for a positive modulus
+	if y.Sign() < 0 {
+		inv := new(big.Int).ModInverse(base, absM)
+		if inv == nil {
+			panic(valueError("base is not invertible for the given modulus"))
 		}
-		base = Mod(base*base, m)
+		base, y = inv, new(big.Int).Neg(y)
 	}
-	return Mod(result, m)
+	r := new(big.Int).Exp(base, y, absM)
+	if m.Sign() < 0 && r.Sign() != 0 {
+		r.Add(r, m)
+	}
+	return NormBig(r)
 }
 
 // DynDivmod is divmod(a, b).
-func DynDivmod(a, b any) any {
-	ka, _, _ := numeric(Unbox(a))
-	kb, _, _ := numeric(Unbox(b))
-	if ka == notNum || kb == notNum {
+func DynDivmod(a, b any) VarTuple[any] {
+	isNum := func(v any) bool { v = Unbox(v); return isIntVal(v) || isFloatValue(v) }
+	if !isNum(a) || !isNum(b) {
 		panic(newError("TypeError", "unsupported operand type(s) for divmod(): '"+TypeName(a)+"' and '"+TypeName(b)+"'"))
+	}
+	if bf, ok := Unbox(b).(float64); ok && bf == 0 {
+		panic(zeroDivision("float divmod()"))
+	}
+	if _, ok := Unbox(a).(float64); ok {
+		if bi, ok := bigOf(Unbox(b)); ok && bi.Sign() == 0 {
+			panic(zeroDivision("float divmod()"))
+		}
 	}
 	return NewVarTuple[any](DynBinary("FloorDiv", a, b), DynBinary("Mod", a, b))
 }
@@ -1001,41 +1048,49 @@ func DynIterator(v any) any {
 	})
 }
 
-// DynIntBase is int(text, base).
-func DynIntBase(v, base any) int64 {
-	s, ok := Unbox(v).(string)
-	if !ok {
+// DynIntBase is int(text, base) for bases 2 to 36 and 0.
+func DynIntBase(v, base any) any {
+	var text string
+	switch x := Unbox(v).(type) {
+	case string:
+		text = x
+	case Bytes:
+		text = string(x)
+	case *ByteArray:
+		text = string(x.b)
+	default:
 		panic(newError("TypeError", "int() can't convert non-string with explicit base"))
 	}
 	b, ok := intOf(Unbox(base))
 	if !ok {
 		panic(newError("TypeError", "'"+TypeName(base)+"' object cannot be interpreted as an integer"))
 	}
-	text := strings.ReplaceAll(strings.TrimSpace(s), "_", "")
-	neg := false
-	if strings.HasPrefix(text, "-") || strings.HasPrefix(text, "+") {
-		neg = text[0] == '-'
-		text = text[1:]
+	if b != 0 && (b < 2 || b > 36) {
+		panic(valueError("int() base must be >= 2 and <= 36, or 0"))
 	}
-	if b == 16 || b == 8 || b == 2 || b == 0 {
-		lower := strings.ToLower(text)
-		for prefix, pb := range map[string]int64{"0x": 16, "0o": 8, "0b": 2} {
-			if strings.HasPrefix(lower, prefix) && (b == pb || b == 0) {
-				text, b = text[2:], pb
-			}
+	body := strings.TrimSpace(text)
+	sign := ""
+	if strings.HasPrefix(body, "-") || strings.HasPrefix(body, "+") {
+		sign, body = body[:1], body[1:]
+	}
+	lower := strings.ToLower(body)
+	origBase := b
+	for prefix, pb := range map[string]int64{"0x": 16, "0o": 8, "0b": 2} {
+		if strings.HasPrefix(lower, prefix) && (b == pb || b == 0) {
+			body, b = body[2:], pb
+			body = strings.TrimPrefix(body, "_") // 0x_ff
 		}
 	}
 	if b == 0 {
 		b = 10
+		if strings.HasPrefix(body, "0") && strings.Trim(body, "0_") != "" {
+			panic(valueError("invalid literal for int() with base 0: " + quote(text)))
+		}
 	}
-	n, err := strconv.ParseInt(text, int(b), 64)
-	if err != nil || text == "" {
-		panic(valueError("invalid literal for int() with base " + itoa(int(b)) + ": " + Repr(s)))
+	if body == "" || strings.HasPrefix(body, "_") || strings.HasSuffix(body, "_") || strings.Contains(body, "__") {
+		panic(valueError("invalid literal for int() with base " + itoa(int(origBase)) + ": " + quote(text)))
 	}
-	if neg {
-		n = -n
-	}
-	return n
+	return IntFromText(sign+body, int(b), text)
 }
 
 // DynIsSubclass is issubclass(sub, sup) for classes held in objects.
@@ -1057,7 +1112,7 @@ func DynIsSubclass(sub, sup any) bool {
 	if !ok {
 		panic(newError("TypeError", "issubclass() arg 2 must be a class, a tuple of classes, or a union"))
 	}
-	if p.Name == "object" && p.Builtin || c.Name == p.Name {
+	if p.Name == "object" && p.Builtin || c.Name == p.Name || c.Name == "bool" && p.Name == "int" {
 		return true
 	}
 	return IsSubclass(c.Name, p.Name)
@@ -1066,4 +1121,82 @@ func DynIsSubclass(sub, sup any) bool {
 // UndefinedName is reading a name that nothing defines.
 func UndefinedName(name string) any {
 	panic(newError("NameError", "name '"+name+"' is not defined"))
+}
+
+// PlainObject is object(): an instance with nothing in it.
+type PlainObject struct{ _ byte }
+
+func (*PlainObject) PyClassName() string { return "object" }
+
+func rangeFrom(args []any) any {
+	n := make([]int64, len(args))
+	var bigs []*big.Int
+	for i, a := range args {
+		v := Unbox(a)
+		bi, ok := bigOf(v)
+		if !ok {
+			panic(newError("TypeError", "'"+TypeName(v)+"' object cannot be interpreted as an integer"))
+		}
+		bigs = append(bigs, bi)
+		if !bi.IsInt64() {
+			n = nil
+		} else if n != nil {
+			n[i] = bi.Int64()
+		}
+	}
+	if n == nil {
+		switch len(bigs) {
+		case 1:
+			return rangeOfBig(new(big.Int), bigs[0], big.NewInt(1))
+		case 2:
+			return rangeOfBig(bigs[0], bigs[1], big.NewInt(1))
+		default:
+			return rangeOfBig(bigs[0], bigs[1], bigs[2])
+		}
+	}
+	switch len(n) {
+	case 1:
+		return NewRange(0, n[0], 1)
+	case 2:
+		return NewRange(n[0], n[1], 1)
+	case 3:
+		return NewRange(n[0], n[1], n[2])
+	}
+	panic(newError("TypeError", "range expected at least 1 argument, got "+itoa(len(n))))
+}
+
+// Ascii is ascii(x): repr with every non-ASCII character escaped.
+func Ascii(v any) string {
+	r := Repr(Unbox(v))
+	var b strings.Builder
+	for _, c := range r {
+		if c < 0x80 {
+			b.WriteRune(c)
+		} else {
+			b.WriteString(charEscape(c))
+		}
+	}
+	return b.String()
+}
+
+// StrDecode is str(bytes, encoding[, errors]).
+func StrDecode(args ...any) string {
+	s, ok := bytesOf(args[0])
+	if !ok {
+		panic(newError("TypeError", "decoding to str: need a bytes-like object, "+TypeName(Unbox(args[0]))+" found"))
+	}
+	enc := argNamed("str", "encoding", args, 1, "utf-8")
+	errs := argNamed("str", "errors", args, 2, "strict")
+	return DecodeBytes(s, enc, errs)
+}
+
+// DynRange is range(...) with arguments of any size.
+func DynRange(args ...any) any { return rangeFrom(args) }
+
+func isNumberVal(v any) bool {
+	switch Unbox(v).(type) {
+	case int64, float64, bool, complex128, *big.Int:
+		return true
+	}
+	return false
 }

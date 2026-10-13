@@ -63,6 +63,10 @@ def to_dict(node):
             d["pytype"] = pytype_of(node.value)
             if d["pytype"] == "float" and not math.isfinite(node.value):
                 d["value"] = repr(node.value)  # JSON has no inf or nan
+            elif d["pytype"] == "bytes":
+                d["value"] = node.value.hex()
+            elif d["pytype"] == "complex":
+                d["value"] = [repr(node.value.real), repr(node.value.imag)]
             elif d["pytype"] not in PYTYPES:
                 d["value"] = repr(node.value)
 

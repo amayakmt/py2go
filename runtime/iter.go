@@ -1,6 +1,9 @@
 package runtime
 
-import "fmt"
+import (
+	"fmt"
+	"math/big"
+)
 
 // Cursor walks a sequence one item at a time: Next moves to the next item
 // and reports whether there is one, and Value returns it. Every for loop
@@ -112,6 +115,10 @@ func Truth(v any) bool {
 		return v != 0
 	case float64:
 		return v != 0
+	case complex128:
+		return v != 0
+	case *big.Int:
+		return v.Sign() != 0
 	case string:
 		return v != ""
 	case Seq:

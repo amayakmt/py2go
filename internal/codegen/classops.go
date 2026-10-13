@@ -437,7 +437,8 @@ func (g *generator) typeSpecs(n pyast.Node) ([]typeSpec, error) {
 		case name.ID == "object":
 			specs = append(specs, typeSpec{object: true})
 		case name.ID == "int" || name.ID == "str" || name.ID == "float" || name.ID == "bool" ||
-			name.ID == "list" || name.ID == "dict" || name.ID == "set" || name.ID == "tuple" || name.ID == "range":
+			name.ID == "list" || name.ID == "dict" || name.ID == "set" || name.ID == "tuple" || name.ID == "range" ||
+			name.ID == "complex" || name.ID == "bytes" || name.ID == "bytearray" || name.ID == "frozenset" || name.ID == "slice":
 			specs = append(specs, typeSpec{builtin: name.ID})
 		default:
 			return nil, unsupported(fmt.Sprintf("isinstance() with '%s'", name.ID), node.Line())
@@ -482,8 +483,6 @@ func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) 
 	switch x.typ {
 	case tObject:
 		switch s.builtin {
-		case "int":
-			return "(" + g.rt("InstanceOf") + "[int64](" + x.code + ") || " + g.rt("InstanceOf") + "[bool](" + x.code + "))", nil
 		case "bool":
 			return g.rt("InstanceOf") + "[bool](" + x.code + ")", nil
 		case "str":
@@ -702,6 +701,15 @@ func (g *generator) objectCompare(op string, l, r value, line int) (value, bool,
 		// and pointers here.
 		identity := func(v value) bool {
 			return involved(v) || v.typ.isList() || v.typ.isDict() || v.typ.isSet() || v.typ == tExc || v.typ == tOptExc
+		}
+		if (!identity(l) || !identity(r)) && g.boxable(l) && g.boxable(r) && l.typ != tNone && r.typ != tNone {
+			// Numbers, strings and tuples: the same object when they are
+			// equal, as CPython shares them in the common cases.
+			code := g.rt("Is") + "(" + g.boxed(l) + ", " + g.boxed(r) + ")"
+			if op == "IsNot" {
+				return value{code: "!" + code, typ: tBool, prec: precUnary}, true, nil
+			}
+			return value{code: code, typ: tBool, prec: precAtom}, true, nil
 		}
 		if !identity(l) || !identity(r) {
 			return value{}, true, unsupported(fmt.Sprintf("'%s' between %s and %s", opSymbols[op], l.typ, r.typ), line)

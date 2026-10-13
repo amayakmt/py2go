@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -17,6 +18,7 @@ type spec struct {
 	fill     rune
 	align    byte // '<', '>', '^', '=' or 0 for the type's default
 	sign     byte // '+', '-' or ' '
+	negZero  bool // 'z': a negative zero result is written as zero
 	zero     bool
 	width    int
 	comma    bool
@@ -43,6 +45,10 @@ func parseSpec(s string) (spec, error) {
 	}
 	if i < len(runes) && (runes[i] == '+' || runes[i] == '-' || runes[i] == ' ') {
 		sp.sign = byte(runes[i])
+		i++
+	}
+	if i < len(runes) && runes[i] == 'z' {
+		sp.negZero = true
 		i++
 	}
 	if i < len(runes) && runes[i] == '#' {
@@ -108,11 +114,31 @@ func ValidateSpec(kind, s string) error {
 		switch {
 		case sp.typ != 0 && sp.typ != 's':
 			return unknown()
-		case sp.sign != '-' || sp.zero || sp.comma || sp.under || sp.alt || sp.align == '=':
+		case sp.negZero:
+			return fmt.Errorf("Negative zero coercion (z) not allowed in format specifier")
+		case sp.comma:
+			return fmt.Errorf("Cannot specify ',' with 's'.")
+		case sp.under:
+			return fmt.Errorf("Cannot specify '_' with 's'.")
+		case sp.sign != '-':
+			return fmt.Errorf("Sign not allowed in string format specifier")
+		case sp.alt:
+			return fmt.Errorf("Alternate form (#) not allowed in string format specifier")
+		case sp.align == '=':
+			return fmt.Errorf("'=' alignment not allowed in string format specifier")
+		case sp.zero:
 			return fmt.Errorf("Sign not allowed in string format specifier")
 		}
 	case "int":
 		switch {
+		case sp.comma && sp.under:
+			return fmt.Errorf("Cannot specify both ',' and '_'.")
+		case sp.comma && strings.ContainsRune("bcoxXn", rune(sp.typ)) && sp.typ != 0:
+			return fmt.Errorf("Cannot specify ',' with '%s'.", string(sp.typ))
+		case sp.under && strings.ContainsRune("cdn", rune(sp.typ)) && sp.typ != 'd' && sp.typ != 0:
+			return fmt.Errorf("Cannot specify '_' with '%s'.", string(sp.typ))
+		case sp.negZero && (sp.typ == 0 || strings.ContainsRune("bcdoxXn", rune(sp.typ))):
+			return fmt.Errorf("Negative zero coercion (z) not allowed in integer format specifier")
 		case strings.IndexByte("sn", sp.typ) >= 0 && sp.typ == 's':
 			return unknown()
 		case sp.hasPrec && !strings.ContainsRune("eEfFgG%", rune(sp.typ)) && sp.typ != 0:
@@ -247,6 +273,37 @@ func (sp spec) group(num string, base int) string {
 	return num
 }
 
+// FormatBig is format(v, spec) for an int beyond 64 bits.
+func FormatBig(v *big.Int, s string) string {
+	sp := mustSpec("int", s)
+	if strings.ContainsRune("eEfFgG%", rune(sp.typ)) && sp.typ != 0 {
+		return FormatFloat(bigToFloat(v), s)
+	}
+	if sp.typ == 'c' {
+		panic(overflowError("%c arg not in range(0x110000)"))
+	}
+	base, prefix := 10, ""
+	switch sp.typ {
+	case 'b':
+		base, prefix = 2, "0b"
+	case 'o':
+		base, prefix = 8, "0o"
+	case 'x', 'X':
+		base, prefix = 16, "0x"
+	}
+	digits := new(big.Int).Abs(v).Text(base)
+	if sp.typ == 'X' {
+		digits = strings.ToUpper(digits)
+		prefix = "0X"
+	}
+	sign := sp.signFor(v.Sign() < 0)
+	if sp.alt && base != 10 {
+		sign += prefix
+	}
+	digits = sp.separate(digits, base, sign)
+	return sp.pad('>', sign, digits)
+}
+
 // FormatInt is format(v, spec) for an int.
 func FormatInt(v int64, s string) string {
 	sp := mustSpec("int", s)
@@ -254,6 +311,9 @@ func FormatInt(v int64, s string) string {
 		return FormatFloat(float64(v), s)
 	}
 	if sp.typ == 'c' {
+		if v < 0 || v > 0x10ffff {
+			panic(overflowError("%c arg not in range(0x110000)"))
+		}
 		return sp.pad('>', "", string(rune(v)))
 	}
 	base, prefix := 10, ""
@@ -328,6 +388,9 @@ func FormatFloat(v float64, s string) string {
 		default:
 			if sp.hasPrec {
 				body = generalFormat(a, prec, sp.alt)
+				if !strings.ContainsAny(body, ".en") {
+					body += ".0"
+				}
 			} else {
 				body = FloatRepr(a)
 			}
@@ -412,8 +475,15 @@ func FormatDyn(v any, s string) string {
 		return FormatStr(x, s)
 	case int64:
 		return FormatIntDyn(x, s)
+	case *big.Int:
+		return FormatBig(x, s)
 	case float64:
 		return FormatFloat(x, s)
+	case complex128:
+		if s == "" {
+			return Str(x)
+		}
+		return FormatComplex(x, s)
 	case bool:
 		if s == "" {
 			return Str(x)

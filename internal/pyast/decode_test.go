@@ -1,7 +1,9 @@
 package pyast
 
 import (
+	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"testing"
 )
@@ -141,9 +143,7 @@ func TestDecodeConstants(t *testing.T) {
 
 func TestDecodeConstantUnsupported(t *testing.T) {
 	tests := []struct{ name, json, want string }{
-		{"bytes", `{"_type":"Constant","value":"b'x'","pytype":"bytes","lineno":4}`, "bytes constant"},
-		{"complex", `{"_type":"Constant","value":"1j","pytype":"complex","lineno":4}`, "complex constant"},
-		{"huge int", `{"_type":"Constant","value":123456789012345678901234567890,"pytype":"int","lineno":4}`, "integer literal out of int64 range"},
+		{"a type nothing decodes", `{"_type":"Constant","value":"x","pytype":"decimal","lineno":4}`, "decimal constant"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,5 +162,29 @@ func TestDecodeConstantUnsupported(t *testing.T) {
 func TestDecodeConstantWithoutPytype(t *testing.T) {
 	if _, err := Decode([]byte(`{"_type":"Constant","value":1,"lineno":1}`)); err == nil {
 		t.Fatal("a Constant without pytype must be a decode error")
+	}
+}
+
+func TestDecodeConstantsOfPhase10(t *testing.T) {
+	big, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
+	for _, tc := range []struct {
+		name, json string
+		want       any
+	}{
+		{"huge int", `{"_type":"Constant","value":123456789012345678901234567890,"pytype":"int","lineno":4}`, big},
+		{"bytes", `{"_type":"Constant","value":"6101ff","pytype":"bytes","lineno":4}`, "a\x01\xff"},
+		{"complex", `{"_type":"Constant","value":["0.0","2.5"],"pytype":"complex","lineno":4}`, complex(0, 2.5)},
+		{"ellipsis", `{"_type":"Constant","value":"Ellipsis","pytype":"ellipsis","lineno":4}`, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n, err := Decode([]byte(tc.json))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := as[*Constant](t, n)
+			if got, want := fmt.Sprint(c.Value), fmt.Sprint(tc.want); got != want {
+				t.Errorf("value: want %v, got %v", want, got)
+			}
+		})
 	}
 }

@@ -170,7 +170,7 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 			return value{}, err
 		}
 		if key.typ != base.typ.keyType() {
-			if mentionsObject(key.typ) {
+			if mentionsObject(key.typ) || (isNumberType(key.typ) && isNumberType(base.typ.keyType())) {
 				return g.dynSubscript(base, n.Index)
 			}
 			return value{}, mismatch("dict key", base.typ.keyType(), key.typ, n.Index.Line())
@@ -180,6 +180,9 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	idx, err := g.typedExpr(n.Index)
 	if err != nil {
 		return value{}, err
+	}
+	if idx.typ == tBool {
+		return g.dynSubscript(base, n.Index) // True is the index 1
 	}
 	if idx.typ != tInt {
 		return value{}, unsupported(fmt.Sprintf("index of type %s", idx.typ), n.Line())
@@ -317,8 +320,10 @@ func (g *generator) formatField(f *pyast.FormattedValue) (string, error) {
 		v = value{code: call(g.rt("Str"), v.code), typ: tStr, prec: precAtom}
 	case 'r':
 		v = value{code: call(g.rt("Repr"), v.code), typ: tStr, prec: precAtom}
+	case 'a':
+		v = value{code: call(g.rt("Ascii"), g.boxed(v)), typ: tStr, prec: precAtom}
 	default:
-		return "", unsupported("!a conversion in an f-string", f.Line())
+		return "", unsupported("unknown conversion in an f-string", f.Line())
 	}
 
 	reject := func(err error) (string, error) {
@@ -393,9 +398,11 @@ func (g *generator) formatDynamic(f *pyast.FormattedValue, v value, spec string)
 		v = value{code: call(g.rt("Str"), v.code), typ: tStr, prec: precAtom}
 	case 'r':
 		v = value{code: call(g.rt("Repr"), v.code), typ: tStr, prec: precAtom}
+	case 'a':
+		v = value{code: call(g.rt("Ascii"), g.boxed(v)), typ: tStr, prec: precAtom}
 	case -1:
 	default:
-		return "", unsupported("!a conversion in an f-string", f.Line())
+		return "", unsupported("unknown conversion in an f-string", f.Line())
 	}
 	if c := g.classOf(v.typ); c != nil {
 		if m := c.lookup("__format__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && (m.sig.pos[0].typ == tStr || m.sig.pos[0].typ == tObject) && m.sig.ret == tStr {
@@ -442,3 +449,5 @@ func (g *generator) longTuple(n *pyast.Tuple) (value, error) {
 	}
 	return value{code: g.rt("NewVarTuple") + "[" + g.goType(elem) + "](" + strings.Join(codes, ", ") + ")", typ: varTupleOf(elem), prec: precAtom}, nil
 }
+
+func isNumberType(t pyType) bool { return t == tInt || t == tFloat || t == tBool }
