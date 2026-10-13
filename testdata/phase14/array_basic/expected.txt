@@ -1,0 +1,44 @@
+b 200 OverflowError signed char is greater than maximum
+b -200 OverflowError signed char is less than minimum
+B 300 OverflowError unsigned byte integer is greater than maximum
+B -1 OverflowError unsigned byte integer is less than minimum
+h 40000 OverflowError signed short integer is greater than maximum
+H 70000 OverflowError unsigned short is greater than maximum
+H -1 OverflowError unsigned short is less than minimum
+i 2147483648 OverflowError signed integer is greater than maximum
+I -1 OverflowError can't convert negative value to unsigned int
+I 4294967296 OverflowError unsigned int is greater than maximum
+l 9223372036854775808 OverflowError Python int too large to convert to C long
+q 9223372036854775808 OverflowError int too big to convert
+Q -1 OverflowError can't convert negative int to unsigned
+Q 18446744073709551616 OverflowError int too big to convert
+b 1.5 TypeError 'float' object cannot be interpreted as an integer
+b 'a' TypeError 'str' object cannot be interpreted as an integer
+d 'a' TypeError must be real number, not str
+f None TypeError must be real number, not NoneType
+i True array('i', [1])
+d 3 array('d', [3.0])
+f 0.1 array('f', [0.10000000149011612])
+IndexError pop index out of range
+ValueError array.remove(x): x not in array
+ValueError array.index(x): x not in array
+ValueError bad typecode (must be b, B, u, w, h, H, i, I, l, L, q, Q, f or d)
+TypeError cannot use a str to initialize an array with typecode 'i'
+ValueError bytes length not a multiple of item size
+ValueError bytes length not a multiple of item size
+TypeError 'str' object cannot be interpreted as an integer
+TypeError bad argument type for built-in operation
+TypeError can't multiply sequence by non-int of type 'float'
+IndexError array index out of range
+IndexError array assignment index out of range
+ValueError tounicode() may only be called on unicode type arrays ('u' or 'w')
+TypeError 'str' object cannot be interpreted as an integer
+array('d', [1.5, 2.0]) array('f', [0.10000000149011612]) array('B', [97, 98, 99]) 4 bBuwhHiIlLqQfd array('i') 8 b'\xff\xff'
+3 b'\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00' [1, 2, 3] array('i', [2, 3]) array('i', [3, 2, 1]) array('i', [1, 2, 3, 1, 2, 3]) array('i', [1, 2, 3, 1, 2, 3]) True True [1, 2, 3] True 3 i 4 3
+array('i', [16777216, 33554432, 50331648]) 1
+array('i', [100, 2, 1, 7, 8]) 9 3 array('i', [100, 2, 1, 7, 8]) 1 1
+array('i', [5, 6, 1, 7, 8, 4, 5, 6, 1, 7, 8, 4]) 62 8 [1, 1, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8] [10, 12, 2, 14, 16, 8, 10, 12, 2, 14, 16, 8] array('b', [1, 1, 1])
+b'\x01\x00\x02\x00\x03\x00\xff\xff'
+array('H', [1, 2, 3, 65535]) True
+array('H', [1, 2, 3, 65535, 7, 8, 9]) array('B', [0, 1, 2, 3, 4]) array('B', [1, 2]) array('d', [1.0, 2.0])
+array('u', 'hello') wörld b'a\x00\x00\x00b\x00\x00\x00'

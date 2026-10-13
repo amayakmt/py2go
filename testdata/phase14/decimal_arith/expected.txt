@@ -1,0 +1,84 @@
+1.5 12 -0 1E+5 1E-7 0.000001 1E-7 0.5 5 Infinity -Infinity NaN -sNaN123 0 -5 1000000000000000000000000000000 1
+Decimal('3.14') Decimal('7') -3.14 1000.5 2.50 DecimalTuple(sign=0, digits=(1, 2), exponent=3) DecimalTuple(sign=0, digits=(1, 2, 3, 4, 5, 0, 0), exponent=-4)
+0.1000000000000000055511151231257827021181583404541015625 0.5 10000000000000000000000 -2.50000000000000015570397864444964104724267173196494695730507373809814453125E-10 0.333333333333333314829616256247390992939472198486328125 Infinity True
+3.3 -1.10 2.420 2.5 0.3333333333333333333333333333 0.6666666666666666666666666667 3 -3 1 -1 (Decimal('3'), Decimal('1.5'))
+1024 0.25 15.625 1.414213562373095048801688724 0.001  2.755675960631075360471944584 3.5 -1.5 1.50 0 0
+3 3.0 2.5 0.125 3 3 8 2.5 3.0 2.5 2
+1.23456789 1.23456789 1.234567890123456789012345679E+29 1.000000000000000000000000000E+30 1.000000000000000000000000000
+True True True True True False True True False True False
+True True False a [Decimal('1.5'), Decimal('2'), Decimal('3')] 2.5 1 1.0
+3 -3 2.5 2 4 2.57 1.2E+3  False True (25, 2) False True
+2.5 2.6 2.6 1.2E+3 2.500 -2 2 1.4 1.6 1.5 1.1
+2 4 -3 123.456 1.2 1E+2 0 1E+2
+1.414213562373095048801688724 4 0.5 7.389056098930650227230427461 2.718281828459045235360287471 2.302585092994045684017991455 2 0.3010299956639811952137388947 -0.6931471805599453094172321215 1 1.000E+5 -0
+22 -5 5 -5 -1 1 1 1 -2 5.000000000000000000000000001 4.999999999999999999999999999 1.000000000000000000000000001
+1 -3 True True True True True False True +Normal -Zero +Infinity 10 True
+ 100 111 11 11010 1234500 123 
+'' 1234567.891 -0.000123456 0 1E+10
+'f' 1234567.891 -0.000123456 0 10000000000
+'.2f' 1234567.89 -0.00 0.00 10000000000.00
+'10.3f' 1234567.891     -0.000      0.000 10000000000.000
+'<10.1f' 1234567.9  -0.0       0.0        10000000000.0
+'^10.1f' 1234567.9     -0.0       0.0     10000000000.0
+'>+10.2f' +1234567.89      -0.00      +0.00 +10000000000.00
+'010.2f' 1234567.89 -000000.00 0000000.00 10000000000.00
+',.2f' 1,234,567.89 -0.00 0.00 10,000,000,000.00
+'_.1f' 1_234_567.9 -0.0 0.0 10_000_000_000.0
+'e' 1.234567891e+6 -1.23456e-4 0e+0 1e+10
+'.3e' 1.235e+6 -1.235e-4 0.000e+3 1.000e+10
+'E' 1.234567891E+6 -1.23456E-4 0E+0 1E+10
+'g' 1234567.891 -0.000123456 0 1e+10
+'.3g' 1.23e+6 -0.000123 0 1e+10
+'%' 123456789.1% -0.0123456% 0% 1000000000000%
+'.1%' 123456789.1% -0.0% 0.0% 1000000000000.0%
+'G' 1234567.891 -0.000123456 0 1E+10
+'+' +1234567.891 -0.000123456 +0 +1E+10
+' f'  1234567.891 -0.000123456  0  10000000000
+'.0f' 1234568 -0 0 10000000000
+',' 1,234,567.891 -0.000123456 0 1E+10
+'010,.1f' 1,234,567.9 -000,000.0 0,000,000.0 10,000,000,000.0
+'*^12.2f' *1234567.89* ***-0.00**** ****0.00**** 10000000000.00
+'.10f' 1234567.8910000000 -0.0001234560 0.0000000000 10000000000.0000000000
+Infinity -NaN 12345678901234567890.12     3.14 2.500e+0 1.5 Decimal('1.5') 1E+3 1E-8 1.2E+5 1E+3 120E+3 12.3E-9
+28 ROUND_HALF_EVEN -999999 999999 1 0 True False True Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999, capitals=1, clamp=0, flags=[Inexact, FloatOperation, Rounded], traps=[InvalidOperation, DivisionByZero, Overflow])
+0.33333 1.2346E+8 5 5 True True
+0.66666 1.9999
+1.41 2.30 2.72 1.73 1.02E+3 1.23E+3 True True
+28
+1.23456 1.235 3 1.235 0.1000 10.00 0.3333 3 4.5 1024 1.414 -1 3 -1 1E+5
+ 
+Infinity 0E-100 1E-101 5E-100 ['FloatOperation', 'Overflow', 'Underflow', 'Subnormal', 'Inexact', 'Rounded', 'Clamped']
+0.14 True True False
+D(1) / 0 -> DivisionByZero [<class 'decimal.DivisionByZero'>]
+D(0) / 0 -> InvalidOperation [<class 'decimal.DivisionUndefined'>]
+D('abc') -> InvalidOperation [<class 'decimal.ConversionSyntax'>]
+D('1e999999999999') * D('1e999999999999') -> Overflow [<class 'decimal.Overflow'>]
+D('nan').quantize(D(1)) + D('snan') -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(1) % 0 -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(-1).sqrt() -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(2) ** D('1.5') * D('1e9999999') ** 2 -> Overflow [<class 'decimal.Overflow'>]
+D('1.5').quantize(D('1e50')) -> 0E+50
+D(1) // 0 -> DivisionByZero [<class 'decimal.DivisionByZero'>]
+D('inf') - D('inf') -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(0) ** 0 -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(-8) ** D('0.5') -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+D(1).ln() + D(-1).ln() -> InvalidOperation [<class 'decimal.InvalidOperation'>]
+divmod(D(1), 0) -> InvalidOperation [<class 'decimal.InvalidOperation'>, <class 'decimal.DivisionByZero'>]
+D(1) + 1.5 -> TypeError unsupported operand type(s) for +: 'Decimal' and 'float'
+D(1) < 1.5 -> True
+D(1.5) == 1.5 -> True
+int(D('nan')) -> ValueError cannot convert NaN to integer
+int(D('inf')) -> OverflowError cannot convert Infinity to integer
+float(D('snan')) -> ValueError cannot convert signaling NaN to float
+D(1, 2) -> TypeError optional argument must be a context
+D((2, (1,), 0)) -> ValueError sign must be an integer with the value 0 or 1
+D((0, (1, 10), 0)) -> ValueError coefficient must be a tuple of digits
+D('1').quantize('x') -> TypeError conversion from str to Decimal is not supported
+D('1').compare(None) -> TypeError conversion from NoneType to Decimal is not supported
+hash(D('snan')) -> TypeError Cannot hash a signaling NaN value
+round(D('inf')) -> OverflowError cannot convert Infinity to integer
+D(1) + None -> TypeError unsupported operand type(s) for +: 'Decimal' and 'NoneType'
+D(object()) -> TypeError conversion from object to Decimal is not supported
+Infinity  True 9 True 9 ROUND_HALF_EVEN True
+Infinity NaN 0.333333333 9
+28 True True True True True -999999999999999999

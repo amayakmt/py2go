@@ -1,0 +1,26 @@
+5.485714285714286 3.5 2 5.485714285714286 3.5 2.82842712474619 1.7142857142857142
+5.0 3.5 3 4 3.0 52.0
+a 5.0 ['a', 'b', 'c'] []
+7.091428571428571 6.078367346938776 2.662973633258236 2.465434514834814 3.5 1.8708286933869707 1.707825127659933
+7/108 5/12 1.3333333333333333
+[3.1, 5.0, 8.2] [2.38, 2.8600000000000003, 3.7400000000000007, 4.76, 5.0, 5.0, 6.919999999999999, 8.879999999999999, 10.24] [3.9000000000000004, 5.0, 6.6] [3.0]
+0.8215838362577492 4.125 0.7916685736056362
+0.55 0.13888888888888884 LinearRegression(slope=0.55, intercept=0.13888888888888884) LinearRegression(slope=0.5719298245614035, intercept=0.0)
+0.3333333333333333 0.1 0.1 0.6666666666666666
+StatisticsError mean requires at least one data point
+StatisticsError no median for empty data
+StatisticsError no mode for empty data
+StatisticsError variance requires at least two data points
+StatisticsError pvariance requires at least one data point
+StatisticsError stdev requires at least two data points
+StatisticsError ('No negative inputs allowed', -1)
+StatisticsError Must have a non-empty dataset
+0.0
+StatisticsError harmonic mean does not support negative values
+[1, 1, 1]
+StatisticsError at least one of the inputs is constant
+StatisticsError fmean requires at least one data point
+TypeError can't convert type 'str' to numerator/denominator
+True
+NormalDist(mu=100.0, sigma=15.0) 100.0 15.0 225.0 0.02659615202676218 0.8413447460685429 2.0 NormalDist(mu=110.0, sigma=15.0) NormalDist(mu=200.0, sigma=30.0) NormalDist(mu=99.0, sigma=15.033296378372908) True
+NormalDist(mu=2.5, sigma=1.2909944487358056)

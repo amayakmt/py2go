@@ -1,0 +1,19 @@
+b'h\xc3\xa9llo' héllo b'abc' é b'\xc3\xa9' b'\xe9'
+utf-8 iso8859-1 utf-16-le ascii utf-8-sig
+b'616263' b'abc' Uryyb Hello
+LookupError unknown encoding: nope
+UnicodeEncodeError 'ascii' codec can't encode character '\xe9' in position 0: ordinal not in range(128)
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
+b'?'
+b'&#233;'
+a�b
+ab
+LookupError unknown error handler name 'zzz'
+b'\xef\xbb\xbf' b'\xff\xfe' b'\x00\x00\xfe\xff' (b'a\xc3\xa9', 2) ('a', 1)  ('aé', 3)
+('éè', 2) (b'abc', 3) (b'a\\nb\\\\c\\x00', 6) ('é\n', 8) (b'\\xe9\\n', 2)
+'' '€' 'x'
+[b'a', b'\xc3\xa9'] ['€!']
+cba abc reverse
+LookupError unknown encoding: reverse
+['héllo', 'wörld']
+b'h\xc3\xa9llo\nw\xc3\xb6rld\n'

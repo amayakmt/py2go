@@ -1,0 +1,36 @@
+'2024-03-15 13:45:30' %Y-%m-%d %H:%M:%S (2024, 3, 15, 13, 45, 30, 4, 75, -1)
+'15/03/24' %d/%m/%y (2024, 3, 15, 0, 0, 0, 4, 75, -1)
+'Fri Mar 15 13:45:30 2024' %c (2024, 3, 15, 13, 45, 30, 4, 75, -1)
+'March 5, 1999' %B %d, %Y (1999, 3, 5, 0, 0, 0, 4, 64, -1)
+'Dec 25 2020 11:59 PM' %b %d %Y %I:%M %p (2020, 12, 25, 23, 59, 0, 4, 360, -1)
+'12:00 AM' %I:%M %p (1900, 1, 1, 0, 0, 0, 0, 1, -1)
+'12:00 PM' %I:%M %p (1900, 1, 1, 12, 0, 0, 0, 1, -1)
+'2021 100' %Y %j (2021, 4, 10, 0, 0, 0, 5, 100, -1)
+'2020-02-29' %Y-%m-%d (2020, 2, 29, 0, 0, 0, 5, 60, -1)
+'Mon Jan  1 00:00:00 2018' %a %b %d %H:%M:%S %Y (2018, 1, 1, 0, 0, 0, 0, 1, -1)
+'1970-01-01T00:00:00+0530' %Y-%m-%dT%H:%M:%S%z (1970, 1, 1, 0, 0, 0, 3, 1, -1)
+'23:59:60' %H:%M:%S (1900, 1, 1, 23, 59, 60, 0, 1, -1)
+'05/06' %m/%d (1900, 5, 6, 0, 0, 0, 6, 126, -1)
+'2022 10 3' %Y %U %w (2022, 3, 9, 0, 0, 0, 2, 68, -1)
+'2022 10 1' %Y %W %u (2022, 3, 7, 0, 0, 0, 0, 66, -1)
+'  7  '  %d  (1900, 1, 7, 0, 0, 0, 6, 7, -1)
+'1 2 3' %d %m %y ValueError time data '1 2 3' does not match format '%d %m %y'
+'99%' %y%% (1999, 1, 1, 0, 0, 0, 4, 1, -1)
+'2024-W11-5' %G-W%V-%u (2024, 3, 15, 0, 0, 0, 4, 75, -1)
+'07:08' %R (1900, 1, 1, 7, 8, 0, 0, 1, -1)
+'07:08:09 PM' %r (1900, 1, 1, 19, 8, 9, 0, 1, -1)
+' 5' %e (1900, 1, 5, 0, 0, 0, 4, 5, -1)
+'Saturday' %A (1900, 1, 1, 0, 0, 0, 5, 1, -1)
+'sat' %a (1900, 1, 1, 0, 0, 0, 5, 1, -1)
+'07:08:09' %T (1900, 1, 1, 7, 8, 9, 0, 1, -1)
+'UTC' %Z (1900, 1, 1, 0, 0, 0, 0, 1, 0)
+ValueError time data '2024-13-01' does not match format '%Y-%m-%d'
+ValueError day is out of range for month
+ValueError unconverted data remains: x
+ValueError time data 'abc' does not match format '%Y'
+ValueError 'Q' is a bad directive in format '%Q'
+ValueError stray % in format '%Y%'
+ValueError time data '12' does not match format '%H:%M'
+ValueError time data 'Febuary 3' does not match format '%B %d'
+ValueError day is out of range for month
+2001 34 5

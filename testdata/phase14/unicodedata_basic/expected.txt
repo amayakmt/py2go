@@ -1,0 +1,48 @@
+'a' Ll L 0 Na 0  None None None LATIN SMALL LETTER A
+'A' Lu L 0 Na 0  None None None LATIN CAPITAL LETTER A
+'5' Nd EN 0 Na 0  5 5 5.0 DIGIT FIVE
+' ' Zs WS 0 Na 0  None None None SPACE
+'é' Ll L 0 A 0 0065 0301 None None None LATIN SMALL LETTER E WITH ACUTE
+'ǅ' Lt L 0 N 0 <compat> 0044 017E None None None LATIN CAPITAL LETTER D WITH SMALL LETTER Z WITH CARON
+'€' Sc ET 0 A 0  None None None EURO SIGN
+'中' Lo L 0 W 0  None None None CJK UNIFIED IDEOGRAPH-4E2D
+'한' Lo L 0 W 0 1112 1161 11AB None None None HANGUL SYLLABLE HAN
+'٣' Nd AN 0 N 0  3 3 3.0 ARABIC-INDIC DIGIT THREE
+'½' No ON 0 A 0 <fraction> 0031 2044 0032 None None 0.5 VULGAR FRACTION ONE HALF
+'́' Mn NSM 230 A 0  None None None COMBINING ACUTE ACCENT
+'\u200f' Cf R 0 N 0  None None None RIGHT-TO-LEFT MARK
+'😀' So ON 0 W 0  None None None GRINNING FACE
+'\x00' Cc BN 0 N 0  None None None None
+'ª' Lo L 0 A 0 <super> 0061 None None None FEMININE ORDINAL INDICATOR
+'Ⅷ' Nl L 0 A 0 <compat> 0056 0049 0049 0049 None None 8.0 ROMAN NUMERAL EIGHT
+'🇦' So L 0 N 0  None None None REGIONAL INDICATOR SYMBOL LETTER A
+'ﬁ' Ll L 0 N 0 <compat> 0066 0069 None None None LATIN SMALL LIGATURE FI
+'\xad' Cf BN 0 A 0  None None None SOFT HYPHEN
+LATIN SMALL LETTER A CJK UNIFIED IDEOGRAPH-4E2D HANGUL SYLLABLE HAN GRINNING FACE a α 中 한 😀
+'é' ['\\xe9', 'e\\u0301', '\\xe9', 'e\\u0301'] True False
+'é' ['\\xe9', 'e\\u0301', '\\xe9', 'e\\u0301'] False True
+'Å' ['\\xc5', 'A\\u030a', '\\xc5', 'A\\u030a'] True False
+'Å' ['\\xc5', 'A\\u030a', '\\xc5', 'A\\u030a'] False True
+'ﬁ' ['\\ufb01', '\\ufb01', 'fi', 'fi'] True False
+'①' ['\\u2460', '\\u2460', '1', '1'] True False
+'한글' ['\\ud55c\\uae00', '\\u1112\\u1161\\u11ab\\u1100\\u1173\\u11af', '\\ud55c\\uae00', '\\u1112\\u1161\\u11ab\\u1100\\u1173\\u11af'] True False
+'한' ['\\ud55c', '\\u1112\\u1161\\u11ab', '\\ud55c', '\\u1112\\u1161\\u11ab'] False True
+'ạ̇' ['\\u1ea1\\u0307', 'a\\u0323\\u0307', '\\u1ea1\\u0307', 'a\\u0323\\u0307'] False True
+'ạ̇' ['\\u1ea1\\u0307', 'a\\u0323\\u0307', '\\u1ea1\\u0307', 'a\\u0323\\u0307'] False False
+'ǆ' ['\\u01c6', '\\u01c6', 'd\\u017e', 'dz\\u030c'] True False
+'ｱ' ['\\uff71', '\\uff71', '\\u30a2', '\\u30a2'] True False
+'ẛ̣' ['\\u1e9b\\u0323', '\\u017f\\u0323\\u0307', '\\u1e69', 's\\u0323\\u0307'] True False
+'Å' ['\\xc5', 'A\\u030a', '\\xc5', 'A\\u030a'] False False
+'x̧́y' ['x\\u0327\\u0301y', 'x\\u0327\\u0301y', 'x\\u0327\\u0301y', 'x\\u0327\\u0301y'] False False
+ValueError no such name
+ValueError not a decimal
+ValueError not a digit
+ValueError not a numeric character
+KeyError "undefined character name 'NO SUCH NAME'"
+TypeError category() argument must be a unicode character, not str
+TypeError category() argument must be a unicode character, not str
+ValueError invalid normalization form
+TypeError category() argument must be a unicode character, not int
+15.1.0 
+[('Cc', 9), ('Cf', 11), ('Cn', 6818), ('Co', 915), ('Ll', 313), ('Lm', 54), ('Lo', 17587), ('Lt', 3), ('Lu', 266), ('Mc', 65), ('Me', 3), ('Mn', 250), ('Nd', 101), ('Nl', 34), ('No', 128), ('Pd', 4), ('Pe', 10), ('Pf', 2), ('Pi', 1), ('Po', 88), ('Ps', 9), ('Sc', 9), ('Sk', 23), ('Sm', 138), ('So', 951), ('Zl', 1), ('Zs', 2)]
+False 37 28 [' ', 'A', 'a', 'c', 'd']
