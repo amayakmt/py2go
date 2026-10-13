@@ -294,6 +294,11 @@ func (c *userCursor[T]) Value() T { return c.cur }
 
 func (it *Iterator[T]) PyRepr() string { return "<iterator object at " + addr(it) + ">" }
 
-func (g *Gen[Y, S, R]) PyRepr() string { return "<generator object at " + addr(g) + ">" }
+func (g *Gen[Y, S, R]) PyRepr() string {
+	if g.coro {
+		return "<coroutine object " + g.name + " at " + addr(g) + ">"
+	}
+	return "<generator object at " + addr(g) + ">"
+}
 
 func addr(p any) string { return fmt.Sprintf("%p", p) }

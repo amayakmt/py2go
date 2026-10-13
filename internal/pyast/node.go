@@ -38,6 +38,7 @@ type FunctionDef struct {
 	HasParams     bool
 	HasDecorators bool // len(Decorators) > 0
 	HasTypeParams bool // PEP 695: def f[T](x: T)
+	IsAsync       bool // async def
 	Lineno        int
 }
 
@@ -155,11 +156,12 @@ type While struct {
 }
 
 type For struct {
-	Target Node
-	Iter   Node
-	Body   []Node
-	Orelse []Node
-	Lineno int
+	Target  Node
+	Iter    Node
+	Body    []Node
+	Orelse  []Node
+	IsAsync bool // async for
+	Lineno  int
 }
 
 type Break struct{ Lineno int }
@@ -397,13 +399,20 @@ type WithItem struct {
 
 // With is "with a as x, b: body".
 type With struct {
-	Items  []*WithItem
-	Body   []Node
-	Lineno int
+	Items   []*WithItem
+	Body    []Node
+	IsAsync bool // async with
+	Lineno  int
 }
 
 // Yield is "yield value"; Value may be nil.
 type Yield struct {
+	Value  Node
+	Lineno int
+}
+
+// Await is "await value".
+type Await struct {
 	Value  Node
 	Lineno int
 }
@@ -492,6 +501,7 @@ func (n *IfExp) Line() int          { return n.Lineno }
 func (n *NamedExpr) Line() int      { return n.Lineno }
 func (n *With) Line() int           { return n.Lineno }
 func (n *Yield) Line() int          { return n.Lineno }
+func (n *Await) Line() int          { return n.Lineno }
 func (n *YieldFrom) Line() int      { return n.Lineno }
 func (n *Match) Line() int          { return n.Lineno }
 func (n *MatchValue) Line() int     { return n.Lineno }

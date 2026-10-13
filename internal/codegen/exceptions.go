@@ -139,6 +139,9 @@ func (g *generator) excValue(n pyast.Node) (string, error) {
 			if err != nil {
 				return "", err
 			}
+			if list.typ == listOf(tObject) {
+				return call(g.rt("NewGroup"), strconv.Quote(name), msg.code, g.rt("ExcItems")+"("+list.at(precAtom)+")"), nil
+			}
 			if list.typ != listOf(tExc) {
 				return "", mismatch("exceptions of "+name, listOf(tExc), list.typ, n.Line())
 			}
@@ -168,6 +171,8 @@ func (g *generator) excValue(n pyast.Node) (string, error) {
 				return v.at(precAtom) + ".PyExc()", nil
 			case v.typ == tObject:
 				return g.rt("AsException") + "(" + v.code + ")", nil
+			case g.boxable(v) && (v.typ.isOptional() || mentionsObject(v.typ)):
+				return g.rt("AsException") + "(" + g.boxed(v) + ")", nil
 			}
 		}
 	}

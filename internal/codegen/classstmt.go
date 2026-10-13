@@ -81,8 +81,16 @@ func (g *generator) prescan(mod *pyast.Module) {
 			// A method that returns something decides the result type of
 			// the methods of that name in the other classes.
 			for _, st := range n.Body {
-				if fn, ok := st.(*pyast.FunctionDef); ok && fn.Returns == nil && !isGeneratorBody(fn.Body) && returnsValue(fn.Body) {
+				if fn, ok := st.(*pyast.FunctionDef); ok && fn.Returns == nil && !fn.IsAsync && !isGeneratorBody(fn.Body) && returnsValue(fn.Body) {
 					g.valueMethods[fn.Name] = true
+				}
+			}
+		case *pyast.Call:
+			if f, ok := n.Func.(*pyast.Name); ok && f.ID == "_native" && len(n.Args) > 0 {
+				if c, ok := n.Args[0].(*pyast.Constant); ok {
+					if s, ok := c.Value.(string); ok && (strings.HasPrefix(s, "thread.") || strings.HasPrefix(s, "signal.")) {
+						g.threads = true
+					}
 				}
 			}
 		case *pyast.ImportFrom:
@@ -239,3 +247,12 @@ func (g *generator) isUserExceptionClass(name string) *classInfo {
 }
 
 var _ = runtime.IsExceptionClass
+
+// attrCount is the number of attributes the classes have found so far.
+func (g *generator) attrCount() int {
+	n := 0
+	for _, c := range g.classOrder {
+		n += len(c.members)
+	}
+	return n
+}

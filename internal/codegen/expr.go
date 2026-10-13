@@ -176,6 +176,8 @@ func (g *generator) expr(n pyast.Node) (value, error) {
 		return g.yieldExpr(n)
 	case *pyast.YieldFrom:
 		return g.yieldFrom(n)
+	case *pyast.Await:
+		return g.awaitExpr(n)
 	case *pyast.NamedExpr:
 		return g.namedExpr(n)
 	case *pyast.Subscript:

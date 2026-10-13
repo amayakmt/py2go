@@ -65,6 +65,10 @@ func (g *generator) relabel(v value, want pyType) value {
 	}
 	if want == tObject {
 		v = v.typed()
+		if v.typ.isOptional() {
+			// An Optional is not a Python object: None, or the value.
+			v.code, v.prec = v.at(precAtom)+".Boxed()", precAtom
+		}
 		if v.konst && v.typ != tObject {
 			v.code = g.goType(v.typ) + "(" + v.code + ")"
 			v.prec = precAtom
@@ -320,8 +324,8 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 			if arg.typ.isClass() {
 				return value{code: arg.at(precAtom) + ".PyClassName()", typ: tStr, prec: precAtom}, true, nil
 			}
-			if arg.typ == tObject {
-				return value{code: g.rt("TypeName") + "(" + arg.code + ")", typ: tStr, prec: precAtom}, true, nil
+			if arg.typ == tObject || arg.typ.isGen() {
+				return value{code: g.rt("TypeName") + "(" + g.boxed(arg) + ")", typ: tStr, prec: precAtom}, true, nil
 			}
 			if arg.typ == tExc {
 				return value{code: g.rt("BaseTypeName") + "(" + arg.at(precAtom) + ".Type)", typ: tStr, prec: precAtom}, true, nil
@@ -383,6 +387,8 @@ func pythonTypeName(t pyType) string {
 		return "function"
 	case t == tRange:
 		return "range"
+	case t.isGen():
+		return "generator"
 	}
 	return string(t)
 }

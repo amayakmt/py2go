@@ -23,7 +23,7 @@ var goKeywords = map[string]bool{
 // shadow.
 var goTypeNames = map[string]bool{
 	"float64": true, "int64": true, "string": true, "true": true, "false": true,
-	"nil": true, "runtime": true, "init": true, "byte": true, "rune": true, "uint": true,
+	"nil": true, "runtime": true, "init": true, "main": true, "byte": true, "rune": true, "uint": true,
 	"int32": true, "uint8": true, "float32": true, "error": true, "iota": true,
 }
 

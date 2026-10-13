@@ -494,8 +494,6 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 		return unsupported("method "+name+" (the attribute hooks and descriptors arrive in phase 9)", fn.Line())
 	case "__del__", "__sizeof__", "__reduce__", "__copy__", "__deepcopy__", "__getstate__", "__setstate__":
 		return unsupported("method "+name, fn.Line())
-	case "__aenter__", "__aexit__", "__aiter__", "__anext__", "__await__":
-		return unsupported("method "+name+" (async arrives in phase 13)", fn.Line())
 	}
 	if prev := c.members[name]; prev != nil && setterOf == "" {
 		return unsupported(fmt.Sprintf("redefinition of '%s.%s'", c.name, fn.Name), fn.Line())

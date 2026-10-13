@@ -31,6 +31,8 @@ type Gen[Y, S, R any] struct {
 	in    chan genMsg[S]
 	out   chan genOut[Y, R]
 	state int
+	coro  bool   // an "async def" coroutine
+	name  string // its function, for repr
 }
 
 // Yielder is what the body of a generator yields through.
@@ -95,6 +97,9 @@ func (g *Gen[Y, S, R]) step(msg genMsg[S]) (y Y, ret R, done bool) {
 		if msg.exc != nil {
 			panic(msg.exc)
 		}
+		if g.coro {
+			panic(newError("RuntimeError", "cannot reuse already awaited coroutine"))
+		}
 		return y, ret, true
 	case genNew:
 		if msg.exc != nil {
@@ -135,6 +140,13 @@ func stopIteration[R any](ret R) *PyError {
 // Send is g.send(v); it is next(g) with the zero value. A generator that
 // finishes raises StopIteration.
 func (g *Gen[Y, S, R]) Send(v S) Y {
+	if g.state == genNew && !isNoneVal(any(v)) {
+		panic(newError("TypeError", "can't send non-None value to a just-started "+g.PyClassName()))
+	}
+	return g.send(v)
+}
+
+func (g *Gen[Y, S, R]) send(v S) Y {
 	y, ret, done := g.step(genMsg[S]{val: v})
 	if done {
 		panic(stopIteration(ret))
@@ -145,7 +157,7 @@ func (g *Gen[Y, S, R]) Send(v S) Y {
 // NextValue is next(g).
 func (g *Gen[Y, S, R]) NextValue() Y {
 	var zero S
-	return g.Send(zero)
+	return g.send(zero)
 }
 
 // Throw is g.throw(exc).

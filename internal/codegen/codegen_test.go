@@ -34,14 +34,14 @@ func TestGenerateHello(t *testing.T) {
 }
 
 func TestGenerateUnsupported(t *testing.T) {
-	data := []byte(`{"_type": "Module", "body": [{"_type": "Await", "lineno": 12}]}`)
+	data := []byte(`{"_type": "Module", "body": [{"_type": "Global2", "lineno": 12}]}`)
 	root, err := pyast.Decode(data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = Generate(root)
-	if err == nil || !strings.Contains(err.Error(), "unsupported: Await at line 12") {
-		t.Fatalf("want \"unsupported: Await at line 12\", got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unsupported: Global2 at line 12") {
+		t.Fatalf("want \"unsupported: Global2 at line 12\", got %v", err)
 	}
 }
 

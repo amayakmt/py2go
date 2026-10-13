@@ -212,6 +212,8 @@ func (g *generator) unwrapOperands(msg func(lname, rname string) string, l, r va
 type genInfo struct {
 	yield, send, ret pyType
 	iterator         bool
+	coro             bool // an async def: a coroutine
+	asyncGen         bool // an async def with yield
 }
 
 const yielderVar = "_pyy"
@@ -243,6 +245,9 @@ func (g *generator) yieldExpr(n *pyast.Yield) (value, error) {
 		if g.gen.yield != tNoneType && g.gen.yield != tObject {
 			return value{}, unsupported("yield without a value in a generator of "+string(g.gen.yield), n.Line())
 		}
+		if g.gen.asyncGen {
+			return value{code: g.rt("AGYield") + "(" + yielderVar + ", " + g.rt("NoneV") + ")", typ: g.gen.send, prec: precAtom}, nil
+		}
 		return value{code: yielderVar + ".Yield(" + g.rt("NoneV") + ")", typ: g.gen.send, prec: precAtom}, nil
 	}
 	v, err := g.exprAs(n.Value, g.gen.yield)
@@ -252,6 +257,9 @@ func (g *generator) yieldExpr(n *pyast.Yield) (value, error) {
 	v, err = g.coerce(v, g.gen.yield, "yielded value", n.Line())
 	if err != nil {
 		return value{}, err
+	}
+	if g.gen.asyncGen {
+		return value{code: g.rt("AGYield") + "(" + yielderVar + ", " + v.typed().code + ")", typ: g.gen.send, prec: precAtom}, nil
 	}
 	return value{code: yielderVar + ".Yield(" + v.typed().code + ")", typ: g.gen.send, prec: precAtom}, nil
 }

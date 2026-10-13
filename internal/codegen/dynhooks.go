@@ -82,6 +82,9 @@ func (g *generator) funcInfoWith(name string, sig *funcSig, snapshot bool) strin
 	if len(kwonly) > 0 {
 		fmt.Fprintf(&b, ", KwOnly: map[string]bool{%s}", strings.Join(kwonly, ", "))
 	}
+	if sig.gen != nil && (sig.gen.coro || sig.gen.asyncGen) {
+		b.WriteString(", Async: true")
+	}
 	b.WriteString("}")
 	return b.String()
 }
@@ -104,7 +107,7 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 
 // dynDunders are the special methods the runtime calls by name, as the
 // built-ins round(), bytes() and the like do.
-var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true}
+var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true, "__await__": true, "__aenter__": true, "__aexit__": true, "__aiter__": true, "__anext__": true}
 
 func isDunder(name string) bool {
 	return strings.HasPrefix(name, "__") && strings.HasSuffix(name, "__")

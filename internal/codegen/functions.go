@@ -229,7 +229,7 @@ func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool
 		// Without a hint, a function that never returns a value returns
 		// None, a generator yields anything, and any other returns anything.
 		switch {
-		case isGeneratorBody(fn.Body):
+		case fn.IsAsync || isGeneratorBody(fn.Body):
 			ret = genOf(tObject, tObject, tObject)
 		case g.buildingMethod && protocolReturns[fn.Name] != "":
 			ret = protocolReturns[fn.Name]
@@ -248,7 +248,22 @@ func (g *generator) buildSig(fn *pyast.FunctionDef, qualname string, nested bool
 		}
 	}
 	sig.ret = ret
-	if isGeneratorBody(fn.Body) {
+	if fn.IsAsync {
+		if isGeneratorBody(fn.Body) {
+			sig.gen = &genInfo{yield: tObject, send: tObject, ret: tObject, asyncGen: true}
+			sig.ret = tObject
+		} else {
+			r := tObject
+			if fn.Returns != nil {
+				r = ret
+				if r == tNone {
+					r = tNoneType
+				}
+			}
+			sig.gen = &genInfo{yield: tObject, send: tObject, ret: r, coro: true}
+			sig.ret = genOf(tObject, tObject, r)
+		}
+	} else if isGeneratorBody(fn.Body) {
 		switch {
 		case ret.isIter():
 			sig.gen = &genInfo{yield: ret.elem(), send: tNoneType, ret: tNoneType, iterator: true}
@@ -321,9 +336,6 @@ func (g *generator) collectSignatures(mod *pyast.Module) {
 			continue
 		}
 		g.sigs[fn.Name] = sig
-		if fn.Name == "main" {
-			sig.goName = "_pyf_main" // Go's main is the module body
-		}
 		ps, _ := sig.defaultNodes()
 		for i, p := range ps {
 			p.defaultVar = fmt.Sprintf("_pyd_%s_%d", fn.Name, i)
@@ -543,11 +555,20 @@ func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header str
 	}
 	if sig.gen != nil {
 		gi := sig.gen
-		fmt.Fprintf(&b, "return %s[%s, %s, %s](func(%s *%s[%s, %s]) %s {\n%s})", g.rt("NewGen"),
+		ctor := "return "
+		tail := ""
+		if gi.asyncGen {
+			ctor, tail = "return "+g.rt("NewAsyncGen")+"(", ")"
+		}
+		fmt.Fprintf(&b, "%s%s[%s, %s, %s](func(%s *%s[%s, %s]) %s {\n%s})", ctor, g.rt("NewGen"),
 			g.goType(gi.yield), g.goType(gi.send), g.goType(gi.ret), yielderVar, g.rt("Yielder"), g.goType(gi.yield), g.goType(gi.send), g.goType(gi.ret), body.String())
 		if gi.iterator {
 			b.WriteString(".Iterator()")
 		}
+		if gi.coro {
+			fmt.Fprintf(&b, ".AsCoro(%q)", fn.Name)
+		}
+		b.WriteString(tail)
 		b.WriteString("\n}")
 		return b.String(), nil
 	}
@@ -884,6 +905,10 @@ func (g *generator) coerce(v value, want pyType, dest string, line int) (value, 
 			return adapted, nil
 		}
 	}
+	if want == tObject && v.typ == tExc {
+		// An exception is an object like any other (a *PyError).
+		return value{code: v.code, typ: tObject, prec: v.prec}, nil
+	}
 	return value{}, mismatch(dest, want, v.typ, line)
 }
 
@@ -980,9 +1005,15 @@ func (g *generator) builtinAsLambda(n pyast.Node, want pyType) *pyast.Lambda {
 func (g *generator) functionAttribute(sig *funcSig, attr string, line int) (value, error) {
 	switch attr {
 	case "__name__":
-		return value{code: strconv.Quote(sig.name), typ: tStr, prec: precAtom}, nil
+		return value{code: strconv.Quote(pyName(sig.name)), typ: tStr, prec: precAtom}, nil
 	case "__qualname__":
-		return value{code: strconv.Quote(sig.qualname), typ: tStr, prec: precAtom}, nil
+		q := sig.qualname
+		if i := strings.LastIndex(q, "."); i >= 0 {
+			q = q[:i+1] + pyName(q[i+1:])
+		} else {
+			q = pyName(q)
+		}
+		return value{code: strconv.Quote(q), typ: tStr, prec: precAtom}, nil
 	case "__doc__":
 		if !sig.hasDoc {
 			return value{}, unsupported(fmt.Sprintf("__doc__ of '%s', which has no docstring (it would be None)", sig.name), line)

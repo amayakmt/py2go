@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 // Seq is what lists and tuples have in common: the runtime can print,
@@ -34,6 +35,9 @@ func Eq(a, b any) bool {
 			if r, ok := e2.PyEq(a); ok {
 				return r
 			}
+		}
+		if r, isFunc := sameFunc(a, b); isFunc {
+			return r
 		}
 		return a == b
 	}
@@ -79,7 +83,29 @@ func Eq(a, b any) bool {
 		}
 		return false
 	}
+	if r, isFunc := sameFunc(a, b); isFunc {
+		return r
+	}
 	return a == b
+}
+
+// sameFunc compares function values by their closure: the same function
+// value is equal to itself, and bound methods taken twice are not equal.
+func sameFunc(a, b any) (result, isFunc bool) {
+	if c, ok := a.(*Callable); ok {
+		a = c.Fn
+	}
+	if c, ok := b.(*Callable); ok {
+		b = c.Fn
+	}
+	ka, kb := reflect.TypeOf(a), reflect.TypeOf(b)
+	if (ka == nil || ka.Kind() != reflect.Func) && (kb == nil || kb.Kind() != reflect.Func) {
+		return false, false
+	}
+	if ka == nil || kb == nil || ka.Kind() != kb.Kind() {
+		return false, true
+	}
+	return (*[2]unsafe.Pointer)(unsafe.Pointer(&a))[1] == (*[2]unsafe.Pointer)(unsafe.Pointer(&b))[1], true
 }
 
 // bigEq compares an int of more than 64 bits with an int or a float.

@@ -98,6 +98,7 @@ type generator struct {
 	elseFlags          []string         // per enclosing loop: the flag a break sets, if it has an else
 	gen                *genInfo         // the generator function being compiled
 	genNone            bool             // ... and it returns None
+	threads            bool             // the program starts threads or handles signals: loops yield
 	hoist              *strings.Builder // declarations an expression needs before its statement
 	buildingMethod     bool             // method names are not Go identifiers, so any name will do
 }
@@ -168,6 +169,15 @@ func Generate(root pyast.Node) ([]byte, error) {
 		return nil, err
 	}
 	g.inferModuleVars(mod)
+	// A method may have read a module variable that had no type until now,
+	// so its attributes are found again, and the module variables with them.
+	if before := g.attrCount(); true {
+		g.inferRounds(g.classOrder)
+		if g.attrCount() != before {
+			g.inferModuleVars(mod)
+			g.inferRounds(g.classOrder)
+		}
+	}
 
 	// Function definitions go to package level.
 	// Everything else goes into main(), in source order.
@@ -270,7 +280,7 @@ func checkName(name string, line int) error {
 	if goReserved[name] && !strings.HasSuffix(name, renameSuffix) {
 		return unsupported(fmt.Sprintf("identifier '%s' (reserved in Go output)", name), line)
 	}
-	if strings.HasPrefix(name, "_py") {
+	if strings.HasPrefix(name, "_py") && !strings.HasPrefix(name, "_pyz") {
 		return unsupported(fmt.Sprintf("identifier '%s' (the _py prefix is reserved)", name), line)
 	}
 	return nil

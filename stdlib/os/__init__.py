@@ -41,6 +41,18 @@ def getpid():
     return _native("os.getpid")
 
 
+def getppid():
+    return _native("os.getppid")
+
+
+def kill(pid, sig):
+    _native("signal.kill", pid, int(sig))
+
+
+def _exit(status):
+    _native("os._exit", status)
+
+
 def cpu_count():
     return _native("os.cpu_count")
 

@@ -83,7 +83,60 @@ func DynCallMethod(obj any, name string, args []any, kw []KW) any {
 	if r, ok := callMethod(obj, name, args, kw); ok {
 		return r
 	}
+	if _, user := Unbox(obj).(Named); !user {
+		if r, ok := dunderMethod(obj, name, args); ok {
+			return r
+		}
+	}
 	return DynCallKw(DynGetAttr(obj, name), args, kw)
+}
+
+// dunderMethod is obj.__getitem__(k) and the other special methods that
+// built-in objects answer by running the operation.
+func dunderMethod(obj any, name string, args []any) (any, bool) {
+	n := func(k int) {
+		if len(args) != k {
+			panic(newError("TypeError", "expected "+itoa(k)+" argument"+map[bool]string{true: "", false: "s"}[k == 1]+", got "+itoa(len(args))))
+		}
+	}
+	switch name {
+	case "__getitem__":
+		n(1)
+		return DynGetItem(obj, args[0]), true
+	case "__setitem__":
+		n(2)
+		DynSetItem(obj, args[0], args[1])
+		return nil, true
+	case "__delitem__":
+		n(1)
+		DynDelItem(obj, args[0])
+		return nil, true
+	case "__len__":
+		n(0)
+		return DynLen(obj), true
+	case "__contains__":
+		n(1)
+		return DynContains(obj, args[0]), true
+	case "__iter__":
+		n(0)
+		return DynIter(obj), true
+	case "__eq__":
+		n(1)
+		return Eq(obj, args[0]), true
+	case "__ne__":
+		n(1)
+		return !Eq(obj, args[0]), true
+	case "__str__":
+		n(0)
+		return Str(obj), true
+	case "__repr__":
+		n(0)
+		return Repr(obj), true
+	case "__bool__":
+		n(0)
+		return DynBool(obj), true
+	}
+	return nil, false
 }
 
 // callMethod runs a method the runtime implements itself.

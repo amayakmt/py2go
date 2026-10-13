@@ -99,7 +99,7 @@ func TestGenerateClassOutput(t *testing.T) {
 		{"dataclass generates init and eq", "from dataclasses import dataclass\n\n\n@dataclass\nclass D:\n    a: int\n    b: str = 'x'\n", []string{
 			"M___init____D(a int64, b string)", "M___eq____D(other any) (bool, bool)", "M___repr____D() string", "var _pyd_D___init___0 string"}, nil},
 		{"frozen dataclass setters panic", "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass D:\n    a: int\n", []string{`Set_a(v int64) { panic(runtime.FrozenInstance("a")) }`}, nil},
-		{"function named main", "def main() -> None:\n    print(1)\n\n\nmain()\n", []string{"func _pyf_main()", "_pyf_main()"}, nil},
+		{"function named main", "def main() -> None:\n    print(1)\n\n\nmain()\n", []string{"func main_py()", "main_py()"}, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

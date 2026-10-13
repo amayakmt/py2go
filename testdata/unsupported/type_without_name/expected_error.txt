@@ -1,1 +1,1 @@
-unsupported: type() of exception at line 4
+unsupported: type() of list[int] at line 2

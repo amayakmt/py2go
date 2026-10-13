@@ -41,6 +41,9 @@ func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	case *pyast.While:
 		return g.whileStmt(b, n)
 	case *pyast.For:
+		if n.IsAsync {
+			return g.asyncFor(b, n)
+		}
 		return g.forStmt(b, n)
 	case *pyast.Raise:
 		return g.raiseStmt(b, n)
@@ -65,6 +68,9 @@ func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	case *pyast.ClassDef:
 		return unsupported("class defined inside a function or a block", n.Line())
 	case *pyast.With:
+		if n.IsAsync {
+			return g.asyncWith(b, n)
+		}
 		return g.withStmt(b, n)
 	case *pyast.Match:
 		return g.matchStmt(b, n)
@@ -867,6 +873,9 @@ func (g *generator) whileStmtBody(b *strings.Builder, n *pyast.While) error {
 		b.WriteString("for {\n")
 	} else {
 		b.WriteString("for " + cond.code + " {\n")
+	}
+	if g.threads {
+		b.WriteString(g.rt("Yield") + "()\n")
 	}
 	g.loopDepth++
 	defer func() { g.loopDepth-- }()

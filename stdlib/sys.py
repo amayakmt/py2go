@@ -71,3 +71,11 @@ def intern(s):
 
 def getsizeof(obj, default=None):
     return 64
+
+
+def setswitchinterval(interval):
+    _native("thread.setswitchinterval", interval)
+
+
+def getswitchinterval():
+    return _native("thread.getswitchinterval")

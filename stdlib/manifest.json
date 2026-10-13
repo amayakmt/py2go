@@ -599,7 +599,7 @@
    "name": "_thread",
    "phase": 13,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -725,14 +725,14 @@
    "name": "asyncio",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "atexit",
    "phase": 12,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -851,7 +851,7 @@
    "name": "concurrent",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -872,7 +872,7 @@
    "name": "contextvars",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1509,7 +1509,7 @@
    "name": "queue",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1572,7 +1572,7 @@
    "name": "sched",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1621,7 +1621,7 @@
    "name": "signal",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1810,7 +1810,7 @@
    "name": "threading",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {

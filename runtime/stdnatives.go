@@ -200,7 +200,7 @@ func init() {
 		if secs < 0 {
 			panic(valueError("sleep length must be non-negative"))
 		}
-		time.Sleep(time.Duration(secs * float64(time.Second)))
+		sleepFor(time.Duration(secs * float64(time.Second)))
 		return nil
 	})
 	RegisterNative("time.gmtime", func(args []any, kw []KW) any { return timeTuple(args, time.UTC) })
@@ -482,4 +482,17 @@ func forceRead(v reflect.Value) reflect.Value {
 		return v
 	}
 	return reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem()
+}
+
+func init() {
+	RegisterNative("asyncio.isclass", func(args []any, kw []KW) any {
+		nativeArgs("isclass", args, 1, 1)
+		_, ok := Unbox(args[0]).(*ClassRef)
+		return ok
+	})
+	RegisterNative("asyncio.iscoroutinefunction", func(args []any, kw []KW) any {
+		nativeArgs("iscoroutinefunction", args, 1, 1)
+		info := funcInfoOf(Unbox(args[0]))
+		return info != nil && info.Async
+	})
 }

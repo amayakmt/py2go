@@ -23,6 +23,7 @@ type FuncInfo struct {
 	VarArgs  string // name of *args, if any
 	KwArgs   string // name of **kwargs, if any
 	KwOnly   map[string]bool
+	Async    bool // an "async def"
 }
 
 var funcInfos = map[uintptr]*FuncInfo{}

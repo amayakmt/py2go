@@ -599,6 +599,9 @@ func (g *generator) typeCall(n *pyast.Call) (value, error) {
 		return value{}, err
 	}
 	c := g.classOf(x.typ)
+	if c == nil && x.typ == tExc {
+		return value{code: g.rt("ExcClass") + "(" + x.code + ")", typ: tObject, prec: precAtom}, nil
+	}
 	if c == nil {
 		return value{}, unsupported(fmt.Sprintf("type() of %s", x.typ), n.Line())
 	}

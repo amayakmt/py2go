@@ -114,6 +114,9 @@ func Is(a, b any) bool {
 			return ok && y.Kind() == "tuple" && Eq(a, b)
 		}
 	}
+	if r, isFunc := sameFunc(a, b); isFunc {
+		return r
+	}
 	defer func() { recover() }()
 	return a == b
 }

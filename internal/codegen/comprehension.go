@@ -33,13 +33,10 @@ func loopNest(gens []*pyast.Comprehension, inner pyast.Node) (pyast.Node, error)
 	node := inner
 	for i := len(gens) - 1; i >= 0; i-- {
 		gen := gens[i]
-		if gen.IsAsync {
-			return nil, unsupported("async comprehension", gen.Target.Line())
-		}
 		for j := len(gen.Ifs) - 1; j >= 0; j-- {
 			node = &pyast.If{Test: gen.Ifs[j], Body: []pyast.Node{node}, Lineno: gen.Ifs[j].Line()}
 		}
-		node = &pyast.For{Target: gen.Target, Iter: gen.Iter, Body: []pyast.Node{node}, Lineno: gen.Target.Line()}
+		node = &pyast.For{Target: gen.Target, Iter: gen.Iter, Body: []pyast.Node{node}, IsAsync: gen.IsAsync, Lineno: gen.Target.Line()}
 	}
 	return node, nil
 }
@@ -193,7 +190,7 @@ func (g *generator) genExp(n *pyast.GeneratorExp) (value, error) {
 
 	for i, gen := range n.Generators {
 		if gen.IsAsync {
-			return value{}, unsupported("async comprehension", gen.Target.Line())
+			return value{}, unsupported("async generator expression", gen.Target.Line())
 		}
 		src, err := g.iterOf(gen.Iter)
 		if err != nil {

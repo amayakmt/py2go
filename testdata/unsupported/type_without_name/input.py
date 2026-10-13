@@ -1,4 +1,3 @@
-try:
-    pass
-except ValueError as e:
-    print(type(e))
+items = [1, 2]
+kind = type(items)
+print(kind)

@@ -351,14 +351,38 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 		static = append(static, a)
 	}
 	var dstar pyast.Node
+	named, mappings := 0, 0
 	for _, kw := range n.Keywords {
 		if kw.Arg != "" {
-			return value{}, unsupported("keyword arguments together with a **mapping argument", kw.Line())
+			named++
+		} else {
+			mappings++
 		}
-		if dstar != nil {
-			return value{}, unsupported("more than one **mapping argument", kw.Line())
+	}
+	if mappings > 1 {
+		return value{}, unsupported("more than one **mapping argument", n.Line())
+	}
+	if named > 0 {
+		// f(*a, key=v) and f(**m, key=v): the keywords and the mapping are
+		// one dict display, {"key": v, **m}.
+		d := &pyast.Dict{Lineno: n.Line()}
+		for _, kw := range n.Keywords {
+			if kw.Arg != "" {
+				d.Keys = append(d.Keys, &pyast.Constant{PyType: "str", Value: kw.Arg, Lineno: kw.Line()})
+				d.Values = append(d.Values, kw.Value)
+			}
 		}
-		dstar = kw.Value
+		for _, kw := range n.Keywords {
+			if kw.Arg == "" {
+				d.Keys = append(d.Keys, nil)
+				d.Values = append(d.Values, kw.Value)
+			}
+		}
+		dstar = d
+	} else {
+		for _, kw := range n.Keywords {
+			dstar = kw.Value
+		}
 	}
 
 	nPos := len(sig.pos)

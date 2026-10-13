@@ -38,7 +38,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return &Module{Body: body}, nil
 
-	case "FunctionDef":
+	case "FunctionDef", "AsyncFunctionDef":
 		var aux struct {
 			Name          string            `json:"name"`
 			Args          json.RawMessage   `json:"args"`
@@ -79,6 +79,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			Decorators:    decorators,
 			HasDecorators: len(decorators) > 0,
 			HasTypeParams: len(aux.TypeParams) > 0,
+			IsAsync:       head.Type == "AsyncFunctionDef",
 			Lineno:        head.Lineno,
 		}, nil
 
@@ -169,7 +170,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return n, nil
 
-	case "With":
+	case "With", "AsyncWith":
 		var aux struct {
 			Items []struct {
 				ContextExpr  json.RawMessage `json:"context_expr"`
@@ -180,7 +181,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err := json.Unmarshal(raw, &aux); err != nil {
 			return nil, err
 		}
-		n := &With{Lineno: head.Lineno}
+		n := &With{Lineno: head.Lineno, IsAsync: head.Type == "AsyncWith"}
 		for _, it := range aux.Items {
 			ctx, err := decodeNode(it.ContextExpr)
 			if err != nil {
@@ -197,6 +198,19 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 			return nil, err
 		}
 		return n, nil
+
+	case "Await":
+		var aux struct {
+			Value json.RawMessage `json:"value"`
+		}
+		if err := json.Unmarshal(raw, &aux); err != nil {
+			return nil, err
+		}
+		v, err := decodeNode(aux.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &Await{Value: v, Lineno: head.Lineno}, nil
 
 	case "Yield", "YieldFrom":
 		var aux struct {
@@ -558,7 +572,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		}
 		return &While{Test: test, Body: body, Orelse: orelse, Lineno: head.Lineno}, nil
 
-	case "For":
+	case "For", "AsyncFor":
 		var aux struct {
 			Target json.RawMessage   `json:"target"`
 			Iter   json.RawMessage   `json:"iter"`
@@ -584,7 +598,7 @@ func decodeNode(raw json.RawMessage) (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &For{Target: target, Iter: iter, Body: body, Orelse: orelse, Lineno: head.Lineno}, nil
+		return &For{Target: target, Iter: iter, Body: body, Orelse: orelse, IsAsync: head.Type == "AsyncFor", Lineno: head.Lineno}, nil
 
 	case "Break":
 		return &Break{Lineno: head.Lineno}, nil
