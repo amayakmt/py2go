@@ -65,7 +65,7 @@
   },
   {
    "name": "_bz2",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -144,7 +144,7 @@
    "name": "_compat_pickle",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -198,7 +198,7 @@
   },
   {
    "name": "_dbm",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -212,7 +212,7 @@
   },
   {
    "name": "_elementtree",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -240,7 +240,7 @@
   },
   {
    "name": "_gdbm",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -324,7 +324,7 @@
   },
   {
    "name": "_lzma",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -333,7 +333,7 @@
    "name": "_markupbase",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -520,7 +520,7 @@
   },
   {
    "name": "_sqlite3",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -690,7 +690,7 @@
    "name": "abc",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -739,7 +739,7 @@
    "name": "base64",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -753,7 +753,7 @@
    "name": "binascii",
    "phase": 15,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -772,7 +772,7 @@
   },
   {
    "name": "bz2",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -858,7 +858,7 @@
    "name": "configparser",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -886,14 +886,14 @@
    "name": "copyreg",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "csv",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -926,7 +926,7 @@
   },
   {
    "name": "dbm",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1110,7 +1110,7 @@
    "name": "gzip",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1131,14 +1131,14 @@
    "name": "hmac",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "html",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1234,7 +1234,7 @@
   },
   {
    "name": "lzma",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1262,7 +1262,7 @@
   },
   {
    "name": "mimetypes",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1304,7 +1304,7 @@
   },
   {
    "name": "netrc",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1383,12 +1383,12 @@
    "name": "pickle",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "pickletools",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1409,7 +1409,7 @@
   },
   {
    "name": "plistlib",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1500,7 +1500,7 @@
   },
   {
    "name": "pyexpat",
-   "phase": 15,
+   "phase": 16,
    "kind": "N",
    "status": "todo",
    "expected_failures": []
@@ -1516,7 +1516,7 @@
    "name": "quopri",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1598,7 +1598,7 @@
   },
   {
    "name": "shelve",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1654,7 +1654,7 @@
   },
   {
    "name": "sqlite3",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1766,7 +1766,7 @@
   },
   {
    "name": "tarfile",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1850,7 +1850,7 @@
   },
   {
    "name": "tomllib",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1901,7 +1901,7 @@
    "name": "types",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1936,7 +1936,7 @@
    "name": "uuid",
    "phase": 15,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1955,7 +1955,7 @@
   },
   {
    "name": "wave",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -1997,7 +1997,7 @@
   },
   {
    "name": "xml",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -2011,14 +2011,14 @@
   },
   {
    "name": "zipapp",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
   },
   {
    "name": "zipfile",
-   "phase": 15,
+   "phase": 16,
    "kind": "L",
    "status": "todo",
    "expected_failures": []
@@ -2034,7 +2034,7 @@
    "name": "zlib",
    "phase": 15,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {

@@ -24,7 +24,7 @@ Python 3.13 is resolved through `uv`.
 
     go test -count=1 ./...
 
-Each case under `testdata/phase2/` to `phase14/` runs under CPython 3.13 (committed
+Each case under `testdata/phase2/` to `phase15/` runs under CPython 3.13 (committed
 `expected.txt`) and as transpiled Go; stdout must match. Cases under
 `testdata/unsupported/` assert the exact error and line number.
 After adding a case, `scripts/regen_expected.sh testdata/phase2/<case>` records
