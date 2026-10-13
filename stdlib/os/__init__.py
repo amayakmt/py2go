@@ -41,6 +41,10 @@ def getpid():
     return _native("os.getpid")
 
 
+def urandom(size):
+    return _native("secrets.token_bytes", size)
+
+
 def getppid():
     return _native("os.getppid")
 

@@ -241,6 +241,7 @@ func AsInt(x any) int64 {
 type ClassRef struct {
 	Name    string
 	Builtin bool
+	Module  string    // the module of a class defined in a module of the project
 	ctor    any       // the constructor of a class of the program
 	info    *FuncInfo // and the names of its parameters
 }
@@ -267,11 +268,22 @@ func BuiltinClassOf(name string) *ClassRef {
 	return c
 }
 
+// module is the module a class was defined in.
+func (c *ClassRef) module() string {
+	if c.Module != "" {
+		return c.Module
+	}
+	return "__main__"
+}
+
+// ClassModule records the module a class of a joined module was defined in.
+func ClassModule(name, module string) { ClassOf(name).Module = module }
+
 func (c *ClassRef) PyRepr() string {
 	if c.Builtin {
 		return "<class '" + c.Name + "'>"
 	}
-	return "<class '__main__." + c.Name + "'>"
+	return "<class '" + c.module() + "." + c.Name + "'>"
 }
 
 // ClassOfValue is type(x) for an instance.

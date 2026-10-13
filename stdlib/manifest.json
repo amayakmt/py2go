@@ -564,7 +564,7 @@
    "name": "_strptime",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -711,7 +711,7 @@
    "name": "array",
    "phase": 14,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -816,7 +816,7 @@
    "name": "codecs",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -837,7 +837,7 @@
    "name": "colorsys",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -935,7 +935,7 @@
    "name": "decimal",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1026,14 +1026,14 @@
    "name": "fnmatch",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "fractions",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1068,7 +1068,7 @@
    "name": "getopt",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1089,7 +1089,7 @@
    "name": "glob",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1579,7 +1579,7 @@
    "name": "secrets",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1607,7 +1607,7 @@
    "name": "shlex",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1698,7 +1698,7 @@
    "name": "statistics",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1719,7 +1719,7 @@
    "name": "struct",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1803,7 +1803,7 @@
    "name": "this",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1915,7 +1915,7 @@
    "name": "unicodedata",
    "phase": 14,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {

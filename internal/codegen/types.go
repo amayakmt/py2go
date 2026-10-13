@@ -673,3 +673,6 @@ func isEllipsis(n pyast.Node) bool {
 	}
 	return false
 }
+
+// isScalar reports whether t is int, float, str or bool.
+func (t pyType) isScalar() bool { return t == tInt || t == tFloat || t == tStr || t == tBool }

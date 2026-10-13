@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	cryptoRand "crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -485,6 +486,18 @@ func forceRead(v reflect.Value) reflect.Value {
 }
 
 func init() {
+	RegisterNative("secrets.token_bytes", func(args []any, kw []KW) any {
+		nativeArgs("token_bytes", args, 1, 1)
+		n := DynInt(args[0])
+		if n < 0 {
+			panic(valueError("negative argument not allowed"))
+		}
+		b := make([]byte, n)
+		if _, err := cryptoRand.Read(b); err != nil {
+			panic(newError("OSError", err.Error()))
+		}
+		return Bytes(b)
+	})
 	RegisterNative("asyncio.isclass", func(args []any, kw []KW) any {
 		nativeArgs("isclass", args, 1, 1)
 		_, ok := Unbox(args[0]).(*ClassRef)

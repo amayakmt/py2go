@@ -86,6 +86,8 @@ var parents = map[string]string{
 	"asyncio__exceptions_pm_InvalidStateError":        "Exception",
 	"asyncio__exceptions_pm_BrokenBarrierError":       "RuntimeError",
 	"threading_pm_BrokenBarrierError":                 "RuntimeError",
+	"struct_pm_error":                                 "Exception",
+	"statistics_pm_StatisticsError":                   "ValueError",
 	"queue_pm_Empty":                                  "Exception",
 	"queue_pm_Full":                                   "Exception",
 	"queue_pm_ShutDown":                               "Exception",

@@ -10,6 +10,10 @@ defpath = "/bin:/usr/bin"
 devnull = "/dev/null"
 
 
+def normcase(s):
+    return s
+
+
 def isabs(s):
     return s.startswith("/")
 

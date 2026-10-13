@@ -210,7 +210,7 @@ func PowFloat(a, b float64) float64 {
 	if a < 0 && !math.IsInf(a, 0) && !math.IsInf(b, 0) && b != math.Trunc(b) {
 		panic(valueError("negative number raised to a fractional power would be complex"))
 	}
-	r := math.Pow(a, b)
+	r := CrPow(a, b)
 	if math.IsInf(r, 0) && !math.IsInf(a, 0) && !math.IsInf(b, 0) {
 		panic(overflowError("(34, 'Numerical result out of range')"))
 	}

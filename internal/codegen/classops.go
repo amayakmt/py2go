@@ -599,6 +599,9 @@ func (g *generator) typeCall(n *pyast.Call) (value, error) {
 		return value{}, err
 	}
 	c := g.classOf(x.typ)
+	if c == nil && (x.typ == tObject || x.typ == tInt || x.typ == tFloat || x.typ == tStr || x.typ == tBool) {
+		return value{code: g.rt("DynType") + "(" + g.boxed(x) + ")", typ: tObject, prec: precAtom}, nil
+	}
 	if c == nil && x.typ == tExc {
 		return value{code: g.rt("ExcClass") + "(" + x.code + ")", typ: tObject, prec: precAtom}, nil
 	}
@@ -698,7 +701,8 @@ func (g *generator) typeCompare(n *pyast.Compare) (value, bool, error) {
 		return value{}, true, err
 	}
 	if !lok || !rok {
-		return value{}, true, unsupported("comparison of a class with something that is not a class", n.Line())
+		// The comparison is left to the dynamic one.
+		return value{}, false, nil
 	}
 	code := l + " == " + r
 	if op == "IsNot" || op == "NotEq" {

@@ -226,6 +226,8 @@ func Hash(v any) int64 {
 		return fixHash(v.PyHash())
 	case nil, NoneT:
 		return 4238894112
+	case *ClassRef:
+		return IdentityHash(v)
 	case EllipsisT:
 		return 4238894113
 	case NotImplementedT:

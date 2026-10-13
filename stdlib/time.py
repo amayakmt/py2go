@@ -63,6 +63,11 @@ def strftime(format, t=None):
     return _native("time.strftime", format, tuple(t))
 
 
+def strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
+    from _strptime import _strptime_time
+    return struct_time(*_strptime_time(data_string, format))
+
+
 def asctime(t=None):
     if t is None:
         t = localtime()

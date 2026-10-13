@@ -965,6 +965,9 @@ func DynPow(a, b, mod any) any {
 
 // DynDivmod is divmod(a, b).
 func DynDivmod(a, b any) VarTuple[any] {
+	if r, ok := userDivmod(a, b); ok {
+		return r
+	}
 	isNum := func(v any) bool { v = Unbox(v); return isIntVal(v) || isFloatValue(v) }
 	if !isNum(a) || !isNum(b) {
 		panic(newError("TypeError", "unsupported operand type(s) for divmod(): '"+TypeName(a)+"' and '"+TypeName(b)+"'"))
@@ -1242,4 +1245,28 @@ func ExcAttr(e *PyError, name string) any {
 		return v
 	}
 	panic(NoAttribute(TypeName(e), name))
+}
+
+// userDivmod is divmod(a, b) for operands whose classes define __divmod__ or
+// __rdivmod__.
+func userDivmod(a, b any) (VarTuple[any], bool) {
+	try := func(obj any, name string, arg any) (VarTuple[any], bool) {
+		obj = Unbox(obj)
+		if _, user := obj.(Named); !user || !DynHasAttr(obj, name) {
+			return VarTuple[any]{}, false
+		}
+		r := DynCall(DynGetAttr(obj, name), arg)
+		if _, ni := Unbox(r).(NotImplementedT); ni {
+			return VarTuple[any]{}, false
+		}
+		var items []any
+		for c := DynIter(r).Iter(); c.Next(); {
+			items = append(items, c.Value())
+		}
+		return NewVarTuple(items...), true
+	}
+	if r, ok := try(a, "__divmod__", b); ok {
+		return r, true
+	}
+	return try(b, "__rdivmod__", a)
 }

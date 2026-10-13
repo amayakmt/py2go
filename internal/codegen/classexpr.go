@@ -678,9 +678,10 @@ func (g *generator) unboundCall(n *pyast.Call, c *classInfo, mem *member) (value
 
 // attrStore describes where an assignment to recv.attr goes.
 type attrStore struct {
-	typ  pyType
-	set  func(src string) string // the Go statement that stores src
-	read func() string           // the Go expression that reads the current value
+	typ    pyType
+	member *member                 // the attribute, when it is a field of the class
+	set    func(src string) string // the Go statement that stores src
+	read   func() string           // the Go expression that reads the current value
 }
 
 // resolveStore finds the destination of "recv.attr = ...". The receiver is
@@ -770,9 +771,10 @@ func (g *generator) resolveStore(b *strings.Builder, target *pyast.Attribute) (*
 		return nil, unsupported(fmt.Sprintf("assignment to method '%s' of class '%s'", target.Attr, c.name), line)
 	}
 	return &attrStore{
-		typ:  m.typ,
-		set:  func(src string) string { return fmt.Sprintf("%s.Set_%s(%s)", recvCode, name, src) },
-		read: func() string { return recvCode + ".Get_" + name + "()" },
+		typ:    m.typ,
+		member: m,
+		set:    func(src string) string { return fmt.Sprintf("%s.Set_%s(%s)", recvCode, name, src) },
+		read:   func() string { return recvCode + ".Get_" + name + "()" },
 	}, nil
 }
 
@@ -835,6 +837,15 @@ func (g *generator) assignAttr(b *strings.Builder, target *pyast.Attribute, valu
 		}
 		g.registerField(target.Attr, v.typ, line)
 		return nil
+	}
+	if g.infer && g.bigMode && store.member != nil && store.member.kind == mField && store.typ != tObject {
+		// Code without annotations: an attribute that is given a value of
+		// another type, or a value this analysis cannot type, holds any.
+		if vt, err := g.typedExpr(valueNode); err == nil && vt.typ != store.typ && !g.isSubtype(vt.typ, store.typ) && ((vt.typ == tObject && store.typ == tInt) || (vt.typ.isScalar() && store.typ.isScalar()) || (vt.typ == tNoneType && store.typ.isScalar())) {
+			store.member.typ = tObject
+			g.inferGrew = true
+			return nil
+		}
 	}
 	v, err := g.exprAs(valueNode, store.typ)
 	if err != nil {
@@ -958,7 +969,7 @@ func (g *generator) augmented(op string, cur, right value, line int) (value, err
 // unwrapTypeName is the Python name of a static type for TypeError messages.
 func (g *generator) typeNameOf(t pyType) string {
 	if t.isClass() || t == tInt || t == tFloat || t == tStr || t == tBool {
-		return string(t)
+		return pyName(string(t))
 	}
 	return pythonTypeName(t)
 }

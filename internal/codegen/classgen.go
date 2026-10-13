@@ -130,6 +130,9 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		g.defaultVars = append(g.defaultVars, defaultVar{varName, m.typ})
 		fmt.Fprintf(main, "%s = %s\n", varName, v.code)
 	}
+	if i := strings.LastIndex(c.name, "_pm_"); i >= 0 {
+		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("ClassModule"), strconv.Quote(c.pyName()), strconv.Quote(strings.ReplaceAll(c.name[:i], "__", ".")))
+	}
 	if c.exc {
 		names := []string{strconv.Quote(c.name)}
 		for _, k := range c.mro[1:] {
@@ -138,6 +141,13 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 			}
 		}
 		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClass"), strconv.Quote(c.name), strings.Join(names, ", "))
+		if c.generic == nil {
+			// An exception class held in a variable can be called too.
+			g.register(main, "class:"+c.name, func() string {
+				return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), c.goNew(),
+					g.rt("RegisterCtorInfo"), strconv.Quote(c.pyName()), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)))
+			})
+		}
 	} else if c.generic == nil {
 		// A class held in a variable can be called through the runtime.
 		g.register(main, "class:"+c.name, func() string {

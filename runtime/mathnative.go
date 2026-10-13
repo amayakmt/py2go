@@ -90,46 +90,46 @@ func init() {
 		}
 		return math.Sqrt(x)
 	})
-	unary("cbrt", math.Cbrt)
-	unary("exp", math.Exp)
-	unary("exp2", math.Exp2)
+	unary("cbrt", glibcCbrt)
+	unary("exp", CrExp)
+	unary("exp2", CrExp2)
 	unary("expm1", math.Expm1)
 	unary("sin", func(x float64) float64 {
 		if math.IsInf(x, 0) {
 			panic(domainError())
 		}
-		return math.Sin(x)
+		return CrSin(x)
 	})
 	unary("cos", func(x float64) float64 {
 		if math.IsInf(x, 0) {
 			panic(domainError())
 		}
-		return math.Cos(x)
+		return CrCos(x)
 	})
 	unary("tan", func(x float64) float64 {
 		if math.IsInf(x, 0) {
 			panic(domainError())
 		}
-		return math.Tan(x)
+		return CrTan(x)
 	})
-	unary("asin", math.Asin)
-	unary("acos", math.Acos)
-	unary("atan", math.Atan)
-	unary("sinh", math.Sinh)
-	unary("cosh", math.Cosh)
-	unary("tanh", math.Tanh)
-	unary("asinh", math.Asinh)
+	unary("asin", CrAsin)
+	unary("acos", CrAcos)
+	unary("atan", CrAtan)
+	unary("sinh", glibcSinh)
+	unary("cosh", glibcCosh)
+	unary("tanh", glibcTanh)
+	unary("asinh", CrAsinh)
 	unary("acosh", func(x float64) float64 {
 		if x < 1 {
 			panic(domainError())
 		}
-		return math.Acosh(x)
+		return CrAcosh(x)
 	})
 	unary("atanh", func(x float64) float64 {
 		if x <= -1 || x >= 1 {
 			panic(domainError())
 		}
-		return math.Atanh(x)
+		return CrAtanh(x)
 	})
 	unary("fabs", math.Abs)
 	unary("degrees", func(x float64) float64 { return x * (180 / math.Pi) })
@@ -140,28 +140,32 @@ func init() {
 		}
 		return math.Log1p(x)
 	})
-	unary("erf", math.Erf)
-	unary("erfc", math.Erfc)
+	unary("erf", glibcErf)
+	unary("erfc", glibcErfc)
 	unary("gamma", func(x float64) float64 {
-		if x == math.Floor(x) && x <= 0 && !math.IsInf(x, 0) {
+		r, e := pyGamma(x)
+		switch e {
+		case errDomain:
 			panic(domainError())
+		case errRange:
+			panic(rangeError())
 		}
-		if math.IsInf(x, -1) {
-			panic(domainError())
-		}
-		return math.Gamma(x)
+		return r
 	})
 	unary("lgamma", func(x float64) float64 {
-		if x == math.Floor(x) && x <= 0 && !math.IsInf(x, 0) {
+		r, e := pyLgamma(x)
+		switch e {
+		case errDomain:
 			panic(domainError())
+		case errRange:
+			panic(rangeError())
 		}
-		r, _ := math.Lgamma(x)
 		return r
 	})
 
 	RegisterNative("math.atan2", func(args []any, kw []KW) any {
 		nativeArgs("atan2", args, 2, 2)
-		return math.Atan2(mathFloat(args[0]), mathFloat(args[1]))
+		return CrAtan2(mathFloat(args[0]), mathFloat(args[1]))
 	})
 	RegisterNative("math.copysign", func(args []any, kw []KW) any {
 		nativeArgs("copysign", args, 2, 2)
@@ -192,7 +196,7 @@ func init() {
 		if x < 0 && !math.IsInf(x, 0) && y != math.Floor(y) && !math.IsInf(y, 0) && !math.IsNaN(y) {
 			panic(domainError())
 		}
-		return mathResult(math.Pow(x, y), x, y)
+		return mathResult(CrPow(x, y), x, y)
 	})
 	RegisterNative("math.hypot", func(args []any, kw []KW) any {
 		fs := make([]float64, len(args))
@@ -310,15 +314,15 @@ func init() {
 			return logOf(args[0], f)
 		})
 	}
-	logFn("log10", math.Log10)
-	logFn("log2", math.Log2)
+	logFn("log10", glibcLog10)
+	logFn("log2", CrLog2)
 	RegisterNative("math.log", func(args []any, kw []KW) any {
 		nativeArgs("log", args, 1, 2)
-		x := logOf(args[0], math.Log)
+		x := logOf(args[0], CrLog)
 		if len(args) == 1 {
 			return x
 		}
-		base := logOf(args[1], math.Log)
+		base := logOf(args[1], CrLog)
 		if base == 0 {
 			panic(newError("ZeroDivisionError", "float division by zero"))
 		}
@@ -516,16 +520,11 @@ func hypotAll(xs []float64) float64 {
 	if max == 0 || len(xs) == 1 {
 		return max
 	}
-	// Sum of squares of the scaled values, with compensation.
-	var sum, c float64
-	for _, x := range xs {
-		y := x / max
-		y = y*y - c
-		t := sum + y
-		c = (t - sum) - y
-		sum = t
+	abs := make([]float64, len(xs))
+	for i, x := range xs {
+		abs[i] = math.Abs(x)
 	}
-	return max * math.Sqrt(sum)
+	return vectorNorm(abs, max)
 }
 
 // fsum is the exactly rounded sum of floats (Shewchuk's algorithm, as in

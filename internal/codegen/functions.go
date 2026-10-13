@@ -541,7 +541,16 @@ func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header str
 	}
 
 	var b strings.Builder
-	b.WriteString(header + " {\n")
+	if mc != nil && mc.kind == mMethod && sig.selfName == "self" && assignsName(fn.Body, "self") && strings.Contains(header, "(self *") {
+		// The method rebinds self, which is a variable of the class type in
+		// Python, not the pointer the receiver is: the receiver is renamed
+		// and self is declared as the class.
+		header = strings.Replace(header, "(self *", "(self_ *", 1)
+		b.WriteString(header + " {\n")
+		fmt.Fprintf(&b, "var self %s = self_\n_ = self\n", mc.cls.name)
+	} else {
+		b.WriteString(header + " {\n")
+	}
 	if top {
 		b.WriteString(guardMarker(fn.Name) + "\n")
 		if g.callsUnknown {
@@ -1260,4 +1269,33 @@ func hasGlobalOrNonlocal(stmts []pyast.Node) []string {
 		})
 	}
 	return out
+}
+
+// assignsName reports whether a function body assigns to the name, not
+// counting the functions nested in it.
+func assignsName(body []pyast.Node, name string) bool {
+	found := false
+	isName := func(n pyast.Node) bool { x, ok := n.(*pyast.Name); return ok && x.ID == name }
+	for _, st := range body {
+		walkPrune(st, func(n pyast.Node) bool {
+			switch x := n.(type) {
+			case *pyast.FunctionDef, *pyast.Lambda, *pyast.ClassDef:
+				return false
+			case *pyast.Assign:
+				for _, t := range x.Targets {
+					if isName(t) {
+						found = true
+					}
+				}
+			case *pyast.AugAssign:
+				found = found || isName(x.Target)
+			case *pyast.AnnAssign:
+				found = found || isName(x.Target)
+			case *pyast.For:
+				found = found || isName(x.Target)
+			}
+			return !found
+		})
+	}
+	return found
 }

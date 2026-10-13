@@ -325,3 +325,27 @@ setstate = _inst.setstate
 getrandbits = _inst.getrandbits
 randbytes = _inst.randbytes
 binomialvariate = _inst.binomialvariate
+
+
+class SystemRandom(Random):
+    def random(self):
+        return (int.from_bytes(_native("secrets.token_bytes", 7), "big") >> 3) * (1.0 / 9007199254740992.0)
+
+    def getrandbits(self, k):
+        if k < 0:
+            raise ValueError("number of bits must be non-negative")
+        numbytes = (k + 7) // 8
+        x = int.from_bytes(_native("secrets.token_bytes", numbytes), "big")
+        return x >> (numbytes * 8 - k)
+
+    def randbytes(self, n):
+        return _native("secrets.token_bytes", n)
+
+    def seed(self, a=None, version=2):
+        pass
+
+    def getstate(self):
+        raise NotImplementedError("System entropy source does not have state.")
+
+    def setstate(self, state):
+        raise NotImplementedError("System entropy source does not have state.")

@@ -1073,6 +1073,11 @@ func (g *generator) boolOperands(op string, values []pyast.Node) (value, error) 
 		if err != nil {
 			return value{}, err
 		}
+		if rest.typ != tBool {
+			// The rest has operands that are not bools, so it yields one of
+			// them: the whole expression does.
+			return g.valueBoolOp(op, values)
+		}
 		if decls == "" {
 			parts = append(parts, rest.at(prec))
 		} else {

@@ -121,14 +121,14 @@ func complexPow(a, b complex128) complex128 {
 	}
 	// CPython's formula, which rounds the way CPython does.
 	vabs := math.Hypot(real(a), imag(a))
-	length := math.Pow(vabs, real(b))
-	at := math.Atan2(imag(a), real(a))
+	length := CrPow(vabs, real(b))
+	at := CrAtan2(imag(a), real(a))
 	phase := at * real(b)
 	if imag(b) != 0 {
-		length /= math.Exp(at * imag(b))
-		phase += imag(b) * math.Log(vabs)
+		length /= CrExp(at * imag(b))
+		phase += imag(b) * CrLog(vabs)
 	}
-	r := complex(length*math.Cos(phase), length*math.Sin(phase))
+	r := complex(length*CrCos(phase), length*CrSin(phase))
 	if cmplx.IsInf(r) && !cmplx.IsInf(a) && !cmplx.IsInf(b) {
 		panic(overflowError("complex exponentiation"))
 	}
