@@ -97,6 +97,7 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		return nil
 	}
 	c.emitted = true
+	g.refreshClassAttrs(c)
 
 	// Defaults of the methods, evaluated where the class statement stands.
 	for _, name := range c.order {
@@ -129,6 +130,17 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		varName := classAttrVar(c, name)
 		g.defaultVars = append(g.defaultVars, defaultVar{varName, m.typ})
 		fmt.Fprintf(main, "%s = %s\n", varName, v.code)
+		fmt.Fprintf(main, "%s(%s, %s, func() any { return %s })\n", g.rt("RegisterClassAttr"), strconv.Quote(c.pyName()), strconv.Quote(pyName(name)), varName)
+	}
+	bases := []string{strconv.Quote(c.pyName())}
+	for _, k := range c.mro[1:] {
+		if !k.builtin && k.name != "object" {
+			bases = append(bases, strconv.Quote(k.pyName()))
+		}
+	}
+	fmt.Fprintf(main, "%s(%s)\n", g.rt("RegisterClassBases"), strings.Join(bases, ", "))
+	if g.usesPickle && c.generic == nil {
+		fmt.Fprintf(main, "%s(%s, func() any { return &%s{} })\n", g.rt("RegisterAlloc"), strconv.Quote(c.pyName()), c.goStruct())
 	}
 	if i := strings.LastIndex(c.name, "_pm_"); i >= 0 {
 		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("ClassModule"), strconv.Quote(c.pyName()), strconv.Quote(strings.ReplaceAll(c.name[:i], "__", ".")))
@@ -143,8 +155,21 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClass"), strconv.Quote(c.name), strings.Join(names, ", "))
 		if c.generic == nil {
 			// An exception class held in a variable can be called too.
+			if g.usesPickle {
+				g.markValue("class:" + c.name) // unpickling calls it with its arguments
+			}
 			g.register(main, "class:"+c.name, func() string {
-				return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), c.goNew(),
+				ctor := c.goNew()
+				if c.ctorSig != nil {
+					// The constructor takes the number of arguments given first.
+					params, _ := g.goSignature(c.ctorSig)
+					var names []string
+					for _, p := range c.ctorSig.goParams() {
+						names = append(names, p.name)
+					}
+					ctor = fmt.Sprintf("func(%s) %s { return %s(%d, %s) }", params, c.name, c.goNew(), len(c.ctorSig.pos), strings.Join(names, ", "))
+				}
+				return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), ctor,
 					g.rt("RegisterCtorInfo"), strconv.Quote(c.pyName()), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)))
 			})
 		}

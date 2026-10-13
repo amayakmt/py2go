@@ -343,3 +343,36 @@ func Id(v any) int64 {
 	fmt.Fprintf(h, "%T|%s", v, Repr(v))
 	return int64(h.Sum64()>>8) | 1<<55
 }
+
+var (
+	classAttrs = map[string]map[string]func() any{}
+	classBases = map[string][]string{}
+)
+
+// RegisterClassAttr records how to read a class attribute of a class of the
+// program, for getattr(cls, name).
+func RegisterClassAttr(class, name string, get func() any) {
+	m := classAttrs[class]
+	if m == nil {
+		m = map[string]func() any{}
+		classAttrs[class] = m
+	}
+	m[name] = get
+}
+
+// RegisterClassBases records a class and its bases of the program, nearest
+// first, so that an inherited class attribute is found.
+func RegisterClassBases(chain ...string) { classBases[chain[0]] = chain }
+
+func lookupClassAttr(class, name string) (any, bool) {
+	chain := classBases[class]
+	if chain == nil {
+		chain = []string{class}
+	}
+	for _, k := range chain {
+		if get, ok := classAttrs[k][name]; ok {
+			return get(), true
+		}
+	}
+	return nil, false
+}

@@ -99,6 +99,7 @@ type generator struct {
 	gen                *genInfo         // the generator function being compiled
 	genNone            bool             // ... and it returns None
 	threads            bool             // the program starts threads or handles signals: loops yield
+	usesPickle         bool             // the program calls pickle natives: functions and classes are registered by name
 	hoist              *strings.Builder // declarations an expression needs before its statement
 	buildingMethod     bool             // method names are not Go identifiers, so any name will do
 }

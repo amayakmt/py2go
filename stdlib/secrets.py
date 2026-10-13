@@ -45,7 +45,7 @@ def token_urlsafe(nbytes=None):
 
 def compare_digest(a, b):
     if isinstance(a, str) != isinstance(b, str):
-        raise TypeError("a bytes-like object is required, not '" + type(b).__name__ + "'")
+        raise TypeError("a bytes-like object is required, not '" + type(a).__name__ + "'")
     if len(a) != len(b):
         return False
     diff = 0

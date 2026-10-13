@@ -632,6 +632,13 @@ func (g *generator) funcDef(funcs, main *strings.Builder, fn *pyast.FunctionDef)
 		g.register(main, "func:"+sig.goName, func() string {
 			return fmt.Sprintf("%s(%s, %s)\n", g.rt("RegisterFunc"), sig.goName, g.funcInfoLit(sig.name, sig))
 		})
+		if g.usesPickle {
+			module := "__main__"
+			if i := strings.LastIndex(sig.name, "_pm_"); i >= 0 {
+				module = strings.ReplaceAll(sig.name[:i], "__", ".")
+			}
+			fmt.Fprintf(main, "%s(%q, %q, any(%s))\n", g.rt("RegisterGlobal"), module, pyName(sig.name), sig.goName)
+		}
 		return nil
 	}
 	cur, err := g.functionValue(sig)
@@ -1038,7 +1045,7 @@ var protocolReturns = map[string]pyType{
 	"__str__": tStr, "__repr__": tStr, "__format__": tStr,
 	"__eq__": tBool, "__ne__": tBool, "__lt__": tBool, "__le__": tBool, "__gt__": tBool, "__ge__": tBool,
 	"__bool__": tBool, "__contains__": tBool,
-	"__len__": tInt, "__hash__": tInt, "__int__": tInt, "__index__": tInt, "__float__": tFloat,
+	"__len__": tInt, "__hash__": tInt, "__float__": tFloat,
 }
 
 // returnsValue reports whether a function body has a "return value" other than

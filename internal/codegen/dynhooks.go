@@ -107,7 +107,7 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 
 // dynDunders are the special methods the runtime calls by name, as the
 // built-ins round(), bytes() and the like do.
-var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true, "__await__": true, "__divmod__": true, "__rdivmod__": true, "__aenter__": true, "__aexit__": true, "__aiter__": true, "__anext__": true}
+var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true, "__await__": true, "__divmod__": true, "__rdivmod__": true, "__aenter__": true, "__aexit__": true, "__aiter__": true, "__anext__": true, "__reduce__": true, "__reduce_ex__": true, "__getstate__": true, "__setstate__": true, "__getnewargs__": true, "__getnewargs_ex__": true}
 
 func isDunder(name string) bool {
 	return strings.HasPrefix(name, "__") && strings.HasSuffix(name, "__")
@@ -150,6 +150,21 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 		fmt.Fprintf(out, "switch name {\n%s\n}\n", strings.Join(methodGets, "\n"))
 	}
 	out.WriteString("return nil, false\n}\n")
+	var fields, methodNames []string
+	for _, n := range c.orderedNames() {
+		m := c.lookup(n)
+		if m == nil || isDunder(n) && !dynDunders[n] {
+			continue
+		}
+		switch {
+		case m.kind == mField:
+			fields = append(fields, strconv.Quote(pyName(n)))
+		case m.isAttr() || m.isCallable():
+			methodNames = append(methodNames, strconv.Quote(pyName(n)))
+		}
+	}
+	fmt.Fprintf(out, "func %s PyAttrNames() []string {\nreturn %s([]string{%s}, self._pyd)\n}\n", recv, g.rt("AttrNames"), strings.Join(fields, ", "))
+	fmt.Fprintf(out, "func %s PyMethodNames() []string {\nreturn []string{%s}\n}\n", recv, strings.Join(methodNames, ", "))
 	fmt.Fprintf(out, "func %s PySetAttr(name string, v any) bool {\n", recv)
 	if len(sets) > 0 {
 		fmt.Fprintf(out, "switch name {\n%s\n}\n", strings.Join(sets, "\n"))
@@ -239,7 +254,7 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 		fmt.Fprintf(out, "func %s PyTruth() bool { return self.M___len__() != 0 }\n", recv)
 	}
 	if m := one("__int__", 0); m != nil {
-		fmt.Fprintf(out, "func %s PyInt() (int64, bool) { return self.M___int__(), true }\n", recv)
+		fmt.Fprintf(out, "func %s PyInt() (any, bool) { return self.M___int__(), true }\n", recv)
 	}
 	if m := one("__float__", 0); m != nil {
 		fmt.Fprintf(out, "func %s PyFloat() (float64, bool) { return self.M___float__(), true }\n", recv)

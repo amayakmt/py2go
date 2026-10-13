@@ -103,7 +103,7 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 	}
 	switch name {
 	case "len", "int", "float", "abs", "round", "sum", "list", "tuple", "set", "dict", "sorted", "reversed",
-		"enumerate", "any", "all", "min", "max", "hash", "id", "map", "filter", "zip",
+		"enumerate", "any", "all", "min", "max", "hash", "id", "vars", "dir", "map", "filter", "zip",
 		"ord", "chr", "bin", "hex", "oct", "pow", "divmod", "format", "ascii", "str":
 	default:
 		return value{}, false, nil
@@ -193,6 +193,10 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 		return one("Hash", tInt)
 	case "id":
 		return one("Id", tInt)
+	case "vars":
+		return one("DynVars", dictOf(tStr, tObject))
+	case "dir":
+		return one("DynDir", listOf(tStr))
 	case "abs":
 		if len(args) == 1 {
 			return g.dynUnary("Abs", args[0]), true, nil

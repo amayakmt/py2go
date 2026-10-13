@@ -248,3 +248,19 @@ func (s *scope) dropAlias(name string) {
 		delete(s.aliases, name)
 	}
 }
+
+// dropAssigned removes the narrowings of names that the code they would hold
+// for assigns: the narrowed name is a copy, so an assignment to it would be
+// lost, or would not have the narrowed type.
+func dropAssigned(nars []*narrowing, body []pyast.Node) []*narrowing {
+	if len(nars) == 0 {
+		return nars
+	}
+	var out []*narrowing
+	for _, n := range nars {
+		if !assignsName(body, n.name) {
+			out = append(out, n)
+		}
+	}
+	return out
+}

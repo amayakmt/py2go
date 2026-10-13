@@ -88,8 +88,13 @@ func (g *generator) prescan(mod *pyast.Module) {
 		case *pyast.Call:
 			if f, ok := n.Func.(*pyast.Name); ok && f.ID == "_native" && len(n.Args) > 0 {
 				if c, ok := n.Args[0].(*pyast.Constant); ok {
-					if s, ok := c.Value.(string); ok && (strings.HasPrefix(s, "thread.") || strings.HasPrefix(s, "signal.")) {
-						g.threads = true
+					if s, ok := c.Value.(string); ok {
+						if strings.HasPrefix(s, "thread.") || strings.HasPrefix(s, "signal.") {
+							g.threads = true
+						}
+						if strings.HasPrefix(s, "pickle.") {
+							g.usesPickle = true
+						}
 					}
 				}
 			}
@@ -131,6 +136,9 @@ func (g *generator) inferClasses() error {
 // inferClassAttrs types the class attributes that have no annotation, and
 // marks the ones that instances assign.
 func (g *generator) inferClassAttrs(c *classInfo) error {
+	savedInfer := g.infer
+	g.infer = true
+	defer func() { g.infer = savedInfer }()
 	return g.withSubst(c.tsubst, func() error {
 		for _, name := range c.order {
 			m := c.members[name]
@@ -139,6 +147,11 @@ func (g *generator) inferClassAttrs(c *classInfo) error {
 			}
 			if m.typ == "" {
 				v, err := g.exprAs(m.value, "")
+				if err != nil && strings.Contains(err.Error(), "undefined name") {
+					// A module variable that is not typed yet: refreshed later.
+					m.typ = tObject
+					continue
+				}
 				if err != nil {
 					return err
 				}
@@ -220,7 +233,7 @@ func (g *generator) stmtList(b *strings.Builder, stmts []pyast.Node) error {
 			}
 			return err
 		}
-		if nars := g.earlyExitNarrowing(s); len(nars) > 0 {
+		if nars := dropAssigned(g.earlyExitNarrowing(s), stmts[i+1:]); len(nars) > 0 {
 			outer := g.env
 			g.env = newScope(outer)
 			b.WriteString("{\n")
@@ -255,4 +268,24 @@ func (g *generator) attrCount() int {
 		n += len(c.members)
 	}
 	return n
+}
+
+// refreshClassAttrs types again the class attributes of c that were typed
+// before the module variables were: one that reads a module variable was an
+// object. It runs when the class is generated, where the variables exist.
+func (g *generator) refreshClassAttrs(c *classInfo) {
+	_ = g.withSubst(c.tsubst, func() error {
+		for _, name := range c.order {
+			m := c.members[name]
+			if m.kind != mClassAttr || m.typ != tObject || m.value == nil {
+				continue
+			}
+			v, err := g.exprAs(m.value, "")
+			if err != nil || v.typ == tObject || v.typ == tNone || v.typ == tExc || v.typ.isClassRef() || v.typ == tOptExc {
+				continue
+			}
+			m.typ = v.typ
+		}
+		return nil
+	})
 }

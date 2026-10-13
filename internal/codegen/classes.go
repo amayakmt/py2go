@@ -492,7 +492,7 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 		return unsupported("method "+name+" (arrives in phase 9)", fn.Line())
 	case "__getattribute__", "__setattr__", "__delattr__", "__get__", "__set__", "__delete__":
 		return unsupported("method "+name+" (the attribute hooks and descriptors arrive in phase 9)", fn.Line())
-	case "__del__", "__sizeof__", "__reduce__", "__copy__", "__deepcopy__", "__getstate__", "__setstate__":
+	case "__del__", "__sizeof__", "__copy__", "__deepcopy__":
 		return unsupported("method "+name, fn.Line())
 	}
 	if prev := c.members[name]; prev != nil && setterOf == "" {
@@ -712,17 +712,24 @@ func (g *generator) finishClass(c *classInfo) error {
 // visibleNames lists the attribute names instances of c have, from the whole
 // MRO, in a stable order.
 func (c *classInfo) visibleNames() []string {
+	names := c.orderedNames()
+	sort.Strings(names)
+	return names
+}
+
+// orderedNames is visibleNames in definition order, base classes first: the
+// order of the attributes in an instance's __dict__.
+func (c *classInfo) orderedNames() []string {
 	seen := map[string]bool{}
 	var names []string
-	for _, k := range c.mro {
-		for _, n := range k.order {
+	for i := len(c.mro) - 1; i >= 0; i-- {
+		for _, n := range c.mro[i].order {
 			if !seen[n] {
 				seen[n] = true
 				names = append(names, n)
 			}
 		}
 	}
-	sort.Strings(names)
 	return names
 }
 

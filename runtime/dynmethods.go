@@ -872,6 +872,10 @@ func (d *Dict[K, V]) DynMethod(name string, args []any, kw []KW) (any, bool) {
 			src := Unbox(args[0])
 			if o, ok := src.(*Dict[K, V]); ok {
 				d.Update(o)
+			} else if keys, isMap := userMappingKeys(src); isMap {
+				for _, k := range keys {
+					d.Set(conv[K](k), conv[V](DynGetItem(src, k)))
+				}
 			} else if m, ok := src.(interface{ IterAny() Cursor[any] }); ok {
 				_, isSeq := src.(Seq)
 				if g, isDict := src.(interface{ GetItemAny(any) any }); isDict && !isSeq {

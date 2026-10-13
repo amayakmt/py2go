@@ -83,6 +83,10 @@ func (h *Hash2) DynMethod(name string, args []any, kw []KW) (any, bool) {
 		return hex.EncodeToString(h.h.Sum(nil)), true
 	case "copy":
 		n := &Hash2{name: h.name, mk: h.mk, block: h.block}
+		if c, ok := h.h.(interface{ Clone() hash.Hash }); ok {
+			n.h = c.Clone()
+			return n, true
+		}
 		// Replay is not possible, so marshal the state.
 		if m, ok := h.h.(interface{ MarshalBinary() ([]byte, error) }); ok {
 			data, _ := m.MarshalBinary()

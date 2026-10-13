@@ -566,7 +566,7 @@ func DynIntAny(v any) any {
 		return DynIntAny(string(x))
 	case *ByteArray:
 		return DynIntAny(string(x.b))
-	case interface{ PyInt() (int64, bool) }:
+	case interface{ PyInt() (any, bool) }:
 		if n, ok := x.PyInt(); ok {
 			return n
 		}

@@ -329,6 +329,9 @@ func DynGetAttr(obj any, name string) any {
 				return ClassOf(n.PyClassName())
 			}
 		}
+		if name == "__dict__" {
+			return DynVars(obj)
+		}
 		panic(NoAttribute(TypeName(obj), name))
 	}
 	if v, ok := builtinAttr(obj, name); ok {
@@ -374,6 +377,11 @@ func DynGetAttr(obj any, name string) any {
 				return "builtins"
 			}
 			return "__main__"
+		}
+		if !c.Builtin {
+			if v, ok := lookupClassAttr(c.Name, name); ok {
+				return v
+			}
 		}
 		panic(newError("AttributeError", "type object '"+c.Name+"' has no attribute '"+name+"'"))
 	}
@@ -523,6 +531,9 @@ func IsInstanceName(x any, name string, builtin bool) bool {
 func DynType(x any) *ClassRef {
 	x = Unbox(x)
 	if n, ok := x.(Named); ok {
+		if name := n.PyClassName(); pickleBuiltinNames[name] {
+			return BuiltinClassOf(name)
+		}
 		return ClassOf(n.PyClassName())
 	}
 	if e, ok := x.(*PyError); ok {
@@ -1269,4 +1280,60 @@ func userDivmod(a, b any) (VarTuple[any], bool) {
 		return r, true
 	}
 	return try(b, "__rdivmod__", a)
+}
+
+type attrNamer interface{ PyAttrNames() []string }
+
+// AttrNames is the attributes of an instance: the declared ones, then the
+// ones that were added.
+func AttrNames(declared []string, extra map[string]any) []string {
+	out := append([]string{}, declared...)
+	var more []string
+	for k := range extra {
+		more = append(more, k)
+	}
+	sortStrings(more)
+	return append(out, more...)
+}
+
+// DynVars is vars(obj) / obj.__dict__: a copy of the attributes.
+func DynVars(obj any) *Dict[string, any] {
+	obj = Unbox(obj)
+	out := NewDict[string, any]()
+	n, ok := obj.(attrNamer)
+	if !ok {
+		panic(newError("TypeError", "vars() argument must have __dict__ attribute"))
+	}
+	for _, name := range n.PyAttrNames() {
+		out.Set(name, DynGetAttr(obj, name))
+	}
+	return out
+}
+
+// DynDir is dir(obj): the names of the attributes and methods.
+func DynDir(obj any) *List[string] {
+	obj = Unbox(obj)
+	seen := map[string]bool{}
+	var names []string
+	add := func(ns []string) {
+		for _, n := range ns {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
+	}
+	if n, ok := obj.(attrNamer); ok {
+		add(n.PyAttrNames())
+	}
+	if m, ok := obj.(interface{ PyMethodNames() []string }); ok {
+		add(m.PyMethodNames())
+	}
+	if t, ok := obj.(interface{ PyDynTable() map[string]bool }); ok {
+		for k := range t.PyDynTable() {
+			add([]string{k})
+		}
+	}
+	sortStrings(names)
+	return ListFrom[string](NewVarTuple(names...))
 }

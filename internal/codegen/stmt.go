@@ -813,7 +813,7 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 		}
 		b.WriteString(cond.code + " {\n")
 		pos, neg := g.narrowTest(n.Test)
-		g.pendingNarrow = pos
+		g.pendingNarrow = dropAssigned(pos, n.Body)
 		err = g.block(b, n.Body)
 		g.pendingNarrow = nil
 		if err != nil {
@@ -833,7 +833,7 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 			continue
 		}
 		b.WriteString(" else {\n")
-		g.pendingNarrow = neg
+		g.pendingNarrow = dropAssigned(neg, n.Orelse)
 		err = g.block(b, n.Orelse)
 		g.pendingNarrow = nil
 		if err != nil {
@@ -880,6 +880,7 @@ func (g *generator) whileStmtBody(b *strings.Builder, n *pyast.While) error {
 	g.loopDepth++
 	defer func() { g.loopDepth-- }()
 	g.pendingNarrow, _ = g.narrowTest(n.Test)
+	g.pendingNarrow = dropAssigned(g.pendingNarrow, n.Body)
 	err = g.block(b, n.Body)
 	g.pendingNarrow = nil
 	if err != nil {

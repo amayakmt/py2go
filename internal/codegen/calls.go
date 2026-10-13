@@ -14,7 +14,7 @@ import (
 // functions and nested ones.
 func (g *generator) userCall(n *pyast.Call, sig *funcSig) (value, error) {
 	// At module level, Python runs top to bottom, so the def must come first.
-	if !sig.nested && g.fnName == "" && !g.defined[sig.name] {
+	if !sig.nested && g.fnName == "" && !g.defined[sig.name] && !g.infer {
 		return value{}, unsupported(fmt.Sprintf("call to '%s' before its definition", sig.name), n.Line())
 	}
 	if sig.nested {

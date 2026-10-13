@@ -603,6 +603,12 @@ func DynDict(v any) *Dict[any, any] {
 			}
 		}
 	}
+	if keys, isMap := userMappingKeys(v); isMap {
+		for _, k := range keys {
+			out.Set(k, DynGetItem(v, k))
+		}
+		return out
+	}
 	idx := 0
 	for c := DynIter(v).Iter(); c.Next(); idx++ {
 		pair := Unbox(c.Value())
@@ -1066,3 +1072,17 @@ func (s *Set[T]) deepCopy(seen map[any]any) any {
 
 // DynDeepAs is DynDeep with the result type spelled out.
 func DynDeepAs[T any](v any) T { return conv[T](DynDeep(v)) }
+
+// userMappingKeys is the keys of an instance of a class that has keys() and
+// __getitem__, which dict() and dict.update() read as a mapping.
+func userMappingKeys(v any) ([]any, bool) {
+	n, ok := Unbox(v).(Named)
+	if !ok || !DynHasAttr(n, "keys") {
+		return nil, false
+	}
+	var keys []any
+	for c := DynIter(DynCallMethod(n, "keys", nil, nil)).Iter(); c.Next(); {
+		keys = append(keys, c.Value())
+	}
+	return keys, true
+}
