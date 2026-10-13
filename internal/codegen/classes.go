@@ -110,7 +110,7 @@ func (c *classInfo) pyName() string {
 	if c.display != "" {
 		return c.display
 	}
-	return c.name
+	return pyName(c.name)
 }
 
 func (c *classInfo) goStruct() string { return "_pyc_" + c.name }

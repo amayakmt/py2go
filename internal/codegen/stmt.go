@@ -75,7 +75,7 @@ func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	case *pyast.ImportFrom:
 		return g.importFrom(n)
 	case *pyast.Import:
-		return unsupported(fmt.Sprintf("import of module '%s' (modules arrive in phase 11)", n.Names[0].Name), n.Line())
+		return unsupported(fmt.Sprintf("import of module '%s' (the standard library arrives in phase 12)", n.Names[0].Name), n.Line())
 	case *pyast.Unsupported:
 		return unsupported(n.Type, n.Line())
 	default:
@@ -1344,7 +1344,7 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 		return nil
 	}
 	if n.Level > 0 || !typingModules[n.Module] {
-		return unsupported(fmt.Sprintf("import from module '%s' (modules arrive in phase 11)", n.Module), n.Line())
+		return unsupported(fmt.Sprintf("import from module '%s' (the standard library arrives in phase 12)", n.Module), n.Line())
 	}
 	if n.Module == "__future__" {
 		return nil

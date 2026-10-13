@@ -10,17 +10,12 @@ import (
 	"testing"
 
 	"github.com/amayakmt/py2go/internal/codegen"
-	"github.com/amayakmt/py2go/internal/pyast"
-	"github.com/amayakmt/py2go/internal/pyrun"
+	"github.com/amayakmt/py2go/internal/link"
 )
 
 // transpile runs the whole pipeline on one Python file.
 func transpile(pyFile string) ([]byte, error) {
-	js, err := pyrun.DumpAST(pyFile)
-	if err != nil {
-		return nil, err
-	}
-	root, err := pyast.Decode(js)
+	root, err := link.LoadFile(pyFile)
 	if err != nil {
 		return nil, err
 	}

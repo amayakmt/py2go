@@ -233,14 +233,36 @@ func (e *PyError) repr() string {
 	return e.baseRepr()
 }
 
-func (e *PyError) baseRepr() string { return e.Type + "(" + e.argsRepr() + ")" }
+func (e *PyError) baseRepr() string { return BaseTypeName(e.Type) + "(" + e.argsRepr() + ")" }
 
 // Error is the last line CPython prints for an uncaught exception.
 func (e *PyError) Error() string {
 	if msg := e.str(); msg != "" {
-		return e.Type + ": " + msg
+		return QualTypeName(e.Type) + ": " + msg
 	}
-	return e.Type
+	return QualTypeName(e.Type)
+}
+
+// modMarker separates the module of a class defined in another module of the
+// project from its name: "pkg__mod_pm_Err" is pkg.mod.Err.
+const modMarker = "_pm_"
+
+// BaseTypeName is the name of an exception class without its module.
+func BaseTypeName(t string) string {
+	if i := strings.LastIndex(t, modMarker); i >= 0 {
+		return t[i+len(modMarker):]
+	}
+	return t
+}
+
+// QualTypeName is the name with its module as CPython prints it for an
+// uncaught exception: "pkg.mod.Err".
+func QualTypeName(t string) string {
+	i := strings.LastIndex(t, modMarker)
+	if i < 0 {
+		return t
+	}
+	return strings.ReplaceAll(t[:i], "__", ".") + "." + t[i+len(modMarker):]
 }
 
 // Match is the test of an except clause: the exception is an instance of
@@ -323,7 +345,17 @@ func Leave() { depth-- }
 // NameError if the module-level assignment has not run yet.
 func Bound[T any](v T, set bool, name string) T {
 	if !set {
-		panic(newError("NameError", "name '"+name+"' is not defined"))
+		panic(unboundName(name))
 	}
 	return v
+}
+
+// unboundName is the error for reading a module variable that is not bound
+// yet. The name of another module of the project is an attribute of it.
+func unboundName(name string) *PyError {
+	if i := strings.LastIndex(name, modMarker); i >= 0 {
+		mod := strings.ReplaceAll(name[:i], "__", ".")
+		return newError("AttributeError", "module '"+mod+"' has no attribute '"+name[i+len(modMarker):]+"'")
+	}
+	return newError("NameError", "name '"+name+"' is not defined")
 }

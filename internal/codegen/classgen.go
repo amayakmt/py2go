@@ -568,13 +568,13 @@ func (g *generator) emitSynth(out *strings.Builder, c, x *classInfo, m *member, 
 		fmt.Fprintf(out, "return %s\")\"\n}\n\n", body)
 	case "dceq":
 		fmt.Fprintf(out, "func %s %s(other any) (bool, bool) {\n", recv, methodGoName(m, x))
-		fmt.Fprintf(out, "o, ok := other.(%s)\nif !ok || o.PyClassName() != %q {\nreturn false, false\n}\n", x.name, c.name)
+		fmt.Fprintf(out, "o, ok := other.(%s)\n_, exact := other.(*%s)\nif !ok || !exact {\nreturn false, false\n}\n", x.name, c.goStruct())
 		fmt.Fprintf(out, "return %s(%s, %s), true\n}\n\n", g.rt("Eq"), g.dcSeq(selfName+".", fields), g.dcSeq("o.Get_", fields, true))
 	case "dclt", "dcle", "dcgt", "dcge":
 		op := strings.TrimPrefix(m.synth, "dc")
 		fn := map[string]string{"lt": "Lt", "le": "Le", "gt": "Gt", "ge": "Ge"}[op]
 		fmt.Fprintf(out, "func %s %s(other any) (bool, bool) {\n", recv, methodGoName(m, x))
-		fmt.Fprintf(out, "o, ok := other.(%s)\nif !ok || o.PyClassName() != %q {\nreturn false, false\n}\n", x.name, c.name)
+		fmt.Fprintf(out, "o, ok := other.(%s)\n_, exact := other.(*%s)\nif !ok || !exact {\nreturn false, false\n}\n", x.name, c.goStruct())
 		fmt.Fprintf(out, "return %s(%s, %s), true\n}\n\n", g.rt(fn), g.dcSeq(selfName+".", fields), g.dcSeq("o.Get_", fields, true))
 	case "dchash":
 		fmt.Fprintf(out, "func %s %s() int64 {\nreturn %s(%s)\n}\n\n", recv, methodGoName(m, x), g.rt("HashOf"), g.dcSeq(selfName+".", fields))

@@ -1,1 +1,1 @@
-unsupported: import of module 'os' (modules arrive in phase 11) at line 2
+unsupported: import of module 'os' (the standard library arrives in phase 12) at line 2

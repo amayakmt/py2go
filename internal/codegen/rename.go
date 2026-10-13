@@ -202,6 +202,10 @@ func boundNames(mod *pyast.Module, protected map[uintptr]bool) map[string]bool {
 
 // pyName is the name the program wrote for a name that was renamed.
 func pyName(name string) string {
+	// A name of another module of the project carries its module as a prefix.
+	if i := strings.LastIndex(name, "_pm_"); i >= 0 {
+		name = name[i+len("_pm_"):]
+	}
 	if base, ok := strings.CutSuffix(name, renameSuffix); ok && (goKeywords[base] || goTypeNames[base] || goBuiltinFuncs[base]) {
 		return base
 	}

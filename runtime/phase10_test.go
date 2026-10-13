@@ -337,3 +337,22 @@ func TestIdentity(t *testing.T) {
 		t.Error("a nan is itself")
 	}
 }
+
+func TestModuleQualifiedNames(t *testing.T) {
+	if BaseTypeName("pkg__mod_pm_Err") != "Err" || BaseTypeName("Err") != "Err" {
+		t.Error("BaseTypeName")
+	}
+	if QualTypeName("pkg__mod_pm_Err") != "pkg.mod.Err" || QualTypeName("Err") != "Err" {
+		t.Error("QualTypeName")
+	}
+	e := newError("pkg__mod_pm_Err", "boom")
+	if e.Error() != "pkg.mod.Err: boom" || TypeName(e) != "Err" {
+		t.Errorf("error line %q, type %q", e.Error(), TypeName(e))
+	}
+	if got := catch(func() { Bound(0, false, "first_pm_late") }); got != "AttributeError: module 'first' has no attribute 'late'" {
+		t.Errorf("got %q", got)
+	}
+	if got := catch(func() { Bound(0, false, "late") }); got != "NameError: name 'late' is not defined" {
+		t.Errorf("got %q", got)
+	}
+}

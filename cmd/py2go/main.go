@@ -9,8 +9,7 @@ import (
 	"strings"
 
 	"github.com/amayakmt/py2go/internal/codegen"
-	"github.com/amayakmt/py2go/internal/pyast"
-	"github.com/amayakmt/py2go/internal/pyrun"
+	"github.com/amayakmt/py2go/internal/link"
 )
 
 func main() {
@@ -24,21 +23,20 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "check" {
 		return check(args[1:])
 	}
+	if len(args) > 0 && (args[0] == "build" || args[0] == "run") {
+		return project(args[0], args[1:])
+	}
 	if len(args) != 1 {
-		return fmt.Errorf("usage: py2go <file.py>")
+		return fmt.Errorf("usage: py2go <file.py> | build <file.py|dir> [-o out] | run <file.py|dir> [args] | check <path>...")
 	}
 	in := args[0]
 	if filepath.Ext(in) != ".py" {
 		return fmt.Errorf("input must be a .py file, got %q", in)
 	}
 
-	js, err := pyrun.DumpAST(in)
+	root, err := link.LoadFile(in)
 	if err != nil {
-		return err
-	}
-	root, err := pyast.Decode(js)
-	if err != nil {
-		return fmt.Errorf("decode: %w", err)
+		return fmt.Errorf("%s: %w", in, err)
 	}
 	src, err := codegen.Generate(root)
 	if err != nil {
@@ -108,11 +106,7 @@ func check(paths []string) error {
 }
 
 func transpile(path string) error {
-	js, err := pyrun.DumpAST(path)
-	if err != nil {
-		return err
-	}
-	root, err := pyast.Decode(js)
+	root, err := link.LoadFile(path)
 	if err != nil {
 		return err
 	}

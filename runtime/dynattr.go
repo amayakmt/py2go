@@ -1120,7 +1120,7 @@ func DynIsSubclass(sub, sup any) bool {
 
 // UndefinedName is reading a name that nothing defines.
 func UndefinedName(name string) any {
-	panic(newError("NameError", "name '"+name+"' is not defined"))
+	panic(unboundName(name))
 }
 
 // PlainObject is object(): an instance with nothing in it.

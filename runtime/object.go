@@ -53,7 +53,7 @@ func TypeName(v any) string {
 	case string:
 		return "str"
 	case *PyError:
-		return v.Type
+		return BaseTypeName(v.Type)
 	case Seq:
 		return v.Kind()
 	case interface{ Boxed() any }:
@@ -200,7 +200,7 @@ func ExcTypeName(e *PyError) string {
 	if e == nil {
 		return "NoneType"
 	}
-	return e.Type
+	return BaseTypeName(e.Type)
 }
 
 // IsExcInstance is isinstance(x, E) for a value held as object.
