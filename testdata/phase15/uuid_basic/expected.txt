@@ -1,0 +1,13 @@
+12345678-1234-5678-1234-567812345678 UUID('12345678-1234-5678-1234-567812345678') 12345678123456781234567812345678 24197857161011715162171839636988778104 b'\x124Vx\x124Vx\x124Vx\x124Vx' b'xV4\x124\x12xV\x124Vx\x124Vx' (305419896, 4660, 22136, 18, 52, 95073701484152) None reserved for NCS compatibility urn:uuid:12345678-1234-5678-1234-567812345678 305419896 4660 22136 4660 95073701484152 466142576285865592 True
+True True True True True True True True 00000000-0000-0000-0000-000000000000
+6fa459ea-ee8a-3ca4-894e-db77e160355e 886313e1-3b8a-5372-9b90-0c9aee199e5d 53b14841-9895-312b-bb91-82c1f08c9edd b4fe3335-a2ae-5c75-889c-b1247a0f6f02 0429cbbf-f270-5eb0-95ee-04a7751ca548
+True 4 specified in RFC 4122 36 1 20015998343868 5 00000000-0000-4000-8000-000000000005 6ba7b811-9dad-11d1-80b4-00c04fd430c8
+ValueError badly formed hexadecimal UUID string
+TypeError one of the hex, bytes, bytes_le, fields, or int arguments must be given
+TypeError one of the hex, bytes, bytes_le, fields, or int arguments must be given
+ValueError bytes is not a 16-char string
+ValueError int is out of range (need a 128-bit value)
+ValueError illegal version number
+ValueError fields is not a 6-tuple
+ValueError invalid literal for int() with base 16: 'zzzzzzzz123456781234567812345678'
+1 1 True reserved for Microsoft compatibility reserved for NCS compatibility reserved for NCS compatibility

@@ -1,0 +1,68 @@
+b'00-ff'
+b'6162:6364'
+b'6162:6364:65'
+Error Non-hexadecimal digit found
+Error Odd-length string
+Error Non-hexadecimal digit found
+b'\xde\xad\xbe\xef'
+Error Incorrect padding
+Error Incorrect padding
+Error Invalid base64-encoded string: number of data characters (1) cannot be 1 more than a multiple of 4
+b'a'
+Error Excess data after padding
+b'abc'
+Error Leading padding not allowed
+b'YWJj\n'
+b'YWJj'
+b'\n'
+907060870
+4070022707
+0
+50018
+53870
+b'+:&5L;&\\@=V]R;&0 \n'
+b'hello world'
+b'`\n'
+Error At most 45 bytes at once
+b'a=3Db =E9\n'
+b'tab=09here=20=20\nend=20'
+b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\nxxxxxxxxxxxxxxxxxxxxxxxxx'
+b'a_b'
+b'a=b \xe9'
+b'softbreak'
+b'a b'
+TypeError a bytes-like object is required, not 'str'
+ValueError string argument should contain only ASCII characters
+True
+'Error'
+b64encode b'+/8gaGVsbG8sIHdvcmxkIQA=' b'' b'YQ==' b'YWI=' b'YWJj' b'YWJjZA==' b'YWJjZGU='
+urlsafe_b64encode b'-_8gaGVsbG8sIHdvcmxkIQA=' b'' b'YQ==' b'YWI=' b'YWJj' b'YWJjZA==' b'YWJjZGU='
+standard_b64encode b'+/8gaGVsbG8sIHdvcmxkIQA=' b'' b'YQ==' b'YWI=' b'YWJj' b'YWJjZA==' b'YWJjZGU='
+b32encode b'7P7SA2DFNRWG6LBAO5XXE3DEEEAA====' b'' b'ME======' b'MFRA====' b'MFRGG===' b'MFRGGZA=' b'MFRGGZDF'
+b16encode b'FBFF2068656C6C6F2C20776F726C642100' b'' b'61' b'6162' b'616263' b'61626364' b'6162636465'
+a85encode b'qu7dPASc1$/0K.TEbo80!!' b'' b'@/' b'@:B' b'@:E^' b'@:E_W' b'@:E_WAH'
+b85encode b'`~M(lWo&G3EFgDpa%^NF00' b'' b'VE' b'VPX' b'VPaz' b'VPa!s' b'VPa!sWd'
+b32hexencode b'VFVI0Q35DHM6UB10ETNN4R344400====' b'' b'C4======' b'C5H0====' b'C5H66===' b'C5H66P0=' b'C5H66P35'
+encodebytes b'+/8gaGVsbG8sIHdvcmxkIQA=\n' b'' b'YQ==\n' b'YWI=\n' b'YWJj\n' b'YWJjZA==\n' b'YWJjZGU=\n'
+b64decode b'abc'
+b64decode Error Incorrect padding
+b64decode b'abc'
+urlsafe_b64decode b'\xfb\xff'
+b32decode b'abc'
+b32decode b'abcde'
+b32decode Error Incorrect padding
+b16decode b'ab'
+b16decode Error Non-base16 digit found
+a85decode b'abcdefghijklmnopqrstuvwxyz6R'
+b85decode b'abcdefghijklmnopqrstuvwxyy\xc0\x10'
+b64decode b'abc'
+decodebytes b'abcdef'
+b'a' b'YWI=' b'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4\neHh4\n' b'abc' b'<~B\nP@G\nH~>' b'VPXIP' b'z+CS_h' b'\xab\xcd'
+Error Incorrect padding
+TypeError a bytes-like object is required, not 'str'
+ValueError string argument should contain only ASCII characters
+Error Incorrect padding
+b'\x00\x00\x00\x00\x00\x00\x00\x00'
+b'\xff\x06\x0e='
+b'ZmlsZSBjb250ZW50cyBmaWxlIGNvbnRlbnRzIGZpbGUgY29udGVudHMgZmlsZSBjb250ZW50cyBm\naWxlIGNvbnRlbnRzIGZpbGUgY29udGVudHMgZmlsZSBjb250ZW50cyBmaWxlIGNvbnRlbnRzIGZp\nbGUgY29udGVudHMgZmlsZSBjb250ZW50cyA=\n'
+b'file contents file contents file contents file contents file contents file contents file contents file contents file contents file contents '

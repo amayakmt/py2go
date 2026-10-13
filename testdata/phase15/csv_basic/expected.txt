@@ -1,0 +1,28 @@
+[['a', 'b', 'c'], ['1', '2', '3']] [['a', 'b,c', 'd']] [['x', 'he said "hi"', 'y']] [['a', 'b'], [], [], ['c', 'd']] [] [[]] [['a', 'b']] [['a', 'b', 'c']]
+[['multi\nline', 'x']] [['a', 'b', 'c']] [['a', 'b,c']] [['a,b', 'c']] [['a', 'bx']] [[1.0, 2.5, 'x']] [['', '', '']] [['a', 'b']]
+[['a', 'b']] [[None, '', 'x']] [[None, '', 1.0]] 
+Error unexpected end of data
+Error ',' expected after '"'
+[['a'], ['b']]
+ValueError could not convert string to float: 'x'
+[['a\x00b']]
+TypeError "delimiter" must be a 1-character string
+TypeError bad "quoting" value
+Error unknown dialect
+TypeError this function got an unexpected keyword argument 'bogus'
+['a', 'b'] 1 ['c', 'd'] 2 ,
+'a,b c,"d,e","f""g",,,1,2.5,True,"x\ny"\r\n' '""\r\n' '\r\n' 'a\n' '"a","1","2.0",""\r\n' '"a",1,2.0,""\r\n'
+'a b,c\\,d,e\\"f\r\n' 'a\\"b\r\n' 'a;b\r\n' "'a''b;c'\r\n" '"x",,"y"\r\n' '"x",,""\r\n' '"a"\n' 'a\tb\r\n'
+Error need to escape, but no escapechar set
+Error single empty field record must be quoted
+Error iterable expected, not int
+TypeError "lineterminator" must be a string
+6 131072 ['excel', 'excel-tab', 'unix'] 0 3 1.0
+[['a', 'b', 'c|d']] True |
+[['a', 'b', 'c']] 'a#"b#c"\n'
+['name', 'age'] [{'name': 'ann', 'age': '30'}, {'name': 'bob', 'age': '25', None: ['extra']}, {'name': 'cy', 'age': None}, {'name': 'dee', 'age': '1'}] 6
+[{'x': '1', 'y': '2'}, {'x': '3', 'y': '4'}] [{'a': '1', 'b': '?'}] [{'a': '1', 'rest': ['2']}]
+'id,name\r\n1,x\r\n2,-\r\n-,z\r\n'
+ValueError dict contains fields not in fieldnames: 'bad'
+3
+[['h1', 'h2'], ['v 1', 'v,2']]

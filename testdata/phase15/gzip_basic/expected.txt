@@ -1,0 +1,22 @@
+b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff' True 580 True
+b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff' b'' b'\x1f\x8b\x08\x00\x05\x00\x00\x00\x04\xff' b'\x1f\x8b\x08\x00\x05\x00\x00\x00\x00\xff' b'\x87\xd6\x12\x00'
+12 wb True False
+b'hello' b'\n' b'world\n' b'more' b'' rb
+[b'hello\n', b'world\n', b'more'] 
+b'world' 11
+héllo
+ wörld
+
+['héllo\n', 'wörld\n']
+b'\x1f\x8b\x08' 8 b'\x02\xff' True
+b'\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff' b'in memory'
+b'in memory' 
+BadGzipFile Not a gzipped file (b'no')
+EOFError Compressed file ended before the end-of-stream marker was reached
+BadGzipFile CRC check failed
+None
+ValueError Argument 'encoding' not supported in binary mode
+ValueError Invalid mode: 'rbt'
+TypeError filename must be a str or bytes object, or a file
+BadGzipFile Not a gzipped file (b'ju')
+True rb wb

@@ -1,0 +1,69 @@
+['paths', 'server'] {'base': '/opt', 'debug': 'no'} ['home', 'logs', 'multi', 'empty', 'inline', 'base', 'debug'] True True True
+/opt/home /opt/home/logs 'line one\nline two\n\nline four' '' value ; not a comment %(home)s/logs
+8080 0.75 True False x dflt 7 None
+example.com 8080 8080 fb True False ['host', 'port', 'ratio', 'enabled', 'name with spaces', 'base', 'debug'] 7 paths <Section: server> {'host': 'example.com', 'port': '8080', 'ratio': '0.75', 'enabled': 'yes', 'name with spaces': 'x', 'base': '/opt', 'debug': 'no'} True False 3 ['DEFAULT', 'paths', 'server']
+[('base', '/opt'), ('debug', 'no'), ('host', 'example.com'), ('port', '8080'), ('ratio', '0.75'), ('enabled', 'yes'), ('name with spaces', 'x')] [('base', '/opt'), ('debug', 'no')] ['DEFAULT', 'paths', 'server']
+[DEFAULT]
+base = /opt
+debug = no
+
+[paths]
+home = %(base)s/home
+logs = %(home)s/logs
+multi = line one
+	line two
+	
+	line four
+empty = 
+inline = value ; not a comment
+
+[server]
+host = example.com
+port = 9090
+enabled = yes
+name with spaces = x
+new = val
+
+[extra]
+a = 1
+b = 2
+
+
+[DEFAULT]
+base=/opt
+debug=no
+
+[paths]
+home=%(base)s/home
+log
+NoSectionError No section: 'nosuch'
+NoOptionError No option 'nosuch' in section: 'server'
+ValueError invalid literal for int() with base 10: 'example.com'
+ValueError Not a boolean: example.com
+DuplicateSectionError Section 'server' already exists
+ValueError Invalid section name: 'DEFAULT'
+TypeError option values must be strings
+ValueError invalid interpolation syntax in '%bad' at position 0
+KeyError 'nosuch'
+KeyError 'nosuch'
+NoSectionError No section: 'nosuch'
+NoSectionError No section: 'nosuch'
+NoSectionError No section: 'nosuch'
+MissingSectionHeaderError File contains no section headers.|file: '<string>', line: 1|'no header\n'
+DuplicateSectionError While reading from '<string>' [line  3]: section 'a' already exists
+DuplicateOptionError While reading from '<string>' [line  3]: option 'x' in section 'a' already exists
+ParsingError Source contains parsing errors: '<string>'|	[line  3]: 'badline\n'
+ParsingError Source contains parsing errors: '<string>'|	[line  2]: '=nokey\n'
+InterpolationMissingOptionError Bad value substitution: option 'k' in section 'a' contains an interpolation key 'missing' which is not a valid option name. Raw value: '%(missing)s'
+InterpolationDepthError Recursion limit exceeded in value substitution: option 'k' in section 'a' contains an interpolation key which cannot be substituted in 10 steps. Raw value: '%(k)s'
+InterpolationSyntaxError '%' must be followed by '%' or '(', found: '%x'
+{'x': '2', 'y': '3'}
+1-last $literal
+InterpolationMissingOptionError Bad value substitution: option 'q' in section 'c' contains an interpolation key 'nosuch:x' which is not a valid option name. Raw value: '${nosuch:x}'
+{'flag': None, 'key': 'v', 'other: not-a-delim': None} None
+%(k)s {'k': 'v%'} v%
+{'s1': {'a': '1', 'b': None}, 's2': {'c': 'True'}}
+[]
+['/tmp/py2go_cfg_test.ini'] ['one'] v
+['one']
+No section: 's' DEFAULT True True

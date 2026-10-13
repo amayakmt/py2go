@@ -1,0 +1,18 @@
+-1 True True b'x' True
+0 True True b'x' True
+1 True True b'x' True
+6 True True b'x' True
+9 True True b'x' True
+b'x\x9c' b'' True
+True True True True b'\x1f\x8b'
+907060870 222957957 0 103547413 436929629 1 True
+True
+True True b'' b''
+True b'trailing' True
+error Error -3 while decompressing data: incorrect header check
+error Error -5 while decompressing data: incomplete or truncated stream
+error Error -5 while decompressing data: incomplete or truncated stream
+error Bad compression level
+error Error -3 while decompressing data: incorrect data check
+TypeError a bytes-like object is required, not 'str'
+15 9 -1 8 error True
