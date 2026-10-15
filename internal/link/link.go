@@ -690,6 +690,13 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 		if cls, ok, err := r.expandNamedTuple(x); ok || err != nil {
 			return cls, err
 		}
+		// sys.stdout = f and sys.stderr = f tell the runtime where print writes.
+		if len(x.Targets) == 1 {
+			if nm, ok := x.Targets[0].(*pyast.Name); ok && (nm.ID == "sys_pm_stdout" || nm.ID == "sys_pm_stderr") {
+				x.Value = &pyast.Call{Func: &pyast.Name{ID: "_native", Lineno: x.Lineno},
+					Args: []pyast.Node{&pyast.Constant{PyType: "str", Value: "sys.set_" + strings.TrimPrefix(nm.ID, "sys_pm_"), Lineno: x.Lineno}, x.Value}, Lineno: x.Lineno}
+			}
+		}
 		return x, nil
 	case *pyast.Global:
 		for i, nm := range x.Names {
