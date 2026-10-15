@@ -424,7 +424,7 @@
    "name": "_pydatetime",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -788,7 +788,7 @@
    "name": "calendar",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -921,14 +921,14 @@
    "name": "datetime",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "dbm",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -991,35 +991,35 @@
    "name": "errno",
    "phase": 12,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "faulthandler",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "fcntl",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "filecmp",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "fileinput",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1054,7 +1054,7 @@
    "name": "gc",
    "phase": 12,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1075,7 +1075,7 @@
    "name": "getpass",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1103,7 +1103,7 @@
    "name": "grp",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1229,7 +1229,7 @@
    "name": "logging",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1264,7 +1264,7 @@
    "name": "mimetypes",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1306,7 +1306,7 @@
    "name": "netrc",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1369,7 +1369,7 @@
    "name": "pathlib",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1404,7 +1404,7 @@
    "name": "platform",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1425,7 +1425,7 @@
    "name": "posix",
    "phase": 12,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1467,7 +1467,7 @@
    "name": "pwd",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1551,7 +1551,7 @@
    "name": "resource",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1586,7 +1586,7 @@
    "name": "select",
    "phase": 13,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1600,7 +1600,7 @@
    "name": "shelve",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1614,7 +1614,7 @@
    "name": "shutil",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1691,7 +1691,7 @@
    "name": "stat",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1726,7 +1726,7 @@
    "name": "subprocess",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1768,14 +1768,14 @@
    "name": "tarfile",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "tempfile",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1824,7 +1824,7 @@
    "name": "timeit",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1852,7 +1852,7 @@
    "name": "tomllib",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1950,14 +1950,14 @@
    "name": "warnings",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "wave",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -2020,7 +2020,7 @@
    "name": "zipfile",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -2041,7 +2041,7 @@
    "name": "zoneinfo",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   }
  ]
