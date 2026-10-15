@@ -1,0 +1,25 @@
+DEBUG 30 Level 15 30 50
+DEBUG:app.sub:debug msg
+INFO:app.sub:info 1 + 2
+WARNING:app.sub:warn
+ERROR:app.sub:error dict-args
+CRITICAL:app.sub:crit
+Level 25:app.sub:custom level
+<Logger app.sub (DEBUG)> <StreamHandler (NOTSET)> app.sub <RootLogger root (WARNING)> 10 False True
+<Logger app (WARNING)> True root app <Logger app.x (WARNING)>
+'ERROR:app.sub:shown\n'
+1 parent.child INFO 20 from child 42 from child %s (42,)
+['public']
+INFO - hi x hi x|n INFO hi x
+Formatting field not found in record: 'nope'
+Invalid format 'no fields' for '%' style
+Unknown level: 'BOGUS'
+Level not an integer or a valid string: 1.5
+bob adapted 1 <LoggerAdapter filtered (DEBUG)>
+1
+INFO root info
+WARNING root warn
+20 %(levelname)s %(message)s
+ERROR with exc
+Exception: oops
+ERROR goes nowhere

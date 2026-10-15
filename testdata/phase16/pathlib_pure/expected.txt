@@ -1,0 +1,26 @@
+/usr/local/lib/python3.13/site-packages PurePosixPath('/usr/local/lib/python3.13/site-packages') ('/', 'usr', 'local', 'lib', 'python3.13', 'site-packages')  '/' / site-packages  site-packages
+/usr/local/lib/python3.13 /usr/local/lib/python3.13 /usr/local 5 / / (PurePosixPath('/usr/local/lib/python3.13'), PurePosixPath('/usr/local/lib'))
+['.tar', '.gz'] .gz b.tar   ..
+. . . PurePosixPath('.') / //a /a a/../b
+a/b/c x/y /c/d /a/b/c
+True False True False
+b/c . ../b
+ValueError '/a' is not in the subpath of '/b'
+ValueError 'a' is not in the subpath of '/b'
+ValueError Invalid name ''
+ValueError PurePosixPath('/') has an empty name
+ValueError Invalid suffix 'x'
+ValueError Invalid name 'b/c'
+TypeError argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'int'
+ValueError '/a' and 'b' have different anchors
+a/c.py a/b.md a/b a/z.txt
+True True False False True True
+True True False True [PurePosixPath('a'), PurePosixPath('a/c'), PurePosixPath('b')]
+1 True
+file:///a%20b/c file:///%C3%A9 a/b b'a/b' a a
+PurePosixPath True
+some/dir/file.txt PosixPath('some/dir/file.txt') file.txt some/dir some/dir/file.bin False True True
+/tmp/x True True True
+/a/c /x True
+x/y PosixPath('x/y')
+('a', 'b') ('/',)  PurePosixPath('/') . .

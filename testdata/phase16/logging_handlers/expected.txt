@@ -1,0 +1,11 @@
+app.log 'INFO message number 6\nINFO message number 7\n'
+app.log.1 'INFO message number 4\nINFO message number 5\n'
+app.log.2 'INFO message number 2\nINFO message number 3\n'
+[] 2
+['a', 'b', 'c'] 0
+['a', 'b', 'c', 'd', 'boom'] 0
+to queue x INFO queued None True
+['WARNING:listened', 'ERROR:again']
+two
+MIDNIGHT 86400 %Y-%m-%d 1 True
+Invalid rollover interval specified: X

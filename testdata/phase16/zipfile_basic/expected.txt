@@ -1,0 +1,16 @@
+True b'PK\x03\x04' True False
+504b030414000000000000002128c2412435030000000300000005000000612e747874616263504b0102140314000000000000002128c24124350300000003000000050000000000000000000000800100000000612e747874504b0506000000000100010033000000260000000000
+['hello.txt', 'dir/', 'dir/ü.bin'] b'archive comment'
+hello.txt 10 0 (2020, 5, 17, 10, 30, 12) 0o644 False 0x4811c948 0
+dir/ 0 0 (2020, 5, 17, 10, 30, 12) 0o600 True 0x0 0
+dir/ü.bin 1024 8 (2021, 1, 2, 3, 4, 6) 0o600 False 0xb70b4c26 2048
+b'hello zip\n' b'\x00\x01\x02\x03\x04\x05' 1024 None
+b'hello zip\n' b'' hello.txt
+<ZipInfo filename='hello.txt' filemode='?rw-r--r--' file_size=10> True
+KeyError "There is no item named 'missing' in the archive"
+['one.txt', 'sub/', 'sub/two.bin', 'extra.txt'] True
+['extra.txt', 'one.txt', 'sub'] True
+D/y/extra.txt
+100
+BadZipFile File is not a zip file
+FileNotFoundError

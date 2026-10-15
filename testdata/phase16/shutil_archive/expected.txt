@@ -1,0 +1,8 @@
+['gztar', 'tar', 'zip'] ['gztar', 'tar', 'zip']
+['out_zip.zip', 'out_tgz.tar.gz', 'out_tar.tar']
+['proj/', 'proj/a.txt', 'proj/pkg/', 'proj/pkg/b.txt'] ['proj', 'proj/a.txt', 'proj/pkg', 'proj/pkg/b.txt'] ['.', './a.txt', './pkg', './pkg/b.txt']
+['proj/a.txt', 'proj/pkg/b.txt']
+['proj/a.txt', 'proj/pkg/b.txt']
+['a.txt', 'pkg/b.txt']
+unknown archive format 'rar'
+Unknown archive format 'D/a.unknown'

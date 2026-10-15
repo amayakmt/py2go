@@ -1,0 +1,11 @@
+DEBUG: hidden by out level but not alt
+INFO|app|info
+INFO: info
+WARNING|app.sub|sub warning
+WARNING: sub warning
+ERROR|other|other error
+[<StreamHandler <stdout> (INFO)>, <StreamHandler <stdout> (NOTSET)>] 40 False
+dictionary doesn't specify a version
+Unsupported version: 2
+Unable to configure handler 'h'
+Unable to configure handler 'h'

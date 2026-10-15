@@ -1,0 +1,21 @@
+3 True False False None ['ABC']
+True
+I/O operation on closed file.
+b'ABCDE' b'ABCDEFGHIJKLMNOPQRSTUVWXY' b'' True False
+b'ABCDEFGHIJ'
+line one
+ 'line two\n' line utf-8 strict False True
+['line one\n', 'line two\n', 'line three'] ('\n', '\r\n')
+4 b'a\r\nb\r\n' True
+b'a\r\nb\r\n\xe9'
+True
+['héllo wörld\n'] True
+['a\n', 'b\n']
+True
+b'hello' b' wo' b' world\n' b'sec' b'ond line\n' b''
+b'' 6
+b'abcdef'
+b'' False
+True
+8192 2 locale True
+illegal newline value: x

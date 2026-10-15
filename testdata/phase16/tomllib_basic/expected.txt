@@ -1,0 +1,38 @@
+title 'TOML Example'
+count 42
+pi 3.14159
+neg -17
+hex 3735928559
+big 1000000
+flag True
+off False
+inf_v inf
+nan_v nan
+when datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)
+local datetime.datetime(1979, 5, 27, 7, 32)
+day datetime.date(1979, 5, 27)
+clock datetime.time(7, 32, 0, 500000)
+list [1, 2, 3]
+mixed ['a', 1, [2, 3], {'x': 1}]
+inline {'name': 'tom', 'age': 30}
+multi 'line one\nline two'
+basic 'tab\there é "quoted"'
+literal 'C:\\no\\escape'
+owner {'name': 'Tom', 'dob': datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=57600)))}
+database {'ports': [8000, 8001], 'enabled': True, 'pool': {'size': 10}}
+servers [{'name': 'alpha', 'ip': '10.0.0.1'}, {'name': 'beta', 'extra': {'x': 1}}]
+a {'b': {'c': {'d': 'deep', 'quoted key': 1}}}
+{'a': 1, 'b': {'c': 2, 'd': 3}}
+{}
+TOMLDecodeError Invalid value (at end of document)
+TOMLDecodeError Cannot overwrite a value (at end of document)
+TOMLDecodeError Cannot declare ('x',) twice (at line 2, column 3)
+TOMLDecodeError Expected "'" (at end of document)
+TOMLDecodeError Unclosed array (at end of document)
+TOMLDecodeError Invalid statement (at line 1, column 1)
+TOMLDecodeError Expected newline or end of document after a statement (at line 1, column 7)
+TOMLDecodeError Expected newline or end of document after a statement (at line 1, column 6)
+TOMLDecodeError Expected newline or end of document after a statement (at line 1, column 9)
+TOMLDecodeError Cannot overwrite a value (at line 3, column 5)
+{'k': 'v'}
+{'x': '1.5!'}

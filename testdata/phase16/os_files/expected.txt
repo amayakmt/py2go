@@ -1,0 +1,36 @@
+exists: True File exists True
+['b', 'link', 'one.txt']
+/ ['a'] []
+/a ['b'] ['link', 'one.txt']
+/a/b [] ['two.bin']
+6 True False 0o644 1 10 6
+True one.txt True
+- d
+[('b', True, False, False), ('link', False, True, True), ('one.txt', False, True, False)] <DirEntry 'b'>
+True 6
+0o600
+1500000000.0 1000000000000000000
+2
+6 6 6
+b'abc' b'def' b'' False
+b'ping'
+FileNotFoundError 2 [Errno 2] No such file or directory: 'BASE/nope'
+FileNotFoundError 2 [Errno 2] No such file or directory: 'BASE/nope'
+FileExistsError 17 [Errno 17] File exists: 'BASE'
+OSError 39 [Errno 39] Directory not empty: 'BASE'
+IsADirectoryError 21 [Errno 21] Is a directory: 'BASE'
+FileNotFoundError 2 [Errno 2] No such file or directory: 'BASE/x' -> 'BASE/y'
+OSError 9 [Errno 9] Bad file descriptor
+FileExistsError 17 [Errno 17] File exists: 'BASE/a/uno.txt'
+NotADirectoryError 20 [Errno 20] Not a directory: 'BASE/a/uno.txt'
+OSError 22 [Errno 22] Invalid argument: 'BASE/a/uno.txt'
+True True False True False
+BASE/a/one.txt a/b True
+True b'\xc3\xa9' x posix / True . /dev/null
+1 1 dflt True
+None None
+str expected, not int
+True True
+No such file or directory Permission denied True True get_terminal_size
+Linux 5 True
+False

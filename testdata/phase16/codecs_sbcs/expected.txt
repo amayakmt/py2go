@@ -1,0 +1,15 @@
+cp437 b'caf\x82 \x81\xe1' café üß
+cp1252 b'caf\xe9 \xfc\xdf' café üß
+latin-1 b'caf\xe9 \xfc\xdf' café üß
+iso8859-15 b'caf\xe9 \xfc\xdf' café üß
+koi8-r enc error 'charmap' codec can't encode character '\xe9' in position 3: character maps to <undefined>
+cp850 b'caf\x82 \x81\xe1' café üß
+mac-roman b'caf\x8e \x9f\xa7' café üß
+windows-1251 enc error 'charmap' codec can't encode character '\xe9' in position 3: character maps to <undefined>
+b'\x80' € € b'\xc6' b'\xf6'
+UnicodeDecodeError 'charmap' codec can't decode byte 0x81 in position 0: character maps to <undefined>
+UnicodeEncodeError 'charmap' codec can't encode character '\u4e2d' in position 0: character maps to <undefined>
+UnicodeEncodeError 'charmap' codec can't encode character '\u4e2d' in position 0: character maps to <undefined>
+b'? x' b' x' b'\\u4e2d x' b'&#20013;'
+a�b ab a\x81b
+b'caf\xe9'

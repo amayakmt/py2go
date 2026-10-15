@@ -1,0 +1,30 @@
+True True 0o700
+D/copy.txt
+D/cf.txt alpha
+0o640 True
+same: 'D/src/a.txt' and 'D/src/a.txt' are the same file
+['a.txt', 'inner', 'ln'] True
+['a.txt', 'inner'] []
+exists: FileExistsError
+D/moved.txt False
+D/dst2/moved.txt
+False
+[('lstat', 'D/missing', 'FileNotFoundError')]
+rmtree: [Errno 2] No such file or directory: 'D/missing'
+True None True True
+pre_ True mkstemp True 0o600
+True True b'named' rb+ True
+b'named'
+False
+True a,b
+ True
+anon
+True True
+False
+True True
+False
+False 5
+True
+short and a much longer text
+True tmp True True
+False

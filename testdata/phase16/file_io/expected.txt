@@ -1,0 +1,58 @@
+binary stdout
+18 20 <_io.TextIOWrapper name='/tmp/py2go_file_io_test/t.txt' mode='w' encoding='utf-8'> utf-8 strict w True False
+True
+b'h\xc3\xa9llo\r\nw\xc3\xb6rld\rlast\n' BufferedReader <_io.BufferedReader name='B/t.txt'> rb False
+None ['héllo\n', 'wörld\n', 'last\n'] ('\r', '\n', '\r\n')
+'' ['héllo\r\n', 'wörld\r', 'last\n'] ('\r', '\n', '\r\n')
+'\n' ['héllo\r\n', 'wörld\rlast\n'] None
+'\r' ['héllo\r', '\nwörld\r', 'last\n'] None
+'\r\n' ['héllo\r\n', 'wörld\rlast\n'] None
+'hél' 'lo' 6 '\n' 'wörld\nlast\n' ''
+'hé' 'llo\n' ['wörld\n', 'last\n']
+20 1 'é'
+b'a\r\nb\r\n'
+['a', 'b', 'appended', '']
+'XY\nb\na'
+'XY\n'
+round trip True True True
+round trip!!
+x: [Errno 17] File exists: 'B/t.txt'
+replace 'ok �� bad'
+ignore 'ok  bad'
+backslashreplace 'ok \\xff\\xfe bad'
+UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 3: invalid start byte
+'ok ÿþ bad'
+b'caf?'
+UnicodeEncodeError 'ascii' codec can't encode character '\xe9' in position 3: ordinal not in range(128)
+b'\xff\xfeh\x00i\x00' hi
+b'\xef\xbb\xbfbom' 'bom' '\ufeffbom'
+10 2 BufferedWriter
+b'012' b'34' b'34' 5 b'56789ab' b'' b''
+4 bytearray(b'2345') 10 b'ab'
+b'01234XX789ab'
+FileIO b'0123' <_io.FileIO name='B/t.txt' mode='rb' closefd=True>
+[b'01234XX789ab'] True False
+b'012' True
+fd closed 9
+I/O operation on closed file.
+I/O operation on closed file.
+I/O operation on closed file.
+I/O operation on closed file.
+I/O operation on closed file.
+I/O operation on closed file.
+UnsupportedOperation write
+not writable
+must have exactly one of create/read/write/append mode
+can't have text and binary mode at once
+invalid mode: 'z'
+binary mode doesn't take an encoding argument
+can't have unbuffered text I/O
+binary mode doesn't take a newline argument
+illegal newline value: x
+binary mode doesn't take an errors argument
+[Errno 21] Is a directory: 'B'
+[Errno 2] No such file or directory: 'B/nope/x'
+10 False True
+via buffer
+utf-8 surrogateescape <stdout> <stdin> <stderr>
+direct write

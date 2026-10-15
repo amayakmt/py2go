@@ -1,0 +1,45 @@
+2 days, 3:04:05.006007 datetime.timedelta(days=2, seconds=11045, microseconds=6007) 183845.006007 2 11045 6007
+4 days, 6:08:10.012014 1 day, 1:32:02.503004 17:01:21.668669 1:04:05.006007 (2, datetime.timedelta(seconds=11045, microseconds=6007)) -3 days, 20:55:54.993993 2 days, 3:04:05.006007
+51.068057224166665 51 3 days, 4:36:07.509010 False
+7 days, 0:00:00 -1 day, 23:59:59 -1 day, 23:59:59.999999 -1 day, 23:00:00
+[datetime.timedelta(days=-1), datetime.timedelta(0), datetime.timedelta(days=1)] 2 days, 0:00:00 True
+-999999999 days, 0:00:00 999999999 days, 23:59:59.999999 0:00:00.000001
+2024-02-29 2024-03-01 2023-12-31 Wed Jan 31 00:00:00 2024 time.struct_time(tm_year=2024, tm_mon=1, tm_mday=31, tm_hour=0, tm_min=0, tm_sec=0, tm_wday=2, tm_yday=31, tm_isdst=-1)
+5 2024 2024-01-31 Wednesday 31 January 2024, week 04/05, day 031
+True 9999-12-31 0001-01-01 1 day, 0:00:00
+datetime.IsoCalendarDate(year=2025, week=1, weekday=1) datetime.IsoCalendarDate(year=2020, week=53, weekday=7) 2021-01-03
+2024-01-31 2024-01-31
+True True True True
+1 1
+23:59:58.999999 datetime.time(23, 59, 58, 999999) 23:59:58 01:59:58.999999 11:59 PM 00:00:00 23:59:59.999999
+01:02:00+00:00 datetime.time(1, 2, 3, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=75600))) 1
+EST5 datetime.timezone(datetime.timedelta(days=-1, seconds=66600), 'EST5') EST5 -1 day, 18:30:00 UTC datetime.timezone.utc UTC+01:00
+2024-06-15 12:30:45.000500-05:30 2024-06-15 18:00:45.000500+00:00 2024-06-16 03:00:45.000500+09:00 EST5 -1 day, 18:30:00 None
+time.struct_time(tm_year=2024, tm_mon=6, tm_mday=15, tm_hour=12, tm_min=30, tm_sec=45, tm_wday=5, tm_yday=167, tm_isdst=-1) time.struct_time(tm_year=2024, tm_mon=6, tm_mday=15, tm_hour=18, tm_min=0, tm_sec=45, tm_wday=5, tm_yday=167, tm_isdst=0) 2024-06-15 12:30:45.000500 12:30:45.000500-05:30
+datetime.IsoCalendarDate(year=2024, week=24, weekday=6) 5 739052  2024-04-24 00:00:00
+2024-06-15 12:30:45.000500+02:00 EET 2024-06-15 10:30:45.000500+00:00 2024-06-15T12:30:45.000500+02:00 +0200 EET
+166 days, 12:30:45.000500 2025-01-02 01:30:45.000500 2024-06-15 12:30:44.999999
+2020-02-03 04:05:06 0001-01-01 00:00:00 9999-12-31 23:59:59.999999 0:00:00.000001
+2023-11-14 22:13:20+00:00 2023-11-14 23:13:20.500000+01:00
+2024-02-29 23:59:59.123456 2024-02-29 23:59:00+00:00 2024-02-29 23:59:59
+2024-03-05 01:02:03+05:30
+240615 123045 000500 % 2024/06/15 2024-06-15 12:30:45.000500 2024-06-15T12
+[datetime.datetime(2023, 1, 2, 0, 0), datetime.datetime(2024, 1, 2, 0, 0), datetime.datetime(2025, 1, 2, 0, 0)]
+True
+True False datetime True
+ValueError month must be in 1..12
+ValueError year 0 is out of range
+ValueError hour must be in 0..23
+ValueError minute must be in 0..59
+ValueError microsecond must be in 0..999999
+OverflowError days=1000000000; must have magnitude <= 999999999
+ValueError offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24), not datetime.timedelta(days=1).
+ValueError Invalid isoformat string: '2024-1-1'
+TypeError unsupported operand type(s) for -: 'datetime.datetime' and 'datetime.date'
+TypeError unsupported operand type(s) for +: 'datetime.date' and 'int'
+TypeError '<' not supported between instances of 'datetime.datetime' and 'datetime.date'
+TypeError unsupported operand type(s) for +: 'datetime.date' and 'datetime.date'
+ZeroDivisionError integer division or modulo by zero
+ValueError time data 'x' does not match format '%Y'
+TypeError can't subtract offset-naive and offset-aware datetimes
+OverflowError date value out of range

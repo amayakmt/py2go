@@ -1,0 +1,10 @@
+True False False
+(['same.txt'], ['diff.txt', 'sub'], ['left_only.txt'])
+['left_only.txt'] ['right_only.txt'] ['diff.txt', 'same.txt', 'sub'] ['same.txt'] ['diff.txt'] ['sub'] ['diff.txt', 'same.txt']
+['sub'] ['inner.txt']
+diff /tmp/py2go_filecmp_test/a /tmp/py2go_filecmp_test/b
+Only in /tmp/py2go_filecmp_test/a : ['left_only.txt']
+Only in /tmp/py2go_filecmp_test/b : ['right_only.txt']
+Identical files : ['same.txt']
+Differing files : ['diff.txt']
+Common subdirectories : ['sub']

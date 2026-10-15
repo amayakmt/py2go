@@ -1,0 +1,9 @@
+True True True
+True True 16
+invalid resource specified
+True
+True
+True
+([], [], []) True
+([], [], [])
+OSError 9

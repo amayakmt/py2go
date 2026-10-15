@@ -1,0 +1,10 @@
+b'uno' b'two' [b'alpha', b'beta'] 2 True False b'd'
+[b'alpha']
+KeyError 'gone'
+b'uno' [b'alpha']
+error db file doesn't exist; use 'c' or 'n' flag to create a new db
+['list', 'num', 'text'] 3 True
+[1, 2, {'a': (3, 4)}]
+[1, 2, {'a': (3, 4)}, 5] {'k': [1]} héllo ('list', [1, 2, {'a': (3, 4)}, 5]) default
+['list', 'new', 'num', 'text'] héllo
+invalid operation on closed shelf

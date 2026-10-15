@@ -1,0 +1,13 @@
+D/a.txt 1 1 True 'a1\n'
+D/a.txt 2 2 False 'a2\n'
+D/b.txt 3 1 True 'b1\n'
+D/b.txt 4 2 False 'b2\n'
+D/b.txt 5 3 False 'b3'
+1 'a1\n'
+2 'a2\n'
+3 'b1\n'
+4 'b2\n'
+a1
+ a2
+ ''
+[b'b1\n', b'b2\n', b'b3']

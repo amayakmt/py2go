@@ -1,0 +1,27 @@
+0 'hello world\n' '' ['echo', 'hello', 'world']
+CompletedProcess(args=['echo', 'hello', 'world'], returncode=0, stdout='hello world\n', stderr='')
+3 b'out\n' b'err\n'
+b'piped data\n' 0
+'text in\n'
+b'a\nb\n' bar
+
+0 1 7
+hi
+there (2, 'x')
+/tmp
+Command '['sh', '-c', 'exit 5']' returned non-zero exit status 5. 5 ['sh', '-c', 'exit 5']
+1 None None
+FileNotFoundError 2 [Errno 2] No such file or directory: 'definitely-not-a-program-xyz'
+Command '['sleep', '5']' timed out after 0.2 seconds
+Command '['sh', '-c', 'kill -9 $$']' died with <Signals.SIGKILL: 9>. -9
+'via popen\n' None 0 0 True
+['line1\n', 'line2\n'] 0
+None
+-15 -15
+b'ctx\n'
+0
+(b'to-err\n', None)
+0
+"a b" c\"d e
+child writes directly
+parent after child

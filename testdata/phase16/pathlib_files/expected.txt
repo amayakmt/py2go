@@ -1,0 +1,29 @@
+exists: [Errno 17] File exists: 'BASE/sub'
+nf: [Errno 2] No such file or directory: 'BASE/x/y'
+12 héllo
+world
+ b'h\xc3\xa9llo\nworld\n' 13 True True False
+2 b'\x00\x01'
+opened hello.txt .txt
+['a.py', 'hello.txt', 'sub']
+['a.py']
+['a.py', 'hello.txt', 'sub']
+['a.py', 'sub/b.py', 'sub/deep/c.py']
+['a.py', 'sub/b.py', 'sub/deep/c.py']
+['sub/b.py', 'sub/d.txt', 'sub/deep']
+['.', 'a.py', 'hello.txt', 'sub', 'sub/b.py', 'sub/d.txt', 'sub/deep', 'sub/deep/c.py']
+['sub']
+['sub/d.txt'] ['b.py', 'd.txt', 'deep']
+[] True
+. ['sub'] ['a.py', 'hello.txt']
+sub ['deep'] ['b.py', 'd.txt']
+sub/deep [] ['c.py']
+z.py False True
+y.py ['y.py']
+True hello.txt True opened
+True None 0o600 6 9
+unlink: [Errno 2] No such file or directory: 'BASE/y.py'
+rmdir: 39
+touch: FileExistsError
+True True
+False

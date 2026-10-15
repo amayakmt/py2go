@@ -1,0 +1,9 @@
+100 _wave_params(nchannels=2, sampwidth=2, framerate=8000, nframes=100, comptype='NONE', compname='not compressed')
+444 b'RIFF' b'WAVE' b'data'
+2 2 8000 100 NONE not compressed
+_wave_params(nchannels=2, sampwidth=2, framerate=8000, nframes=100, comptype='NONE', compname='not compressed')
+b'\x00\x00\x00\x00\x01\x00\xff\xff\x02\x00\xfe\xff' 3
+(98, -98, 99, -99) b''
+True
+Error: file does not start with RIFF id
+Error: # channels not specified

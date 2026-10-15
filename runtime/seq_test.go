@@ -205,10 +205,11 @@ func captureStdout(t *testing.T, f func()) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := os.Stdout
-	os.Stdout = file
-	defer func() { os.Stdout = saved }()
+	saved, savedMax := Stdout.inner.fd, Stdout.inner.bufMax
+	Stdout.inner.fd, Stdout.inner.bufMax = int(file.Fd()), 0
+	defer func() { Stdout.inner.fd, Stdout.inner.bufMax = saved, savedMax }()
 	f()
+	Stdout.flush()
 	data, err := os.ReadFile(file.Name())
 	if err != nil {
 		t.Fatal(err)

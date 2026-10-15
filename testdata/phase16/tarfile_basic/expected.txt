@@ -1,0 +1,27 @@
+10240 0 b'hello' b'ustar\x00' b'0000644\x00' b'011660\x00 ' b'hello.'
+True False
+['hello.txt', 'dir', 'dir/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt', 'dir/ünï.txt', 'link']
+hello.txt 6 b'0' 0o644 1600000000 alice staff True False False 
+dir 0 b'5' 0o755 1600000000   False True False 
+dir/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt 3 b'0' 0o644 1600000000   True False False 
+dir/ünï.txt 1 b'0' 0o644 1600000000.5   True False False 
+link 0 b'2' 0o644 1600000000   False False True hello.txt
+b'hello\n' True True
+KeyError "filename 'nope' not found"
+0 ValueError name is too long
+0 10240 b'ustar\x0000' ['a/b.txt']
+1 10240 b'ustar  \x00' ['a/b.txt', 'p/qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq']
+2 10240 b'ustar\x0000' ['a/b.txt', 'p/qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq']
+plain.tar ['root', 'root/f.txt', 'root/sub', 'root/sub/g.bin']
+['f.txt', 'sub'] True
+z.tar.gz ['root', 'root/f.txt', 'root/sub', 'root/sub/g.bin']
+['f.txt', 'sub'] True
+b'\x1f\x8b'
+['root', 'root/f.txt', 'root/sub', 'root/sub/g.bin', 'appended.txt']
+root/ 
+root/f.txt 
+root/sub/ 
+root/sub/g.bin 
+appended.txt 
+ReadError file could not be opened successfully:
+OutsideDestinationError '../escape' would be extracted to 'D/escape', which is outside the destination

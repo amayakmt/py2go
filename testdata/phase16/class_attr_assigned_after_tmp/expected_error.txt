@@ -1,1 +1,0 @@
-unsupported: assignment to 'B.x', which is inherited from 'A' (it would create a new attribute) at line 9

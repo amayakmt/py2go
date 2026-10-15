@@ -1,0 +1,7 @@
+('image/png', None) ('application/x-tar', 'gzip') ('text/html', None) (None, None)
+('application/json', None) ('text/plain', None) ('image/jpeg', None)
+.html .jpg ['.bat', '.brf', '.c']
+(None, None) ('audio/mpeg', None)
+('application/x-foo', None) .foo
+('alice', '', 's3cret') ('anon', '', 'guest') ['default', 'example.com']
+machine example.com
