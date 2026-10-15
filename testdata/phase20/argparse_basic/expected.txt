@@ -1,0 +1,33 @@
+Namespace(path='in.txt', count=3, verbose=True, mode='slow', x=['a', 'b'], level=2, rest=['r1', 'r2'])
+in.txt 3 True slow ['a', 'b'] 2 ['r1', 'r2']
+{'path': 'f', 'count': 1, 'verbose': False, 'mode': 'fast', 'x': [], 'level': 0, 'rest': []}
+(Namespace(path='f', count=1, verbose=False, mode='fast', x=[], level=0, rest=['1']), ['--unknown'])
+usage: tool [-h] [-n COUNT] [-v] [--mode {fast,slow}] [-x X] [--level]
+            path [rest ...]
+
+usage: tool [-h] [-n COUNT] [-v] [--mode {fast,slow}] [-x X] [--level]
+            path [rest ...]
+
+A tool.
+
+positional arguments:
+  path                input path
+  rest
+
+options:
+  -h, --help          show this help message and exit
+  -n, --count COUNT   how many
+  -v, --verbose
+  --mode {fast,slow}
+  -x X
+  --level
+
+Namespace(cmd='add', files=['a', 'b'])
+Namespace(cmd='commit', message='msg')
+Namespace(a=True, b=False, n=2.5, flag=True)
+Namespace(a=False, b=False, n=0.5, flag=False)
+exit 2
+exit 2
+exit 2
+ArgumentError the following arguments are required: --k
+Namespace(a=1, b='x')

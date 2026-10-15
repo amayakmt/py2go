@@ -1,0 +1,8 @@
+('math', True, 'dflt') True False
+/ True
+a/b
+skip
+linux
+1.0 None 0
+['math', 'json']
+True False

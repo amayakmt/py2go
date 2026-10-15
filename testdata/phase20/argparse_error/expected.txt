@@ -1,0 +1,2 @@
+Namespace(path='a', n=5)
+Namespace(path='b', n=2)

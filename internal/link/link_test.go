@@ -3,7 +3,6 @@ package link
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/amayakmt/py2go/internal/pyast"
@@ -140,10 +139,13 @@ func TestLinkLeavesTheStandardLibraryToTheCompiler(t *testing.T) {
 	}
 }
 
-func TestLinkModuleAsValueIsRejected(t *testing.T) {
-	_, err := project(t, map[string]string{"main.py": "import util\nprint(util)\n", "util.py": "X = 1\n"})
-	if err == nil || !strings.Contains(err.Error(), "module 'util' used as a value") {
-		t.Errorf("got %v", err)
+func TestLinkModuleAsValueIsAModuleObject(t *testing.T) {
+	mod, err := project(t, map[string]string{"main.py": "import util\nprint(util)\n", "util.py": "X = 1\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !names(mod)["_native"] {
+		t.Errorf("a module used as a value should be a call to _native")
 	}
 }
 

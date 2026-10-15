@@ -1,0 +1,9 @@
+{'a': 1, 'b': 2}
+{'x': 1, 'y': 'two', 'z': [3]}
+{'k': 1, 'v': 's'} {'a': 1, 'b': 2}
+{'q': 1} {'q': 1, 'flag': True, 'n': 1}
+False True False
+{'k': 1} plain
+not all arguments converted during string formatting
+['zeta', 'alpha', 'mid']
+['zeta', 'mid', 'alpha'] {'zeta': 1, 'mid': 3, 'alpha': 9}
