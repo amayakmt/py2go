@@ -922,6 +922,52 @@ func (g *generator) convertCall(name string, n *pyast.Call) (value, error) {
 
 // dictFromKeywords is dict(a=1, b=2), a dict with str keys.
 func (g *generator) dictFromKeywords(n *pyast.Call) (value, error) {
+	mixed := false
+	if len(n.Args) == 0 {
+		var first pyType
+		for i, kw := range n.Keywords {
+			if kw.Arg == "" {
+				break
+			}
+			v, err := g.typedExpr(kw.Value)
+			if err != nil {
+				return value{}, err
+			}
+			if i == 0 {
+				first = v.typ
+			} else if v.typ != first {
+				mixed = true
+			}
+		}
+	}
+	if len(n.Args) == 1 || mixed {
+		// dict(mapping, a=1) and keywords of different types: a dict of objects.
+		var base = "nil"
+		strKeys := true
+		if len(n.Args) == 1 {
+			b, err := g.typedExpr(n.Args[0])
+			if err != nil {
+				return value{}, err
+			}
+			base = g.boxed(b)
+			strKeys = b.typ.isDict() && b.typ.keyType() == tStr
+		}
+		args := []string{base}
+		for _, kw := range n.Keywords {
+			if kw.Arg == "" {
+				return value{}, unsupported("dict(**mapping)", kw.Line())
+			}
+			v, err := g.typedExpr(kw.Value)
+			if err != nil {
+				return value{}, err
+			}
+			args = append(args, strconv.Quote(pyName(kw.Arg)), g.boxed(v))
+		}
+		if strKeys {
+			return value{code: g.rt("StrDictWith") + "(" + strings.Join(args, ", ") + ")", typ: dictOf(tStr, tObject), prec: precAtom}, nil
+		}
+		return g.dynValue(g.rt("DynDictWith")+"("+strings.Join(args, ", ")+")", dictOf(tObject, tObject)), nil
+	}
 	if len(n.Args) != 0 {
 		return value{}, unsupported("dict() with positional and keyword arguments", n.Line())
 	}

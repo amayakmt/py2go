@@ -655,6 +655,40 @@ func DynSet(v any) *Set[any] {
 }
 
 // DynDict is dict(x): from another dict or from pairs.
+// DynDictWith is dict(base, k1=v1, ...): kv holds the keyword names and values.
+func DynDictWith(base any, kv ...any) *Dict[any, any] {
+	var out *Dict[any, any]
+	if base == nil {
+		out = NewDict[any, any]()
+	} else {
+		out = DynDict(base)
+	}
+	for i := 0; i+1 < len(kv); i += 2 {
+		out.Set(kv[i], kv[i+1])
+	}
+	return out
+}
+
+// StrDictWith is DynDictWith for a base whose keys are strings.
+func StrDictWith(base any, kv ...any) *Dict[string, any] {
+	out := NewDict[string, any]()
+	if base != nil {
+		d := DynDict(base)
+		for c := d.Iter(); c.Next(); {
+			k := c.Value()
+			ks, ok := Unbox(k).(string)
+			if !ok {
+				panic(newError("TypeError", "keywords must be strings"))
+			}
+			out.Set(ks, d.Get(k))
+		}
+	}
+	for i := 0; i+1 < len(kv); i += 2 {
+		out.Set(kv[i].(string), kv[i+1])
+	}
+	return out
+}
+
 func DynDict(v any) *Dict[any, any] {
 	v = Unbox(v)
 	out := NewDict[any, any]()

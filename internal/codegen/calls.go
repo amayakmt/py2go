@@ -293,7 +293,7 @@ func (g *generator) bindCall(n *pyast.Call, sig *funcSig, callee, fname string) 
 		val := sig.kwarg.typ.valType()
 		pairs := make([]string, len(kwVals))
 		for i, k := range kwVals {
-			pairs[i] = fmt.Sprintf("%s[string, %s]{Key: %s, Val: %s}", g.rt("KV"), g.goType(val), strconv.Quote(kwEntries[i].name), ref[k])
+			pairs[i] = fmt.Sprintf("%s[string, %s]{Key: %s, Val: %s}", g.rt("KV"), g.goType(val), strconv.Quote(pyName(kwEntries[i].name)), ref[k])
 		}
 		codes = append(codes, g.rt("NewDict")+"[string, "+g.goType(val)+"]("+strings.Join(pairs, ", ")+")")
 	}

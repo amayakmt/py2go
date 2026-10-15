@@ -1310,14 +1310,36 @@ type attrNamer interface{ PyAttrNames() []string }
 
 // AttrNames is the attributes of an instance: the declared ones, then the
 // ones that were added.
-func AttrNames(declared []string, extra map[string]any) []string {
+func AttrNames(declared []string, extra map[string]any, order []string) []string {
 	out := append([]string{}, declared...)
+	seen := map[string]bool{}
+	for _, d := range declared {
+		seen[d] = true
+	}
+	for _, k := range order {
+		if _, ok := extra[k]; ok && !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
 	var more []string
 	for k := range extra {
-		more = append(more, k)
+		if !seen[k] {
+			more = append(more, k)
+		}
 	}
 	sortStrings(more)
 	return append(out, more...)
+}
+
+// DropName removes name from an insertion-ordered list of attribute names.
+func DropName(names []string, name string) []string {
+	for i, n := range names {
+		if n == name {
+			return append(names[:i:i], names[i+1:]...)
+		}
+	}
+	return names
 }
 
 // DynVars is vars(obj) / obj.__dict__: a copy of the attributes.

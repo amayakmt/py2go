@@ -155,7 +155,7 @@ func init() {
 		return int64(fd)
 	})
 	RegisterNative("posix.dup2", func(args []any, kw []KW) any {
-		if err := syscall.Dup2(int(DynInt(args[0])), int(DynInt(args[1]))); err != nil {
+		if err := sysDup2(int(DynInt(args[0])), int(DynInt(args[1]))); err != nil {
 			panic(sysError(err))
 		}
 		return DynInt(args[1])

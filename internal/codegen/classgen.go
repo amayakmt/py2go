@@ -271,7 +271,7 @@ func (g *generator) emitClassTypes(out *strings.Builder, c *classInfo) error {
 	// The struct.
 	// The byte keeps the struct from being zero-sized, since Go may give
 	// all pointers to zero-sized values one address, and instances must differ.
-	fields := []string{"_pyid byte", "_pyd map[string]any"}
+	fields := []string{"_pyid byte", "_pyd map[string]any", "_pyo []string"}
 	if c.exc {
 		fields = append(fields, g.rt("ExcBase"))
 	}

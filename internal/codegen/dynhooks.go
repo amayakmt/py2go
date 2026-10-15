@@ -163,7 +163,7 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 			methodNames = append(methodNames, strconv.Quote(pyName(n)))
 		}
 	}
-	fmt.Fprintf(out, "func %s PyAttrNames() []string {\nreturn %s([]string{%s}, self._pyd)\n}\n", recv, g.rt("AttrNames"), strings.Join(fields, ", "))
+	fmt.Fprintf(out, "func %s PyAttrNames() []string {\nreturn %s([]string{%s}, self._pyd, self._pyo)\n}\n", recv, g.rt("AttrNames"), strings.Join(fields, ", "))
 	fmt.Fprintf(out, "func %s PyMethodNames() []string {\nreturn []string{%s}\n}\n", recv, strings.Join(methodNames, ", "))
 	fmt.Fprintf(out, "func %s PySetAttr(name string, v any) bool {\n", recv)
 	if len(sets) > 0 {
@@ -172,9 +172,9 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 	if c.dc != nil && c.dc.frozen {
 		fmt.Fprintf(out, "panic(%s(name))\n}\n", g.rt("FrozenInstance"))
 	} else {
-		out.WriteString("if self._pyd == nil {\nself._pyd = map[string]any{}\n}\nself._pyd[name] = v\nreturn true\n}\n")
+		out.WriteString("if self._pyd == nil {\nself._pyd = map[string]any{}\n}\nif _, had := self._pyd[name]; !had {\nself._pyo = append(self._pyo, name)\n}\nself._pyd[name] = v\nreturn true\n}\n")
 	}
-	fmt.Fprintf(out, "func %s PyDelAttr(name string) bool {\nif _, ok := self._pyd[name]; ok {\ndelete(self._pyd, name)\nreturn true\n}\nreturn false\n}\n", recv)
+	fmt.Fprintf(out, "func %s PyDelAttr(name string) bool {\nif _, ok := self._pyd[name]; ok {\ndelete(self._pyd, name)\nself._pyo = %s(self._pyo, name)\nreturn true\n}\nreturn false\n}\n", recv, g.rt("DropName"))
 	if m := c.lookup("__getattr__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && !m.special {
 		fmt.Fprintf(out, "func %s PyGetAttrHook(name string) (any, bool) {\nreturn self.M___getattr__(name), true\n}\n", recv)
 	}

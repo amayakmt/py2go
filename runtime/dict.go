@@ -432,7 +432,12 @@ func (v *KeysView[K, V]) pyEq(other any) bool {
 // GetOpt is d.get(k): the value, or None when the key is missing.
 func (d *Dict[K, V]) GetOpt(k K) Opt[V] {
 	if i, ok := d.index[normKey(k)]; ok {
-		return Some(d.entries[i].val)
+		v := d.entries[i].val
+		if IsNone(any(v)) {
+			// A dict of objects holds None as nil.
+			return NoneOf[V]()
+		}
+		return Some(v)
 	}
 	return NoneOf[V]()
 }

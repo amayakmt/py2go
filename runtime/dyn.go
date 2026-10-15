@@ -861,7 +861,9 @@ func PercentFormat(format string, args any) string {
 			panic(valueError(fmt.Sprintf("unsupported format character '%c' (0x%x) at index %d", verb, verb, utf8.RuneCountInString(format[:i]))))
 		}
 	}
-	if next < len(list) && !usedMapping {
+	_, isSeq := args.(Seq)
+	_, mapping := args.(interface{ GetItemAny(any) any })
+	if next < len(list) && !usedMapping && !(mapping && !isSeq) {
 		panic(newError("TypeError", "not all arguments converted during string formatting"))
 	}
 	return b.String()

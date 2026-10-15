@@ -56,7 +56,7 @@ func Load(entry string, load Loader) (*pyast.Module, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pyast.Module{Body: body}, nil
+	return &pyast.Module{Body: append(l.moduleRegistrations(), body...)}, nil
 }
 
 type module struct {
@@ -74,6 +74,8 @@ type module struct {
 	defined   map[string]bool // names bound by the statements run so far
 	aliases   map[string]alias
 	allNames  []string // names exported by "from m import *"
+
+	annotationMods map[string]bool // names bound to the typing or dataclasses module
 }
 
 // alias is what an imported name stands for in one module.
@@ -87,6 +89,8 @@ type linker struct {
 	load  Loader
 	mods  map[string]*module
 	enums map[string]*enumInfo
+
+	valueMods []*module // modules used as values, in order of first use
 }
 
 func (m *module) pkgName() string {
@@ -532,6 +536,40 @@ func raiseClass(class, msg string, line int) pyast.Node {
 func (r *rewriter) stmt(n pyast.Node) ([]pyast.Node, error) {
 	switch x := n.(type) {
 	case *pyast.Import:
+		var rest []pyast.Alias
+		for _, a := range x.Names {
+			if a.Name == "typing" || a.Name == "dataclasses" {
+				if r.m.annotationMods == nil {
+					r.m.annotationMods = map[string]bool{}
+				}
+				bind := a.AsName
+				if bind == "" {
+					bind = a.Name
+				}
+				r.m.annotationMods[bind] = true
+				continue
+			}
+			rest = append(rest, a)
+		}
+		if len(rest) != len(x.Names) {
+			if r.m.annotationMods["dataclasses"] || len(r.m.annotationMods) > 0 {
+				for _, a := range x.Names {
+					if a.Name == "dataclasses" {
+						imp := &pyast.ImportFrom{Module: "dataclasses", Names: []pyast.Alias{{Name: "dataclass"}, {Name: "field"}}, Lineno: x.Lineno}
+						if len(rest) == 0 {
+							return []pyast.Node{imp}, nil
+						}
+						x = &pyast.Import{Names: rest, Lineno: x.Lineno}
+						return append([]pyast.Node{imp}, x), nil
+					}
+				}
+			}
+			if len(rest) == 0 {
+				return passIfEmpty(nil, x.Lineno), nil
+			}
+			x = &pyast.Import{Names: rest, Lineno: x.Lineno}
+			n = x
+		}
 		for _, a := range x.Names {
 			if missing, gone := r.l.unavailable(a.Name); gone {
 				return []pyast.Node{raiseNotFound(missing, x.Lineno)}, nil
@@ -666,7 +704,7 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 		}
 		if a, ok := r.m.aliases[x.ID]; ok {
 			if a.name == "" {
-				return nil, fmt.Errorf("unsupported: module '%s' used as a value at line %d", a.mod.name, x.Lineno)
+				return r.l.moduleValue(a.mod, x.Lineno)
 			}
 			return &pyast.Name{ID: a.mod.prefixOf() + a.name, Lineno: x.Lineno}, nil
 		}
@@ -770,6 +808,11 @@ func (r *rewriter) attribute(x *pyast.Attribute) (pyast.Node, bool, error) {
 	if !ok || r.local(nm.ID) {
 		return nil, false, nil
 	}
+	// typing.List, dataclasses.dataclass: the compiler knows these names
+	// without an import, so the module qualifier is dropped.
+	if len(chain) == 1 && r.m.annotationMods[nm.ID] {
+		return &pyast.Name{ID: x.Attr, Lineno: x.Lineno}, true, nil
+	}
 	a, ok := r.m.aliases[nm.ID]
 	if !ok {
 		return nil, false, nil
@@ -809,7 +852,8 @@ func (r *rewriter) attribute(x *pyast.Attribute) (pyast.Node, bool, error) {
 		continue
 	}
 	if cur.name == "" {
-		return nil, true, fmt.Errorf("unsupported: module '%s' used as a value at line %d", cur.mod.name, x.Lineno)
+		v, err := r.l.moduleValue(cur.mod, x.Lineno)
+		return v, true, err
 	}
 	return &pyast.Name{ID: cur.mod.prefixOf() + cur.name, Lineno: x.Lineno}, true, nil
 }
