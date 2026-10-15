@@ -1320,14 +1320,14 @@
    "name": "ntpath",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "nturl2path",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
