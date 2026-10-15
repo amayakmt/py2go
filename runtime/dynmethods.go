@@ -16,6 +16,7 @@ var strMethodNames = names("encode translate isprintable isascii format_map uppe
 var listMethodNames = names("append pop insert remove index count sort reverse extend copy clear")
 var dictMethodNames = names("get pop popitem setdefault update copy clear keys values items")
 var setMethodNames = names("add remove discard pop union intersection difference symmetric_difference issubset issuperset isdisjoint update intersection_update difference_update symmetric_difference_update copy clear")
+var dunderNames = names("__getitem__ __setitem__ __delitem__ __len__ __contains__ __iter__ __eq__ __ne__ __str__ __repr__ __bool__")
 var tupleMethodNames = names("count index")
 var numMethodNames = names("bit_length bit_count is_integer conjugate as_integer_ratio to_bytes hex fromhex")
 
@@ -68,6 +69,14 @@ func builtinAttr(obj any, name string) (any, bool) {
 		}
 	}
 	if table == nil || !table[name] {
+		if _, user := obj.(Named); !user && dunderNames[name] && obj != nil {
+			return func(args ...any) any {
+				if r, ok := dunderMethod(obj, name, args); ok {
+					return r
+				}
+				panic(NoAttribute(TypeName(obj), name))
+			}, true
+		}
 		return nil, false
 	}
 	return func(args ...any) any {

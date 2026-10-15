@@ -376,6 +376,37 @@ func RegisterClassAttr(class, name string, get func() any) {
 // first, so that an inherited class attribute is found.
 func RegisterClassBases(chain ...string) { classBases[chain[0]] = chain }
 
+var classMembers = map[string][]string{}
+
+var classCallables = map[string]map[string]func() any{}
+
+// RegisterClassCallable records how to read a classmethod or staticmethod of
+// a class of the program as a value of that class.
+func RegisterClassCallable(class, name string, get func() any) {
+	m := classCallables[class]
+	if m == nil {
+		m = map[string]func() any{}
+		classCallables[class] = m
+	}
+	m[name] = get
+}
+
+// RegisterClassMembers records the names of the methods, properties and
+// class attributes a class of the program has, inherited ones included, for
+// dir(cls) and getattr(cls, name).
+func RegisterClassMembers(class string, names ...string) { classMembers[class] = names }
+
+// classHasMember tells whether a class of the program has a method or
+// attribute of that name.
+func classHasMember(class, name string) bool {
+	for _, n := range classMembers[class] {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 func lookupClassAttr(class, name string) (any, bool) {
 	chain := classBases[class]
 	if chain == nil {

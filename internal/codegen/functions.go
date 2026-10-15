@@ -1201,7 +1201,9 @@ func (g *generator) hoistBlockLocals(b *strings.Builder, fn *pyast.FunctionDef, 
 			case *pyast.With:
 				for _, it := range x.Items {
 					if it.Vars != nil {
-						bind(it.Vars, depth)
+						// The with statement is emitted in a block of its own,
+						// so its names are hoisted like those of a nested block.
+						bind(it.Vars, depth+1)
 					}
 				}
 				visitStmts(x.Body, depth+1)

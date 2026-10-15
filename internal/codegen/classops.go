@@ -442,7 +442,7 @@ func (g *generator) typeSpecs(n pyast.Node) ([]typeSpec, error) {
 			specs = append(specs, typeSpec{object: true})
 		case name.ID == "int" || name.ID == "str" || name.ID == "float" || name.ID == "bool" ||
 			name.ID == "list" || name.ID == "dict" || name.ID == "set" || name.ID == "tuple" || name.ID == "range" ||
-			name.ID == "complex" || name.ID == "bytes" || name.ID == "bytearray" || name.ID == "frozenset" || name.ID == "slice":
+			name.ID == "complex" || name.ID == "type" || name.ID == "bytes" || name.ID == "bytearray" || name.ID == "frozenset" || name.ID == "slice":
 			specs = append(specs, typeSpec{builtin: name.ID})
 		default:
 			return nil, unsupported(fmt.Sprintf("isinstance() with '%s'", name.ID), node.Line())

@@ -142,6 +142,26 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		}
 	}
 	fmt.Fprintf(main, "%s(%s)\n", g.rt("RegisterClassBases"), strings.Join(bases, ", "))
+	var members []string
+	for _, n := range c.orderedNames() {
+		m := c.lookup(n)
+		if m == nil || m.kind == mField || isDunder(n) {
+			continue
+		}
+		members = append(members, strconv.Quote(pyName(n)))
+	}
+	if c.generic == nil && !c.exc {
+		for _, n := range c.visibleNames() {
+			m := c.lookup(n)
+			if m == nil || isDunder(n) || m.sig == nil || (m.kind != mClassMethod && m.kind != mStatic) {
+				continue
+			}
+			fmt.Fprintf(main, "%s(%s, %s, func() any {\nself := &%s{}\nreturn %s\n})\n", g.rt("RegisterClassCallable"), strconv.Quote(c.pyName()), strconv.Quote(pyName(n)), c.goStruct(), g.dynBound(c, m))
+		}
+	}
+	if len(members) > 0 {
+		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClassMembers"), strconv.Quote(c.pyName()), strings.Join(members, ", "))
+	}
 	if g.usesPickle && c.generic == nil {
 		fmt.Fprintf(main, "%s(%s, func() any { return &%s{} })\n", g.rt("RegisterAlloc"), strconv.Quote(c.pyName()), c.goStruct())
 	}

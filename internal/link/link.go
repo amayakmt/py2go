@@ -46,6 +46,8 @@ func Load(entry string, load Loader) (*pyast.Module, error) {
 	if err != nil {
 		return nil, err
 	}
+	rewriteTestDecorators(mod)
+	injectTestClasses(mod)
 	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}, enums: map[string]*enumInfo{}}
 	m := &module{name: "__main__", file: abs, ast: mod, entry: true}
 	l.mods[m.name] = m
@@ -164,6 +166,7 @@ func (l *linker) find(name string) (*module, error) {
 					return nil, err
 				}
 				m.ast = ast
+				rewriteTestDecorators(ast)
 			}
 			l.mods[pkgName] = m
 			l.begin(m)

@@ -357,6 +357,8 @@ func DynGetAttr(obj any, name string) any {
 			return f
 		case "__module__":
 			return "__main__"
+		case "__doc__":
+			return nil
 		}
 		panic(newError("AttributeError", "'function' object has no attribute '"+name+"'"))
 	}
@@ -381,6 +383,17 @@ func DynGetAttr(obj any, name string) any {
 		if !c.Builtin {
 			if v, ok := lookupClassAttr(c.Name, name); ok {
 				return v
+			}
+			if get, ok := classCallables[c.Name][name]; ok {
+				return get()
+			}
+			if classHasMember(c.Name, name) {
+				return func(args ...any) any {
+					if len(args) == 0 {
+						panic(newError("TypeError", name+"() missing 1 required positional argument: 'self'"))
+					}
+					return DynCallMethod(args[0], name, args[1:], nil)
+				}
 			}
 		}
 		panic(newError("AttributeError", "type object '"+c.Name+"' has no attribute '"+name+"'"))
@@ -502,6 +515,10 @@ func IsInstanceName(x any, name string, builtin bool) bool {
 	x = Unbox(x)
 	if name == "object" && builtin {
 		return true
+	}
+	if name == "type" && builtin {
+		_, isClass := x.(*ClassRef)
+		return isClass
 	}
 	if m, ok := x.(interface{ PyMRO() []string }); ok && !builtin {
 		for _, n := range m.PyMRO() {
@@ -1327,6 +1344,15 @@ func DynDir(obj any) *List[string] {
 			if !seen[n] {
 				seen[n] = true
 				names = append(names, n)
+			}
+		}
+	}
+	if c, ok := obj.(*ClassRef); ok && !c.Builtin {
+		add(classMembers[c.Name])
+		for _, k := range classBases[c.Name] {
+			add(classMembers[k])
+			for n := range classAttrs[k] {
+				add([]string{n})
 			}
 		}
 	}
