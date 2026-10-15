@@ -108,3 +108,15 @@ def audit(event, *args):
 
 def addaudithook(hook):
     return None
+
+
+_int_max_str_digits = 4300
+
+
+def get_int_max_str_digits():
+    return _int_max_str_digits
+
+
+def set_int_max_str_digits(maxdigits):
+    global _int_max_str_digits
+    _int_max_str_digits = maxdigits

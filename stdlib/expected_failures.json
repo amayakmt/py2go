@@ -1,0 +1,11 @@
+{
+  "reasons": [
+    "address-dependent output",
+    "refcount timing",
+    "thread scheduling",
+    "unavailable C library",
+    "platform"
+  ],
+  "note": "The conformance harness over Lib/test does not exist yet (the roadmap's phase 20, step 3), so there are no per-test entries. Modules that cannot work in a cgo-free build are listed in stdlib/manifest.json with status todo and in docs/known-differences.md.",
+  "tests": []
+}
