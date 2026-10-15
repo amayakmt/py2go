@@ -532,6 +532,11 @@ func raiseClass(class, msg string, line int) pyast.Node {
 func (r *rewriter) stmt(n pyast.Node) ([]pyast.Node, error) {
 	switch x := n.(type) {
 	case *pyast.Import:
+		for _, a := range x.Names {
+			if missing, gone := r.l.unavailable(a.Name); gone {
+				return []pyast.Node{raiseNotFound(missing, x.Lineno)}, nil
+			}
+		}
 		res, err := r.importStmt(x)
 		if err != nil {
 			return nil, err
@@ -546,6 +551,11 @@ func (r *rewriter) stmt(n pyast.Node) ([]pyast.Node, error) {
 		}
 		return passIfEmpty(res, x.Lineno), nil
 	case *pyast.ImportFrom:
+		if name, ok := r.absolute(x); ok {
+			if missing, gone := r.l.unavailable(name); gone {
+				return []pyast.Node{raiseNotFound(missing, x.Lineno)}, nil
+			}
+		}
 		res, raises, err := r.importFromStmt(x)
 		if err != nil {
 			return nil, err
