@@ -1,0 +1,10 @@
+test_add (__main__.MathTests.test_add) ... ok
+test_raises (__main__.MathTests.test_raises) ... ok
+test_true (__main__.MathTests.test_true) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in Xs
+
+OK
+
+3 True 0 0

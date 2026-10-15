@@ -1,0 +1,36 @@
+  one
+- two
++ tow
+  three
+- four
++ five
++ six
+--- a.txt
++++ b.txt
+@@ -1,4 +1,5 @@
+ one
+-two
++tow
+ three
+-four
++five
++six
+*** a.txt
+--- b.txt
+***************
+*** 1,4 ****
+  one
+! two
+  three
+! four
+--- 1,5 ----
+  one
+! tow
+  three
+! five
+! six
+0.8888888888888888 [Match(a=0, b=0, size=2), Match(a=3, b=2, size=2), Match(a=5, b=4, size=0)]
+[('equal', 0, 2, 0, 2), ('delete', 2, 3, 2, 2), ('equal', 3, 5, 2, 4)]
+['apple', 'ape']
+['  a\n', '- b\n', '+ c\n']
+0.9230769230769231

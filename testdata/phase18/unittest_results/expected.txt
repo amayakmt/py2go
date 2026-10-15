@@ -1,0 +1,105 @@
+test_error (__main__.Fixtures.test_error) ... ERROR
+test_fail (__main__.Fixtures.test_fail) ... FAIL
+test_pass (__main__.Fixtures.test_pass) ... ok
+test_skip_if (__main__.Fixtures.test_skip_if) ... skipped 'cond'
+test_skip_unless_ok (__main__.Fixtures.test_skip_unless_ok) ... ok
+test_skipped (__main__.Fixtures.test_skipped) ... skipped 'not today'
+test_skiptest (__main__.Fixtures.test_skiptest) ... skipped 'runtime skip'
+test_subtests (__main__.Fixtures.test_subtests) ... 
+  test_subtests (__main__.Fixtures.test_subtests) (i=1) ... FAIL
+test_xfail (__main__.Fixtures.test_xfail) ... expected failure
+test_xpass (__main__.Fixtures.test_xpass) ... unexpected success
+
+
+FAILED (failures=2, errors=1, skipped=3, expected failures=1, unexpected successes=1)
+10 2 1 3 1 1
+FAIL __main__.Fixtures.test_fail ?        ^
+FAIL __main__.Fixtures.test_subtests (i=1) AssertionError: 1 == 1
+ERROR __main__.Fixtures.test_error KeyError: 'boom'
+SKIP __main__.Fixtures.test_skip_if cond
+SKIP __main__.Fixtures.test_skipped not today
+SKIP __main__.Fixtures.test_skiptest runtime skip
+['setUpClass', 'setUp test_error', 'tearDown test_error', 'setUp test_fail', 'tearDown test_fail', 'setUp test_pass', 'tearDown test_pass', 'cleanup', 'setUp test_skip_unless_ok', 'tearDown test_skip_unless_ok', 'setUp test_skiptest', 'tearDown test_skiptest', 'setUp test_subtests', 'tearDown test_subtests', 'setUp test_xfail', 'tearDown test_xfail', 'setUp test_xpass', 'tearDown test_xpass', 'tearDownClass']
+1 != 2
+--
+'a' != 'b'
+- a
++ b
+ : custom
+--
+3 == 3
+--
+0 is not true
+--
+1 is not false
+--
+1 is not 2
+--
+3 is not None
+--
+5 not found in [1, 2]
+--
+1 unexpectedly found in [1, 2]
+--
+1 is not an instance of <class 'str'>
+--
+1 not greater than 2
+--
+3 not less than or equal to 2
+--
+1.0 != 1.5 within 7 places (0.5 difference)
+--
+Lists differ: [1, 2] != [1, 3]
+
+First differing element 1:
+2
+3
+
+- [1, 2]
+?     ^
+
++ [1, 3]
+?     ^
+
+--
+{'a': 1} != {'a': 2}
+- {'a': 1}
+?       ^
+
++ {'a': 2}
+?       ^
+
+--
+Items in the first set but not the second:
+1
+Items in the second set but not the first:
+3
+--
+Tuples differ: (1,) != (1, 2)
+
+Second tuple contains 1 additional elements.
+First extra element 1:
+2
+
+- (1,)
++ (1, 2)
+?    ++
+
+--
+'a\nb' != 'a\nc'
+  a
+- b
++ c
+
+--
+Regex didn't match: 'xyz' not found in 'hello'
+--
+Element counts were not equal:
+First has 2, Second has 1:  2
+--
+ValueError not raised by int
+--
+explicit
+--
+ValueError invalid literal for int() with base 10: 'x'
+OK True

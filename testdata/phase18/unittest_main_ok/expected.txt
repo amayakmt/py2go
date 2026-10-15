@@ -1,0 +1,8 @@
+A.test_one
+A.test_two
+A.test_one
+B.test_three
+A.test_two
+ran 5 True
+3 ['test_one (__main__.B.test_one)', 'test_three (__main__.B.test_three)', 'test_two (__main__.B.test_two)']
+A.test_one

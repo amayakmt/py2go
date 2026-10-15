@@ -1,0 +1,36 @@
+False 0 None
+True 1 call(1, 2, key='v') [call(1, 2, key='v')]
+True True
+Expected 'mock' to have been called once. Called 2 times.
+Calls: [call(1, 2, key='v'), call(3)].
+expected call not found.
+Expected: mock(9)
+  Actual: mock(3)
+mock(5) call not found
+Expected 'mock' to not have been called. Called 2 times.
+Calls: [call(1, 2, key='v'), call(3)].
+[call(1, 2, key='v'), call(3)]
+42 42
+1 2
+raised bad
+42
+raised KeyError('k')
+r call(1) [call.method(1)] [call.method(1)]
+[call.method(1), call.other.deep(2)]
+expected call not found.
+Expected: method(2)
+  Actual: method(1)
+[call(), call().x(5)]
+ok
+call(1, a=2) call.foo(1) call.foo.bar() True
+True True True
+False [] 0
+0 True [] False 1
+10
+None 1 2
+AttributeError Mock object has no attribute 'beta'
+99
+1
+['a', 'b']
+['a']
+sentinel.thing sentinel.DEFAULT

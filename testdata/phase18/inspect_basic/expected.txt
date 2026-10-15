@@ -1,0 +1,14 @@
+True False False
+True False False True
+True True False
+(a, b=2, *args, c, d=4, **kw)
+['a', 'b', 'args', 'c', 'd', 'kw']
+b 2 True True
+True
+()
+{'a': 1, 'b': 2, 'args': (), 'c': 3, 'd': 4, 'kw': {}}
+TypeError missing a required argument: 'c'
+['method']
+first
+  second
+third
