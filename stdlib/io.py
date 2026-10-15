@@ -649,6 +649,9 @@ class TextIOWrapper(TextIOBase):
         self._loaded = False
         self._seen = 0
         self._detached = False
+        self._eof = False
+        self._carry = b""
+        self._cr = False
 
     @property
     def encoding(self) -> object:
@@ -702,67 +705,147 @@ class TextIOWrapper(TextIOBase):
         if self._loaded:
             return
         self._loaded = True
-        data = self.buffer.read()
-        if data is None:
-            data = b""
-        text = bytes(data).decode(self._encoding, self._errors)
+        self._eof = False
+        self._carry = b""
+        self._cr = False
+
+    def _fill(self):
+        if self._eof:
+            return False
+        self._load()
+        if hasattr(self.buffer, "read1"):
+            chunk = self.buffer.read1(8192)
+        else:
+            chunk = self.buffer.read(8192)
+        if chunk is None:
+            chunk = b""
+        data = self._carry + bytes(chunk)
+        self._carry = b""
+        if not chunk:
+            self._eof = True
+            if data:
+                text = data.decode(self._encoding, self._errors)
+            else:
+                text = ""
+            if self._cr:
+                self._cr = False
+                text = "\r" + text if False else text
+            self._append(text, True)
+            return bool(text)
+        enc = self._encoding.lower().replace("_", "-")
+        if enc in ("utf-8", "utf8", "u8", "utf"):
+            cut = len(data)
+            i = len(data) - 1
+            back = 0
+            while i >= 0 and back < 4 and (data[i] & 0xC0) == 0x80:
+                i -= 1
+                back += 1
+            if i >= 0 and data[i] >= 0xC0:
+                need = 2 if data[i] < 0xE0 else (3 if data[i] < 0xF0 else 4)
+                if len(data) - i < need:
+                    cut = i
+            self._carry = data[cut:]
+            data = data[:cut]
+        text = data.decode(self._encoding, self._errors)
+        self._append(text, False)
+        return True
+
+    def _append(self, text, final):
         if self._newline is None:
-            if "\r\n" in text:
-                self._seen |= 4
-            text = text.replace("\r\n", "\n")
-            if "\r" in text:
-                self._seen |= 2
+            if self._cr:
+                self._cr = False
+                if text.startswith("\n"):
+                    text = text[1:]
+            if not final and text.endswith("\r"):
+                text = text[:-1]
+                self._cr = True
+                self._text += self._translate(text) + "\n"
+                return
+            text = self._translate(text)
+        elif self._newline == "":
             if "\n" in text:
                 self._seen |= 1
-            text = text.replace("\r", "\n")
-        elif self._newline == "":
-            self._seen |= 1 if "\n" in text else 0
-        self._text = text
-        self._pos = 0
+        self._text += text
+
+    def _translate(self, text):
+        if "\r\n" in text:
+            self._seen |= 4
+        text = text.replace("\r\n", "\n")
+        if "\r" in text:
+            self._seen |= 2
+        if "\n" in text:
+            self._seen |= 1
+        return text.replace("\r", "\n")
 
     def read(self, size=-1):
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         self._load()
         if size is None or size < 0:
+            while self._fill():
+                pass
             r = self._text[self._pos:]
-            self._pos = len(self._text)
-        else:
-            r = self._text[self._pos:self._pos + size]
-            self._pos += len(r)
+            self._text = ""
+            self._pos = 0
+            return r
+        while len(self._text) - self._pos < size and self._fill():
+            pass
+        r = self._text[self._pos:self._pos + size]
+        self._pos += len(r)
+        self._compact()
         return r
+
+    def _compact(self):
+        if self._pos > 65536:
+            self._text = self._text[self._pos:]
+            self._pos = 0
 
     def readline(self, size=-1):
         if self.closed:
             raise ValueError("I/O operation on closed file.")
         self._load()
-        text = self._text
-        start = self._pos
-        if self._newline is None or self._newline == "\n":
-            term = "\n"
-            i = text.find("\n", start)
-            end = len(text) if i < 0 else i + 1
-        elif self._newline == "\r":
-            i = text.find("\r", start)
-            end = len(text) if i < 0 else i + 1
-        elif self._newline == "\r\n":
-            i = text.find("\r\n", start)
-            end = len(text) if i < 0 else i + 2
-        else:
-            i = start
-            end = len(text)
-            while i < len(text):
-                if text[i] == "\n":
+        while True:
+            text = self._text
+            start = self._pos
+            end = -1
+            if self._newline is None or self._newline == "\n":
+                i = text.find("\n", start)
+                if i >= 0:
                     end = i + 1
-                    break
-                if text[i] == "\r":
-                    end = i + 2 if text[i + 1:i + 2] == "\n" else i + 1
-                    break
-                i += 1
+            elif self._newline == "\r":
+                i = text.find("\r", start)
+                if i >= 0:
+                    end = i + 1
+            elif self._newline == "\r\n":
+                i = text.find("\r\n", start)
+                if i >= 0:
+                    end = i + 2
+            else:
+                i = start
+                while i < len(text):
+                    if text[i] == "\n":
+                        end = i + 1
+                        break
+                    if text[i] == "\r":
+                        if i + 1 < len(text):
+                            end = i + 2 if text[i + 1] == "\n" else i + 1
+                            break
+                        break
+                    i += 1
+            if end >= 0:
+                break
+            if size is not None and size >= 0 and len(text) - start >= size:
+                break
+            if not self._fill():
+                end = len(self._text)
+                break
         if size is not None and size >= 0 and end - start > size:
             end = start + size
+        text = self._text
         self._pos = end
-        return text[start:end]
+        r = text[start:end]
+        self._compact()
+        return r
 
     def __next__(self):
         line = self.readline()
@@ -800,6 +883,8 @@ class TextIOWrapper(TextIOBase):
             self._loaded = False
             self._text = ""
             self._pos = 0
+            self._eof = False
+            self._carry = b""
             self.buffer.seek(cookie)
             return cookie
         if whence == 1 and cookie == 0:
@@ -808,12 +893,15 @@ class TextIOWrapper(TextIOBase):
             self._loaded = True
             self._text = ""
             self._pos = 0
+            self._eof = False
+            self._carry = b""
             return self.buffer.seek(0, 2)
         raise UnsupportedOperation("can't do nonzero cur-relative seeks")
 
     def tell(self):
         if self._loaded:
-            return len(self._text[:self._pos].encode(self._encoding, self._errors))
+            pending = self._text[self._pos:].encode(self._encoding, self._errors)
+            return self.buffer.tell() - len(pending) - len(self._carry)
         return self.buffer.tell()
 
     def detach(self):

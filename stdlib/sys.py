@@ -95,3 +95,11 @@ def getfilesystemencodeerrors():
 
 def is_finalizing():
     return False
+
+
+def audit(event, *args):
+    return None
+
+
+def addaudithook(hook):
+    return None
