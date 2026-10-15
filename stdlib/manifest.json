@@ -942,7 +942,7 @@
    "name": "difflib",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1173,7 +1173,7 @@
    "name": "inspect",
    "phase": 18,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1439,7 +1439,7 @@
    "name": "pprint",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1838,7 +1838,7 @@
    "name": "token",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1866,7 +1866,7 @@
    "name": "traceback",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1922,7 +1922,7 @@
    "name": "unittest",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
