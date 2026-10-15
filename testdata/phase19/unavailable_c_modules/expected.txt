@@ -1,0 +1,5 @@
+No module named '_tkinter'
+No module named '_tkinter'
+No module named '_curses'
+No module named '_ctypes'
+No module named '_tkinter'

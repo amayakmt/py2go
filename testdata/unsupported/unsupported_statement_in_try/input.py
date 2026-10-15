@@ -1,4 +1,4 @@
 try:
-    import tkinter
+    import imaplib
 except ImportError:
     pass

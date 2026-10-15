@@ -1,0 +1,18 @@
+C:\a\b\c.txt C:x \b D:\b
+b'C:\\a\\b' //host/share\x
+('C:\\a\\b', 'c.txt') ('C:\\', '') ('\\\\h\\s\\x', 'y')
+('C:', '\\a\\b') ('//h/s', '/a') ('', 'a\\b')
+('C:', '\\', 'a\\b') ('C:', '', 'a') ('', '\\', 'a') ('//h/s', '/', 'a')
+('a\\b.tar', '.gz') ('a.b\\c', '') ('.bashrc', '') (b'x', b'.py')
+b.txt C:\a 
+C:\a\b\d ..\..\a . C:\ b'a\\b'
+c:\foo\bar True False True False
+C:\a C:\a
+b\c ..\.. .
+True True False
+\ / ; nul .
+$ and %NOPE_X% and ${NOPE_Y}
+C:\Users\x\a b.txt ///C:/Users/x/a%20b.txt
+//h/s/f \a\b
+TypeError Can't mix strings and bytes in path components
+ValueError Paths don't have the same drive
