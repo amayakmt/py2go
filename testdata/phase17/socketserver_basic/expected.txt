@@ -1,0 +1,10 @@
+b'HELLO A\n' b'QUIT\n'
+b'HELLO B\n' b'QUIT\n'
+True
+b'fedcba'
+[b'one', b'two'] True True
+[]
+[('reader', 1)] True 1
+[3] both
+KeyError True
+Invalid events: 0

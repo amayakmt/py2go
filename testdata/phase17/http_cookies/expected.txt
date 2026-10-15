@@ -1,0 +1,22 @@
+Set-Cookie: fig=newton
+Set-Cookie: sugar=wafer
+Set-Cookie: rocky=road; HttpOnly; Max-Age=3600; Path=/cookie
+Cookie: fig=newton
+Cookie: rocky=road; Path=/cookie
+Cookie: sugar=wafer
+<SimpleCookie: fig='newton' rocky='road' sugar='wafer'>
+Set-Cookie: fig=newton
+newton fig newton
+['fig', 'rocky', 'sugar'] 3 True
+Set-Cookie: chips=ahoy
+Set-Cookie: vienna=finger
+Set-Cookie: keebler="E=everybody; L=\"Loves\"; fudge=;"
+E=everybody; L="Loves"; fudge=;
+Set-Cookie: a=1; Path=/x
+Set-Cookie: b=2
+/x '2'
+Set-Cookie: k="v w" k v w "v w"
+True True False
+CookieError Invalid attribute 'bogus'
+CookieError Illegal key 'bad key'
+document.cookie = decodeURIComponent("fig%3Dnewton");

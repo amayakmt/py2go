@@ -1,0 +1,22 @@
+192.168.1.10 IPv4Address('192.168.1.10') 4 True False False 3232235786 192.168.1.15 192.168.1.0 b'\xc0\xa8\x01\n' 10.1.168.192.in-addr.arpa
+2001:db8::1 IPv6Address('2001:db8::1') 6 2001:0db8:0000:0000:0000:0000:0000:0001 2001:db8::1 True 33558747 b' \x01\r\xb8' None
+10.0.0.0/22 255.255.252.0 0.0.3.255 10.0.3.255 1024 22 [IPv4Network('10.0.0.0/24'), IPv4Network('10.0.1.0/24'), IPv4Network('10.0.2.0/24'), IPv4Network('10.0.3.0/24')] 10.0.0.0/21
+True False [IPv4Address('10.0.0.1'), IPv4Address('10.0.0.2')] 10.0.0.5 1024
+192.168.0.5/24 192.168.0.5 192.168.0.0/24 255.255.255.0 192.168.0.5/24 192.168.0.5/255.255.255.0
+192.168.1.0/24 [IPv4Address('9.9.9.9'), IPv4Address('10.0.0.2')]
+[IPv4Network('10.0.0.1/32'), IPv4Network('10.0.0.2/31'), IPv4Network('10.0.0.4/30'), IPv4Network('10.0.0.8/31')]
+[IPv4Network('10.0.0.0/24')]
+True True
+True True
+ip_address '256.1.1.1' does not appear to be an IPv4 or IPv6 address
+ip_network '256.1.1.1' does not appear to be an IPv4 or IPv6 network
+ip_address '1.2.3' does not appear to be an IPv4 or IPv6 address
+ip_network '1.2.3' does not appear to be an IPv4 or IPv6 network
+ip_address '::g' does not appear to be an IPv4 or IPv6 address
+ip_network '::g' does not appear to be an IPv4 or IPv6 network
+ip_address '1.2.3.4/33' does not appear to be an IPv4 or IPv6 address
+ip_network '1.2.3.4/33' does not appear to be an IPv4 or IPv6 network
+ip_address 'not an ip' does not appear to be an IPv4 or IPv6 address
+ip_network 'not an ip' does not appear to be an IPv4 or IPv6 network
+4311810305 (>= 2**32) is not permitted as an IPv4 address
+340282366920938463463374607431768211456 True 1.2.3.4

@@ -128,12 +128,12 @@ func TestLinkMissingModuleRaisesWhenRun(t *testing.T) {
 }
 
 func TestLinkLeavesTheStandardLibraryToTheCompiler(t *testing.T) {
-	mod, err := project(t, map[string]string{"main.py": "import socket\nfrom typing import Any\n"})
+	mod, err := project(t, map[string]string{"main.py": "import tkinter\nfrom typing import Any\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := mod.Body[0].(*pyast.Import); !ok {
-		t.Errorf("import socket should stay, got %T", mod.Body[0])
+		t.Errorf("import tkinter should stay, got %T", mod.Body[0])
 	}
 	if _, ok := mod.Body[1].(*pyast.ImportFrom); !ok {
 		t.Errorf("from typing import should stay, got %T", mod.Body[1])

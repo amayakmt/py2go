@@ -1,0 +1,12 @@
+ParseResult(scheme='https', netloc='user:pw@example.com:8080', path='/a/b', params='p', query='x=1&y=2', fragment='frag') https user:pw@example.com:8080 /a/b p x=1&y=2 frag user pw example.com 8080
+SplitResult(scheme='', netloc='host', path='/path', query='q', fragment='') SplitResult(scheme='mailto', netloc='', path='a@b.c', query='', fragment='') SplitResult(scheme='', netloc='', path='/just/path', query='', fragment='') ParseResult(scheme='', netloc='', path='', params='', query='', fragment='')
+https://user:pw@example.com:8080/a/b;p?x=1&y=2#frag https://user:pw@example.com:8080/z;p?x=1&y=2#frag http
+http://a/b/g http://other/x http://a/b/?y http://a/b#f http://a/x
+a=1&b=x+y&c=1&c=2 k=%C3%A9&k2=a%26b q=a%20b
+/a%20b/%C3%BC%3F %2Fa%20b%2F a+b%26c A ü%zz a b c %FF%00
+{'a': ['1', '2']} {'a': ['1'], 'b': ['']} [('x', ' y'), ('z', '1;w=2')] {'a': ['1'], 'b': ['2']}
+DefragResult(url='http://a/b', fragment='c') 
+Invalid IPv6 URL
+Port out of range 0-65535
+::1 80 h:abc
+/ü %C3%BC ü b'\xc3\xbc'

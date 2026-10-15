@@ -1,0 +1,15 @@
+anybot / True
+anybot /private/x False
+anybot /private/ok.html True
+badbot / False
+anybot http://example.com/a?b=1 True
+3 RequestRate(requests=2, seconds=10) None
+['http://example.com/sitemap.xml']
+User-agent: *
+Crawl-delay: 3
+Request-rate: 2/10
+Disallow: /private/
+Allow: /private/ok.html
+
+User-agent: badbot
+Disallow: /

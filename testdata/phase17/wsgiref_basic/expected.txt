@@ -1,0 +1,10 @@
+['a=b; path="/"', 'c=d'] 1 4 True
+['Content-Type: text/html', 'X-One: 1', 'Set-Cookie: a=b; path="/"', 'Set-Cookie: c=d', '']
+['Content-Type', 'Set-Cookie', 'Set-Cookie']
+GET 127.0.0.1 http
+http://127.0.0.1/ http://127.0.0.1/
+a /a /b/c
+http True False
+[10, 10, 5]
+200 b'GET /hello/world q=x=1&y=2' demo
+HTTPError HTTP Error 500: Internal Server Error

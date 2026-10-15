@@ -1,0 +1,14 @@
+200 OK 200 text/plain b'path=/a?x=1 ua=Python-urllib/3.13'
+True
+200 True b'path=/new ua=Python-urllib/3.13'
+POST True True /p True
+b'posted:k=v application/x-www-form-urlencoded'
+404 Gone fishing HTTP Error 404: Gone fishing True text/html;charset=utf-8
+True
+b'ok' 1
+b'tok=xyz'
+urlerror ConnectionRefusedError
+b'hello' text/plain
+b'file body\n' 10
+<urlopen error unknown url type: ftp2>
+/a%20b/c /a b

@@ -1,0 +1,11 @@
+200 OK text/plain b'hello from /hello' 11 False
+200 {'path': '/json', 'ua': 'py2go-test'} 37
+201 Made b'got payload' yes 11
+404 no such thing True text/html;charset=utf-8
+204 No Content b'' 0
+501 None
+501 b'' 357
+refused
+Not Found 200 80 443
+example.com 8080
+URL can't contain control characters. '/x y' (found at least ' ')

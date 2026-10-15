@@ -1,1 +1,1 @@
-unsupported: import of module 'socket' (the standard library arrives in phase 12) at line 1
+unsupported: import of module 'tkinter' (the standard library arrives in phase 12) at line 1

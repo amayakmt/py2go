@@ -1,0 +1,69 @@
+Content-Type: multipart/mixed; boundary="BOUNDARY123"
+MIME-Version: 1.0
+Subject: Report
+From: me@example.com
+To: you@example.com
+Date: Tue, 02 Jan 2024 03:04:05 +0000
+
+--BOUNDARY123
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+plain body
+
+--BOUNDARY123
+Content-Type: text/html; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+PHA+aHRtbDwvcD4=
+
+--BOUNDARY123
+Content-Type: application/octet-stream; Name="data.bin"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="data.bin"
+
+AAFiaW5hcnkgZGF0YQ==
+
+--BOUNDARY123--
+
+True ['multipart/mixed', 'text/plain', 'text/html', 'application/octet-stream'] BOUNDARY123
+text/plain None us-ascii b'plain body\n'
+text/html None utf-8 b'<p>html</p>'
+application/octet-stream data.bin None b'\x00\x01binary data'
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+
+aMOpbGxvIHfDtnJsZA==
+
+héllo wörld base64
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+ascii only
+=?utf-8?b?w5xuw69jb2RlIHN1YmplY3Q=?= Ünïcode subject [(b'\xc3\x9cn\xc3\xafcode subject', 'utf-8')] café au lait
+=?utf-8?b?w5xuw68gQw==?= <a@b.c> ('Doe, John', 'john@example.com') [('', 'a@b.c'), ('D', 'd@e.f')]
+(1995, 11, 20, 19, 12, 8, 0, 1, -1) -18000 Thu, 01 Jan 1970 00:00:00 GMT Mon, 20 Nov 1995 19:12:08 -0500
+a\"b\\c abc ['utf-8', '', 'caf%C3%A9'] utf-8''caf%C3%A9
+multipart/mixed ['multipart/mixed', 'multipart/alternative', 'text/plain', 'text/html', 'application/pdf'] 1.0
+[('application/pdf', 'x.pdf')] simple text
+
+True 2
+s body text
+ [('text/plain', ''), ('charset', 'us-ascii')] us-ascii
+multipart/mixed 1 part one
+Content-Type: text/plain;
+ charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+plain body
+
+True
+7bit Ym9keQ==
+
+x True 78

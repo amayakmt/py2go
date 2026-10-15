@@ -1,0 +1,23 @@
+(250, b'fake.example\nSIZE 100000\n8BITMIME')
+True False ['8bitmime', 'size']
+(250, b'OK')
+sent
+{}
+(221, b'bye')
+<a@x.org> size=32 ['<good@x.org>']
+  | Subject: hi
+  | 
+  | .dot line
+  | body
+<me@x.org> size=155 ['<you@x.org>']
+  | From: me@x.org
+  | To: you@x.org
+  | Subject: hello
+  | Content-Type: text/plain; charset="utf-8"
+  | Content-Transfer-Encoding: 7bit
+  | MIME-Version: 1.0
+  | 
+  | body text
+<me@x.org> a
+..b
+c

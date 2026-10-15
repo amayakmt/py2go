@@ -1,0 +1,13 @@
+760832612.0
+1970-01-01 00:00:00Z Fri, 02-Jan-1970 00:00:00 GMT
+[[('foo', 'bar'), ('port', '80,81'), ('discard', None)], [('bar', 'baz')]]
+foo=bar; secure, x=1
+True False
+('example.com', 'example.com')
+1 [('sid', 'abc', 'example.com', '/')]
+sid=abc
+0
+2 [('a', '1', '/', 'example.com', False), ('b', '2', '/x', 'example.com', True)]
+b=2; a=1
+a=1
+1

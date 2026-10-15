@@ -1,0 +1,17 @@
+220 fake ftp
+230 logged in
+/
+250 ok
+error_perm 550 no such dir
+['a.txt', 'b.bin']
+226 transfer complete
+['-rw-r--r-- 1 u g 11 Jan 1 00:00 a.txt', '-rw-r--r-- 1 u g 10 Jan 1 00:00 b.bin']
+226 transfer complete
+b'alpha\nbeta\n'
+10
+226 transfer complete
+error_perm 550 no such file
+221 goodbye
+{'up.bin': 250}
+('10.0.0.1', 1025)
+/home/me

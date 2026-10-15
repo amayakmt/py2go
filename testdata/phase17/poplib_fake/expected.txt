@@ -1,0 +1,10 @@
+b'+OK fake pop3 ready'
+b'+OK'
+error_proto b'-ERR bad password'
+b'+OK logged in'
+(2, 53)
+(b'+OK', [b'1 23', b'2 30'], 12)
+(b'+OK message follows', [b'Subject: two', b'', b'world', b'line2'], 30)
+b'+OK deleted'
+b'+OK'
+b'+OK bye'

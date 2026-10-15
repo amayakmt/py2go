@@ -1,0 +1,6 @@
+404 <HTTPStatus.NOT_FOUND: 404> 404 Not Found Nothing matches the given URI NOT_FOUND 404 True True True True
+200 OK True True 418
+ok 201 Created 202   202
+299 is not a valid HTTPStatus
+GET <HTTPMethod.POST> True Apply partial modifications to a target.
+301 Internal Server Error True

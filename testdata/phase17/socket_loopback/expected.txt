@@ -1,0 +1,28 @@
+127.0.0.1 True 2 1 0 True
+accepted 127.0.0.1 True
+b'HELLO '
+b'WORLD' 127.0.0.1 True
+b''
+-1 <socket.socket [closed] fd=-1, family=2, type=1, proto=6>
+OSError 9
+b'datagram' 127.0.0.1 True
+TimeoutError timed out
+BlockingIOError True
+0.0 False
+b'line one\n' b'line two\n'
+b'' b''
+'text over socket\n'
+refused True
+True
+gaierror -2
+bind(): port must be 0-65535.
+ConnectionRefusedError
+b'\x01\x02\x03\x04' 1.2.3.4 b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01' ::1
+256 1 16777216 1
+[(2, 1, 6, '', ('127.0.0.1', 80))]
+127.0.0.1 80 6 True
+2 1 1 2 6 1 2 2
+None
+2.5 2.5
+illegal IP address string passed to inet_aton
+127.0.0.1 1

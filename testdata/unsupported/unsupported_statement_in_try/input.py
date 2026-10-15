@@ -1,4 +1,4 @@
 try:
-    import socket
+    import tkinter
 except ImportError:
     pass

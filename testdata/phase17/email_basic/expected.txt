@@ -1,0 +1,16 @@
+Hello there Alice <alice@example.com> dflt ['From', 'To', 'Subject', 'Date', 'Message-ID', 'Content-Type'] 6
+Body line one
+Body line two
+ text/plain text plain None utf-8
+False [('From', 'Alice <alice@example.com>'), ('To', 'bob@example.com, "Carol, C" <carol@example.com>')] True ['bob@example.com, "Carol, C" <carol@example.com>']
+value Changed None
+From: Alice <alice@example.com>
+To: bob@example.com, "Carol, C" <carol@example.com>
+Subject: Changed
+Date: Mon, 01 Jan 2024 10:00:00 +0000
+Content-Type: text/plain; charset="utf-8"
+X-Custom: value
+
+Body line one
+Body line two
+
