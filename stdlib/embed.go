@@ -6,5 +6,5 @@ import "embed"
 
 // Files is the tree of modules: math.py, collections/__init__.py, ...
 //
-//go:embed *.py */*.py
+//go:embed *.py */*.py */*/*.py
 var Files embed.FS
