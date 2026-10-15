@@ -704,7 +704,7 @@
    "name": "argparse",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -914,7 +914,7 @@
    "name": "dataclasses",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1061,7 +1061,7 @@
    "name": "genericpath",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1082,7 +1082,7 @@
    "name": "gettext",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1096,7 +1096,7 @@
    "name": "graphlib",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1544,7 +1544,7 @@
    "name": "reprlib",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1593,7 +1593,7 @@
    "name": "selectors",
    "phase": 13,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1908,7 +1908,7 @@
    "name": "typing",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {

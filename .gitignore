@@ -2,4 +2,4 @@
 __pycache__/
 *.pyc
 /py2go
-.DS_Store
+.DS_Store/dist/
