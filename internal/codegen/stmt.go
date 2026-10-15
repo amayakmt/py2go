@@ -816,8 +816,16 @@ func (g *generator) ifStmt(b *strings.Builder, n *pyast.If) error {
 		}
 		b.WriteString(cond.code + " {\n")
 		pos, neg := g.narrowTest(n.Test)
-		g.pendingNarrow = dropAssigned(pos, n.Body)
-		err = g.block(b, n.Body)
+		body := n.Body
+		if cond.code == "false" && g.method != nil {
+			// isinstance(self, D) is false in a method compiled for a class that
+			// is not a D: the body may use what only a D has.
+			if _, isCall := n.Test.(*pyast.Call); isCall {
+				pos, body = nil, nil
+			}
+		}
+		g.pendingNarrow = dropAssigned(pos, body)
+		err = g.block(b, body)
 		g.pendingNarrow = nil
 		if err != nil {
 			return err

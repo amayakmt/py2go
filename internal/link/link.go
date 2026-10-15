@@ -1078,12 +1078,66 @@ func (r *rewriter) class(x *pyast.ClassDef) (pyast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := expandTotalOrdering(x); err != nil {
+		return nil, err
+	}
 	if info := r.l.enums[x.Name]; info != nil && len(r.scopes) == 1 {
 		r.pop()
 		defer r.push(names, true)
 		return r.enumClass(x, info)
 	}
 	return x, nil
+}
+
+// totalOrdering gives, for the comparison a class defines, the bodies of the
+// other three that functools.total_ordering would add.
+var totalOrdering = map[string]map[string]string{
+	"__lt__": {"__le__": "self < other or self == other", "__gt__": "not (self < other or self == other)", "__ge__": "not self < other"},
+	"__le__": {"__lt__": "self <= other and self != other", "__gt__": "not self <= other", "__ge__": "not self <= other or self == other"},
+	"__gt__": {"__lt__": "not (self > other or self == other)", "__le__": "not self > other", "__ge__": "self > other or self == other"},
+	"__ge__": {"__lt__": "not self >= other", "__le__": "not self >= other or self == other", "__gt__": "self >= other and self != other"},
+}
+
+// expandTotalOrdering replaces @functools.total_ordering by the methods it
+// writes, since a class decorator cannot run when the program is compiled.
+func expandTotalOrdering(x *pyast.ClassDef) error {
+	found := -1
+	for i, d := range x.Decorators {
+		if n, ok := d.(*pyast.Name); ok && (n.ID == "functools"+Marker+"total_ordering" || n.ID == "total_ordering") {
+			found = i
+		}
+	}
+	if found < 0 {
+		return nil
+	}
+	x.Decorators = append(x.Decorators[:found], x.Decorators[found+1:]...)
+	defined := map[string]bool{}
+	for _, st := range x.Body {
+		if fn, ok := st.(*pyast.FunctionDef); ok {
+			defined[fn.Name] = true
+		}
+	}
+	for _, root := range []string{"__lt__", "__le__", "__gt__", "__ge__"} {
+		if !defined[root] {
+			continue
+		}
+		var src strings.Builder
+		src.WriteString("class _T:\n")
+		for _, name := range []string{"__lt__", "__le__", "__gt__", "__ge__"} {
+			if body, ok := totalOrdering[root][name]; ok && !defined[name] {
+				fmt.Fprintf(&src, "    def %s(self, other):\n        return %s\n", name, body)
+			}
+		}
+		mod, err := parseSnippet(src.String())
+		if err != nil {
+			return err
+		}
+		if cls, ok := mod.Body[0].(*pyast.ClassDef); ok {
+			x.Body = append(x.Body, cls.Body...)
+		}
+		return nil
+	}
+	return fmt.Errorf("unsupported: total_ordering of a class that defines no comparison at line %d", x.Lineno)
 }
 
 func (r *rewriter) lambda(x *pyast.Lambda) (pyast.Node, error) {

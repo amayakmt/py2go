@@ -93,6 +93,8 @@ var parents = map[string]string{
 	"binascii_pm_Incomplete":                          "Exception",
 	"csv_pm_Error":                                    "Exception",
 	"zlib_pm_error":                                   "Exception",
+	"socket_pm_gaierror":                              "OSError",
+	"socket_pm_herror":                                "OSError",
 	"io_pm_UnsupportedOperation":                      "OSError",
 	"gzip_pm_BadGzipFile":                             "OSError",
 	"queue_pm_Empty":                                  "Exception",

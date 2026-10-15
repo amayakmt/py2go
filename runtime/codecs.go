@@ -181,6 +181,26 @@ func sbcsEncode(s, codec, table, errs string) string {
 	return string(out)
 }
 
+// wtfRunes is []rune(s) for a string that may hold the lone surrogates
+// surrogateescape makes.
+func wtfRunes(s string) []rune {
+	if strings.IndexByte(s, 0xed) < 0 {
+		return []rune(s)
+	}
+	out := make([]rune, 0, len(s))
+	for i := 0; i < len(s); {
+		if s[i] == 0xed && i+2 < len(s) && s[i+1]&0xe0 == 0xa0 && s[i+2]&0xc0 == 0x80 {
+			out = append(out, rune(s[i]&0x0f)<<12|rune(s[i+1]&0x3f)<<6|rune(s[i+2]&0x3f))
+			i += 3
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		out = append(out, r)
+		i += size
+	}
+	return out
+}
+
 // wtf8 spells a surrogate code point as the three bytes Go strings hold it in.
 func wtf8(r int) string {
 	return string([]byte{byte(0xe0 | r>>12), byte(0x80 | (r>>6)&0x3f), byte(0x80 | r&0x3f)})
@@ -224,9 +244,13 @@ func encodeSurrogates(s, errs string) string {
 // encodeLimited encodes to a codec that holds the code points below limit.
 func encodeLimited(s, name string, limit rune, errs string) string {
 	var out []byte
-	runes := []rune(s)
+	runes := wtfRunes(s)
 	for i := 0; i < len(runes); i++ {
 		r := runes[i]
+		if errs == "surrogateescape" && r >= 0xdc80 && r <= 0xdcff {
+			out = append(out, byte(r-0xdc00))
+			continue
+		}
 		if r < limit {
 			out = append(out, byte(r))
 			continue

@@ -787,6 +787,15 @@ func PercentFormat(format string, args any) string {
 			if f, ok := v.(float64); ok {
 				v = IntFromFloat(f)
 			}
+			if x, ok := v.(interface{ PyIndex() (any, bool) }); ok {
+				if r, ok := x.PyIndex(); ok {
+					v = Unbox(r)
+				}
+			} else if x, ok := v.(interface{ PyInt() (any, bool) }); ok {
+				if r, ok := x.PyInt(); ok {
+					v = Unbox(r)
+				}
+			}
 			if bi, isBig := v.(*big.Int); isBig {
 				b.WriteString(FormatBig(bi, strings.Replace(strings.TrimLeft(goSpec, "%"), "-", "<", 1)+"d"))
 				break

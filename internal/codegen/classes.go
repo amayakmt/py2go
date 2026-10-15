@@ -530,6 +530,11 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 		if len(sig.pos) != 0 || sig.vararg != nil || sig.kwarg != nil || len(sig.kwonly) > 0 {
 			return unsupported("property getter that takes parameters", fn.Line())
 		}
+		if sig.ret == tNone && len(fn.Body) > 0 {
+			if _, raises := fn.Body[len(fn.Body)-1].(*pyast.Raise); raises {
+				sig.ret = tObject // a getter that only raises, as abstract bases write them
+			}
+		}
 		if sig.ret == tNone {
 			return unsupported("property getter that returns nothing", fn.Line())
 		}
@@ -648,6 +653,13 @@ func (g *generator) classAssign(c *classInfo, n *pyast.Assign) error {
 		return unsupported("assignment to "+targetKind(n.Targets[0])+" in a class body", n.Line())
 	}
 	name := target.ID
+	// alias = method: the method again under another name.
+	if src, ok := n.Value.(*pyast.Name); ok && c.members[src.ID] != nil && c.members[src.ID].node != nil &&
+		(c.members[src.ID].kind == mMethod || c.members[src.ID].kind == mStatic || c.members[src.ID].kind == mClassMethod) {
+		fn := *c.members[src.ID].node
+		fn.Name = name
+		return g.classMethod(c, &fn)
+	}
 	switch name {
 	case "__match_args__":
 		tup, ok := n.Value.(*pyast.Tuple)

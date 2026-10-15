@@ -463,6 +463,11 @@ func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) 
 			if g.classOf(x.typ).isSubclassOf(s.user) {
 				return "true", nil
 			}
+			if g.method != nil && g.method.selfVar != "" && x.code == g.method.selfVar && g.method.cls == g.classOf(x.typ) {
+				// A method is compiled for each class that inherits it, so self
+				// is exactly that class.
+				return "false", nil
+			}
 			return g.rt("InstanceOf") + "[" + s.user.name + "](" + x.code + ")", nil
 		case x.typ == tObject:
 			return g.rt("InstanceOf") + "[" + s.user.name + "](" + x.code + ")", nil

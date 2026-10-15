@@ -495,6 +495,20 @@ func (s *Set[T]) anySet() *Set[any] {
 	return out
 }
 
+func (s *Set[T]) dynSetOp(op string, a, b *Set[any]) (any, bool) {
+	switch op {
+	case "BitOr":
+		return a.Union(b), true
+	case "BitAnd":
+		return a.Intersection(b), true
+	case "Sub":
+		return a.Difference(b), true
+	case "BitXor":
+		return a.SymmetricDifference(b), true
+	}
+	return nil, false
+}
+
 func (s *Set[T]) DynBinary(op string, other any, reflected bool) (any, bool) {
 	if fs, isFrozen := other.(*FrozenSet); isFrozen && !reflected {
 		// set op frozenset is a set, of the kind of the left operand.
@@ -515,6 +529,14 @@ func (s *Set[T]) DynBinary(op string, other any, reflected bool) (any, bool) {
 	}
 	o, ok := other.(*Set[T])
 	if !ok {
+		// A set of another static item type: operate on dynamic copies.
+		if os, isSet := other.(interface{ anySet() *Set[any] }); isSet {
+			a, b := s.anySet(), os.anySet()
+			if reflected {
+				a, b = b, a
+			}
+			return (&Set[any]{}).dynSetOp(op, a, b)
+		}
 		return nil, false
 	}
 	a, b := s, o
