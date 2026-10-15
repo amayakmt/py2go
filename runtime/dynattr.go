@@ -518,6 +518,13 @@ func IsInstanceName(x any, name string, builtin bool) bool {
 		return IsSubclass(e.PyExc().Type, name)
 	}
 	if !builtin {
+		if n, ok := x.(Named); ok {
+			for _, b := range classBases[n.PyClassName()] {
+				if b == name {
+					return true
+				}
+			}
+		}
 		return false
 	}
 	tn := TypeName(x)

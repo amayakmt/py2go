@@ -18,7 +18,7 @@ import (
 func canonicalCodec(name string) string {
 	n := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), "_", "-"))
 	switch n {
-	case "utf-8", "utf8", "u8", "utf", "utf8-ucs2", "utf8-ucs4", "cp65001":
+	case "utf-8", "utf8", "u8", "utf", "utf8-ucs2", "utf8-ucs4", "cp65001", "locale":
 		return "utf-8"
 	case "utf-8-sig":
 		return "utf-8-sig"
@@ -43,12 +43,15 @@ func canonicalCodec(name string) string {
 	case "raw-unicode-escape", "rawunicodeescape":
 		return "raw-unicode-escape"
 	}
+	if c, ok := sbcsAliases[n]; ok {
+		return c
+	}
 	panic(newError("LookupError", "unknown encoding: "+name))
 }
 
 func checkHandler(errs string) {
 	switch errs {
-	case "strict", "ignore", "replace", "backslashreplace", "xmlcharrefreplace":
+	case "strict", "ignore", "replace", "backslashreplace", "xmlcharrefreplace", "surrogateescape", "surrogatepass":
 	default:
 		panic(newError("LookupError", "unknown error handler name '"+errs+"'"))
 	}
@@ -70,9 +73,9 @@ func EncodeStr(s, encoding, errs string) Bytes {
 	codec := canonicalCodec(encoding)
 	switch codec {
 	case "utf-8":
-		return Bytes(s)
+		return Bytes(encodeSurrogates(s, errs))
 	case "utf-8-sig":
-		return Bytes("\xef\xbb\xbf" + s)
+		return Bytes("\xef\xbb\xbf" + encodeSurrogates(s, errs))
 	case "ascii":
 		return Bytes(encodeLimited(s, "ascii", 0x80, errs))
 	case "latin-1":
@@ -136,7 +139,86 @@ func EncodeStr(s, encoding, errs string) Bytes {
 		}
 		return Bytes(b.String())
 	}
+	if table, ok := sbcsTables[codec]; ok {
+		return Bytes(sbcsEncode(s, codec, table, errs))
+	}
 	panic(newError("LookupError", "unknown encoding: "+encoding))
+}
+
+// sbcsEncode encodes to a single-byte code page.
+func sbcsEncode(s, codec, table, errs string) string {
+	rev := map[rune]byte{}
+	i := 0
+	for _, r := range table {
+		if r != 0xfffe {
+			if _, dup := rev[r]; !dup {
+				rev[r] = byte(i)
+			}
+		}
+		i++
+	}
+	var out []byte
+	runes := []rune(s)
+	for pos, r := range runes {
+		if b, ok := rev[r]; ok {
+			out = append(out, b)
+			continue
+		}
+		checkHandler(errs)
+		switch errs {
+		case "ignore":
+		case "replace":
+			out = append(out, '?')
+		case "backslashreplace":
+			out = append(out, charEscape(r)...)
+		case "xmlcharrefreplace":
+			out = append(out, fmt.Sprintf("&#%d;", r)...)
+		default:
+			panic(unicodeErr("UnicodeEncodeError", codec, s, pos, pos+1, "character maps to <undefined>",
+				fmt.Sprintf("'charmap' codec can't encode character '%s' in position %d: character maps to <undefined>", charEscapeRepr(r), pos)))
+		}
+	}
+	return string(out)
+}
+
+// wtf8 spells a surrogate code point as the three bytes Go strings hold it in.
+func wtf8(r int) string {
+	return string([]byte{byte(0xe0 | r>>12), byte(0x80 | (r>>6)&0x3f), byte(0x80 | r&0x3f)})
+}
+
+// encodeSurrogates handles the lone surrogates a str may hold when it is
+// encoded as UTF-8: surrogateescape turns U+DC80..U+DCFF back into bytes,
+// surrogatepass keeps them, and strict refuses them.
+func encodeSurrogates(s, errs string) string {
+	if strings.IndexByte(s, 0xed) < 0 {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0xed && i+2 < len(s) && s[i+1]&0xe0 == 0xa0 {
+			r := int(s[i]&0x0f)<<12 | int(s[i+1]&0x3f)<<6 | int(s[i+2]&0x3f)
+			switch {
+			case errs == "surrogateescape" && r >= 0xdc80 && r <= 0xdcff:
+				b.WriteByte(byte(r - 0xdc00))
+				i += 2
+				continue
+			case errs == "surrogatepass":
+			case errs == "ignore":
+				i += 2
+				continue
+			case errs == "replace":
+				b.WriteByte('?')
+				i += 2
+				continue
+			default:
+				pos := utf8.RuneCountInString(s[:i])
+				panic(unicodeErr("UnicodeEncodeError", "utf-8", s, pos, pos+1, "surrogates not allowed",
+					fmt.Sprintf("'utf-8' codec can't encode character '\\u%04x' in position %d: surrogates not allowed", r, pos)))
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // encodeLimited encodes to a codec that holds the code points below limit.
@@ -211,6 +293,8 @@ func DecodeBytes(s, encoding, errs string) string {
 				b.WriteRune(utf8.RuneError)
 			case "backslashreplace":
 				fmt.Fprintf(&b, `\x%02x`, s[i])
+			case "surrogateescape":
+				b.WriteString(wtf8(0xdc00 + int(s[i])))
 			default:
 				panic(unicodeErr("UnicodeDecodeError", "ascii", Bytes(s), i, i+1, "ordinal not in range(128)",
 					fmt.Sprintf("'ascii' codec can't decode byte 0x%02x in position %d: ordinal not in range(128)", s[i], i)))
@@ -303,6 +387,19 @@ func DecodeBytes(s, encoding, errs string) string {
 	case "unicode-escape", "raw-unicode-escape":
 		return decodeEscapes(s, codec == "raw-unicode-escape")
 	}
+	if table, ok := sbcsTables[codec]; ok {
+		var b strings.Builder
+		runes := []rune(table)
+		for i := 0; i < len(s); i++ {
+			r := runes[s[i]]
+			if r != 0xfffe {
+				b.WriteRune(r)
+				continue
+			}
+			decodeFailure(&b, "charmap", []byte(s), 0, i, i+1, "character maps to <undefined>", errs)
+		}
+		return b.String()
+	}
 	panic(newError("LookupError", "unknown encoding: "+encoding))
 }
 
@@ -371,6 +468,14 @@ func decodeUTF8(s, errs string) string {
 		case "backslashreplace":
 			for k := i; k < end; k++ {
 				fmt.Fprintf(&b, `\x%02x`, s[k])
+			}
+		case "surrogateescape":
+			for k := i; k < end; k++ {
+				if s[k] < 0x80 {
+					b.WriteByte(s[k])
+				} else {
+					b.WriteString(wtf8(0xdc00 + int(s[k])))
+				}
 			}
 		default:
 			if end-i == 1 {
@@ -493,6 +598,14 @@ func decodeFailure(b *strings.Builder, codec string, data []byte, off, start, en
 	case "backslashreplace":
 		for _, c := range data[start:end] {
 			fmt.Fprintf(b, `\x%02x`, c)
+		}
+	case "surrogateescape":
+		for _, c := range data[start:end] {
+			if c < 0x80 {
+				b.WriteByte(c)
+			} else {
+				b.WriteString(wtf8(0xdc00 + int(c)))
+			}
 		}
 	default:
 		panic(decodeError(codec, data[start:end], off+start, reason))

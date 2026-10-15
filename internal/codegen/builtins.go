@@ -39,7 +39,7 @@ func (g *generator) builtinCall(n *pyast.Call, callee *pyast.Name) (value, error
 		return v, err
 	}
 	v, err := g.builtinCallTyped(n, callee)
-	if err != nil && !g.infer && fallbackOK(err) {
+	if err != nil && fallbackOK(err) {
 		// What the static rules refuse, the run-time ones may do.
 		if dv, ok, derr := g.dynBuiltin(name, n, true); ok && derr == nil {
 			return dv, nil
@@ -584,30 +584,45 @@ func (g *generator) filterCall(n *pyast.Call) (value, error) {
 
 // printCall is print(*args, sep=..., end=...).
 func (g *generator) printCall(n *pyast.Call) (value, error) {
+	v, flushCode, file, err := g.printCall1(n)
+	if err != nil || flushCode == "" {
+		return v, err
+	}
+	if file == "" {
+		file = "nil"
+	}
+	// print(..., flush=...) flushes the file when the flag is true
+	return value{code: "func() runtime.NoneT {\n" + v.code + "\nif " + g.rt("Truth") + "(" + flushCode + ") {\n" + g.rt("FlushFile") + "(" + file + ")\n}\nreturn " + g.rt("NoneV") + "\n}()", typ: tNone, prec: precAtom}, nil
+}
+
+func (g *generator) printCall1(n *pyast.Call) (value, string, string, error) {
 	sep, end := strconv.Quote(" "), strconv.Quote("\n")
 	custom := false
 	file := ""
+	flushCode := ""
 	for _, kw := range n.Keywords {
 		if kw.Arg == "file" || kw.Arg == "flush" {
 			v, err := g.typedExpr(kw.Value)
 			if err != nil {
-				return value{}, err
+				return value{}, "", "", err
 			}
 			if kw.Arg == "file" {
 				file = g.boxed(v)
 				custom = true
+			} else {
+				flushCode = g.boxed(v)
 			}
 			continue
 		}
 		if kw.Arg != "sep" && kw.Arg != "end" {
-			return value{}, unsupported(fmt.Sprintf("keyword argument '%s' of print()", kw.Arg), kw.Line())
+			return value{}, "", "", unsupported(fmt.Sprintf("keyword argument '%s' of print()", kw.Arg), kw.Line())
 		}
 		v, err := g.typedExpr(kw.Value)
 		if err != nil {
-			return value{}, err
+			return value{}, "", "", err
 		}
 		if v.typ != tStr {
-			return value{}, mismatch(kw.Arg, tStr, v.typ, kw.Line())
+			return value{}, "", "", mismatch(kw.Arg, tStr, v.typ, kw.Line())
 		}
 		if kw.Arg == "sep" {
 			sep = v.code
@@ -637,7 +652,7 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 			if st, ok := a.(*pyast.Starred); ok {
 				code, elem, err := g.iterableArg(st.Value, "print(*...)")
 				if err != nil {
-					return value{}, err
+					return value{}, "", "", err
 				}
 				flush()
 				segments = append(segments, call(g.rt("Spread")+"["+g.goType(elem)+"]", code))
@@ -645,7 +660,7 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 			}
 			v, err := g.typedExpr(a)
 			if err != nil {
-				return value{}, err
+				return value{}, "", "", err
 			}
 			run = append(run, v.code)
 		}
@@ -655,9 +670,9 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 			all = "append(" + all + ", " + seg + "...)"
 		}
 		if file != "" {
-			return value{code: g.rt("PrintTo") + "(" + file + ", " + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, nil
+			return value{code: g.rt("PrintTo") + "(" + file + ", " + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, flushCode, file, nil
 		}
-		return value{code: g.rt("PrintOpts") + "(" + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, nil
+		return value{code: g.rt("PrintOpts") + "(" + sep + ", " + end + ", " + all + "...)", typ: tNone, prec: precAtom}, flushCode, file, nil
 	}
 
 	args := make([]string, 0, len(n.Args)+2)
@@ -667,7 +682,7 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 	for _, a := range n.Args {
 		v, err := g.typedExpr(a)
 		if err != nil {
-			return value{}, err
+			return value{}, "", "", err
 		}
 		args = append(args, v.code)
 	}
@@ -676,9 +691,9 @@ func (g *generator) printCall(n *pyast.Call) (value, error) {
 		fn = "PrintOpts"
 	}
 	if file != "" {
-		return value{code: g.rt("PrintTo") + "(" + file + ", " + strings.Join(args, ", ") + ")", typ: tNone, prec: precAtom}, nil
+		return value{code: g.rt("PrintTo") + "(" + file + ", " + strings.Join(args, ", ") + ")", typ: tNone, prec: precAtom}, flushCode, file, nil
 	}
-	return value{code: call(g.rt(fn), args...), typ: tNone, prec: precAtom}, nil
+	return value{code: call(g.rt(fn), args...), typ: tNone, prec: precAtom}, flushCode, file, nil
 }
 
 // rangeCall is range(stop), range(start, stop) and range(start, stop, step)

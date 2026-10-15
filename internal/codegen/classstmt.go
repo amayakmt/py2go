@@ -139,6 +139,8 @@ func (g *generator) inferClassAttrs(c *classInfo) error {
 	savedInfer := g.infer
 	g.infer = true
 	defer func() { g.infer = savedInfer }()
+	g.classBodyCur, g.classBodySeen = c, map[string]bool{}
+	defer func() { g.classBodyCur, g.classBodySeen = nil, nil }()
 	return g.withSubst(c.tsubst, func() error {
 		for _, name := range c.order {
 			m := c.members[name]
@@ -163,6 +165,7 @@ func (g *generator) inferClassAttrs(c *classInfo) error {
 			if g.storedAttrs[name] {
 				m.shadow = true
 			}
+			g.classBodySeen[name] = true
 		}
 		return nil
 	})
@@ -274,12 +277,18 @@ func (g *generator) attrCount() int {
 // before the module variables were: one that reads a module variable was an
 // object. It runs when the class is generated, where the variables exist.
 func (g *generator) refreshClassAttrs(c *classInfo) {
+	g.classBodyCur, g.classBodySeen = c, map[string]bool{}
+	defer func() { g.classBodyCur, g.classBodySeen = nil, nil }()
 	_ = g.withSubst(c.tsubst, func() error {
 		for _, name := range c.order {
 			m := c.members[name]
+			if m.kind == mClassAttr {
+				g.classBodySeen[name] = true
+			}
 			if m.kind != mClassAttr || m.typ != tObject || m.value == nil {
 				continue
 			}
+			delete(g.classBodySeen, name)
 			v, err := g.exprAs(m.value, "")
 			if err != nil || v.typ == tObject || v.typ == tNone || v.typ == tExc || v.typ.isClassRef() || v.typ == tOptExc {
 				continue

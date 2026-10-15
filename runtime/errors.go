@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 )
 
 // parents maps every supported exception class to its base class, following
@@ -92,6 +93,7 @@ var parents = map[string]string{
 	"binascii_pm_Incomplete":                          "Exception",
 	"csv_pm_Error":                                    "Exception",
 	"zlib_pm_error":                                   "Exception",
+	"io_pm_UnsupportedOperation":                      "OSError",
 	"gzip_pm_BadGzipFile":                             "OSError",
 	"queue_pm_Empty":                                  "Exception",
 	"queue_pm_Full":                                   "Exception",
@@ -138,6 +140,9 @@ func RegisterClass(name string, mro ...string) { userMRO[name] = mro }
 func IsSubclass(class, parent string) bool {
 	if class == "ExceptionGroup" && parent == "BaseExceptionGroup" {
 		return true
+	}
+	if class == "io_pm_UnsupportedOperation" && parent == "ValueError" {
+		return true // io.UnsupportedOperation derives from OSError and ValueError
 	}
 	if mro, ok := userMRO[class]; ok {
 		for _, c := range mro {
@@ -191,10 +196,14 @@ func (b *ExcBase) PyExc() *PyError { return b.E }
 // constructor arguments. self is the instance.
 func (b *ExcBase) Init(class string, self any, args ...any) {
 	b.E = &PyError{Type: class, Args: args, Obj: self}
+	fixOSError(b.E)
 }
 
 // SetArgs is BaseException.__init__(*args).
-func (b *ExcBase) SetArgs(args ...any) { b.E.Args = args }
+func (b *ExcBase) SetArgs(args ...any) {
+	b.E.Args = args
+	fixOSError(b.E)
+}
 
 // BaseStr and BaseRepr are str() and repr() of an exception from its
 // arguments, which user classes without __str__ and __repr__ get.
@@ -219,7 +228,72 @@ func WithContext(e, handled *PyError) *PyError {
 
 // NewError is raise Class(args...).
 func NewError(class string, args ...any) *PyError {
-	return &PyError{Type: class, Args: args}
+	e := &PyError{Type: class, Args: args}
+	fixOSError(e)
+	return e
+}
+
+// errnoClasses are the OSError subclasses OSError(errno, ...) turns into.
+var errnoClasses = map[int64]string{
+	int64(syscall.EPERM): "PermissionError", int64(syscall.EACCES): "PermissionError",
+	int64(syscall.ENOENT): "FileNotFoundError", int64(syscall.ESRCH): "ProcessLookupError",
+	int64(syscall.EINTR): "InterruptedError", int64(syscall.ECHILD): "ChildProcessError",
+	int64(syscall.EEXIST): "FileExistsError", int64(syscall.ENOTDIR): "NotADirectoryError",
+	int64(syscall.EISDIR): "IsADirectoryError", int64(syscall.EAGAIN): "BlockingIOError",
+	int64(syscall.EALREADY): "BlockingIOError", int64(syscall.EINPROGRESS): "BlockingIOError",
+	int64(syscall.EPIPE): "BrokenPipeError", int64(syscall.ESHUTDOWN): "BrokenPipeError",
+	int64(syscall.ECONNABORTED): "ConnectionAbortedError", int64(syscall.ECONNREFUSED): "ConnectionRefusedError",
+	int64(syscall.ECONNRESET): "ConnectionResetError", int64(syscall.ETIMEDOUT): "TimeoutError",
+}
+
+// fixOSError gives OSError(errno, strerror[, filename[, winerror[, filename2]]])
+// its attributes, the class errno stands for, and the two arguments args keeps.
+func fixOSError(e *PyError) {
+	if len(e.Args) < 2 || len(e.Args) > 5 || !IsSubclass(e.Type, "OSError") {
+		return
+	}
+	var en int64
+	switch n := e.Args[0].(type) {
+	case int64:
+		en = n
+	case int:
+		en = int64(n)
+		e.Args[0] = en
+	default:
+		return
+	}
+	attrs := map[string]any{"errno": en, "strerror": e.Args[1], "filename": nil, "filename2": nil}
+	if len(e.Args) >= 3 {
+		attrs["filename"] = e.Args[2]
+	}
+	if len(e.Args) == 5 {
+		attrs["filename2"] = e.Args[4]
+	}
+	e.Attrs = attrs
+	if len(e.Args) > 2 {
+		e.Args = e.Args[:2]
+	}
+	if e.Type == "OSError" {
+		if c, ok := errnoClasses[en]; ok {
+			e.Type = c
+		}
+	}
+}
+
+// osErrorStr is str() of an OSError that has an errno.
+func (e *PyError) osErrorStr() (string, bool) {
+	en, ok := e.Attrs["errno"]
+	if !ok || len(e.Args) != 2 {
+		return "", false
+	}
+	s := "[Errno " + Str(en) + "] " + Str(e.Args[1])
+	if fn := e.Attrs["filename"]; fn != nil {
+		s += ": " + Repr(fn)
+		if fn2 := e.Attrs["filename2"]; fn2 != nil {
+			s += " -> " + Repr(fn2)
+		}
+	}
+	return s, true
 }
 
 // newError builds an error with a single message, the shape of every
@@ -253,6 +327,9 @@ func (e *PyError) baseStr() string {
 			return e.Msg + " (1 sub-exception)"
 		}
 		return fmt.Sprintf("%s (%d sub-exceptions)", e.Msg, n)
+	}
+	if s, ok := e.osErrorStr(); ok {
+		return s
 	}
 	switch len(e.Args) {
 	case 0:
@@ -352,6 +429,7 @@ func Report() {
 	}
 	e, ok := r.(*PyError)
 	if !ok {
+		FlushAll()
 		panic(r)
 	}
 	if IsSubclass(e.Type, "SystemExit") {
@@ -431,4 +509,34 @@ func exitCode(e *PyError) int {
 	}
 	fmt.Fprintln(os.Stderr, Str(e.Args[0]))
 	return 1
+}
+
+// handled is the stack of exceptions the program is handling: what
+// sys.exc_info() reports.
+var handled []*PyError
+
+// PushHandled and PopHandled bracket an except clause.
+func PushHandled(e *PyError) { handled = append(handled, e) }
+func PopHandled() {
+	if len(handled) > 0 {
+		handled = handled[:len(handled)-1]
+	}
+}
+
+// ExcInfo is sys.exc_info(): (type, value, traceback) of the exception being
+// handled, or three Nones.
+func ExcInfo() any {
+	if len(handled) == 0 {
+		return NewVarTuple[any](nil, nil, nil)
+	}
+	e := handled[len(handled)-1]
+	var val any = e
+	if e.Obj != nil {
+		val = e.Obj
+	}
+	return NewVarTuple[any](ExcClass(e), val, nil)
+}
+
+func init() {
+	RegisterNative("sys.exc_info", func(args []any, kw []KW) any { return ExcInfo() })
 }

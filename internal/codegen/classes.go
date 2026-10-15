@@ -244,6 +244,7 @@ func (g *generator) reservedClassName(name string) bool {
 // registerClassNames makes every top-level class known by name, so that
 // annotations anywhere can refer to it.
 func (g *generator) registerClassNames(mod *pyast.Module) error {
+	g.modBody = mod.Body
 	for i, stmt := range mod.Body {
 		cd, ok := stmt.(*pyast.ClassDef)
 		if !ok {
@@ -691,6 +692,9 @@ func (g *generator) classAssign(c *classInfo, n *pyast.Assign) error {
 // dataclass methods, the constructor, and the check that every override
 // has the signature of what it overrides.
 func (g *generator) finishClass(c *classInfo) error {
+	if err := g.externalClassAttrs(c); err != nil {
+		return err
+	}
 	if c.dc != nil {
 		if err := g.dataclassMembers(c); err != nil {
 			return err
@@ -772,6 +776,9 @@ func (g *generator) checkOverrides(c *classInfo) error {
 				winner = m
 				continue
 			}
+			if (winner.kind == mClassMethod || winner.kind == mStatic) && (m.kind == mClassMethod || m.kind == mStatic) {
+				continue // called on the class, so each class resolves its own
+			}
 			if winner.shape(g) != m.shape(g) {
 				return unsupported(fmt.Sprintf("'%s.%s' overrides '%s.%s' with a different signature or type (%s vs %s)",
 					winner.owner.name, shortName(name), m.owner.name, shortName(name), winner.shape(g), m.shape(g)), winner.line)
@@ -789,3 +796,31 @@ func (g *generator) checkOverrides(c *classInfo) error {
 }
 
 func shortName(n string) string { return n }
+
+// externalClassAttrs: "C.x = v" at the top of the module declares a class
+// attribute x whose value is computed where the class statement stands,
+// unless the class itself already has x (a subclass shadows the attribute it inherits).
+func (g *generator) externalClassAttrs(c *classInfo) error {
+	cd := c.node
+	// "C.x = v" at the top of the module, after the class, declares a class
+	// attribute whose value is computed where the class statement stands.
+	for _, st := range g.modBody {
+		a, ok := st.(*pyast.Assign)
+		if !ok || len(a.Targets) != 1 {
+			continue
+		}
+		at, ok := a.Targets[0].(*pyast.Attribute)
+		if !ok {
+			continue
+		}
+		if recv, ok := at.Value.(*pyast.Name); !ok || recv.ID != cd.Name || c.members[g.mangled(at.Attr)] != nil {
+			continue
+		}
+		synthetic := &pyast.Assign{Targets: []pyast.Node{&pyast.Name{ID: at.Attr, Lineno: a.Lineno}}, Value: a.Value, Lineno: a.Lineno}
+		if err := g.classAssign(c, synthetic); err != nil {
+			return err
+		}
+		g.externalAttr[a] = true
+	}
+	return nil
+}

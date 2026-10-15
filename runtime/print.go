@@ -3,7 +3,6 @@ package runtime
 import (
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -21,7 +20,41 @@ func PrintOpts(sep, end string, args ...any) {
 		b.WriteString(Str(a))
 	}
 	b.WriteString(end)
-	os.Stdout.WriteString(b.String())
+	writeStdout(b.String())
+}
+
+// StdoutTarget and StderrTarget are what sys.stdout and sys.stderr hold when
+// the program assigned them; nil means the real streams.
+var StdoutTarget, StderrTarget any
+
+// writeStdout is what print writes to: sys.stdout.
+func writeStdout(s string) {
+	if StdoutTarget != nil {
+		if f, ok := StdoutTarget.(*File); !ok || f != Stdout {
+			DynCallMethod(StdoutTarget, "write", []any{s}, nil)
+			return
+		}
+	}
+	Stdout.writeStr(s)
+}
+
+// FlushFile is the flush=True of print: file may be None for sys.stdout.
+func FlushFile(file any) {
+	if IsNone(file) {
+		if StdoutTarget != nil {
+			file = StdoutTarget
+		} else {
+			Stdout.flush()
+			return
+		}
+	}
+	if f, ok := Unbox(file).(*File); ok {
+		f.flush()
+		return
+	}
+	if DynHasAttr(file, "flush") {
+		DynCallMethod(file, "flush", nil, nil)
+	}
 }
 
 // FloatRepr formats a float the way Python's repr() does: the shortest
@@ -79,7 +112,11 @@ func PrintTo(file any, sep, end string, args ...any) {
 	}
 	b.WriteString(end)
 	if IsNone(file) {
-		os.Stdout.WriteString(b.String())
+		writeStdout(b.String())
+		return
+	}
+	if f, ok := Unbox(file).(*File); ok && f.text {
+		f.writeStr(b.String())
 		return
 	}
 	DynCallMethod(file, "write", []any{b.String()}, nil)

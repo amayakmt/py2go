@@ -107,7 +107,7 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 
 // dynDunders are the special methods the runtime calls by name, as the
 // built-ins round(), bytes() and the like do.
-var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true, "__await__": true, "__divmod__": true, "__rdivmod__": true, "__aenter__": true, "__aexit__": true, "__aiter__": true, "__anext__": true, "__reduce__": true, "__reduce_ex__": true, "__getstate__": true, "__setstate__": true, "__getnewargs__": true, "__getnewargs_ex__": true}
+var dynDunders = map[string]bool{"__round__": true, "__bytes__": true, "__trunc__": true, "__floor__": true, "__ceil__": true, "__complex__": true, "__enter__": true, "__exit__": true, "__await__": true, "__divmod__": true, "__rdivmod__": true, "__aenter__": true, "__aexit__": true, "__aiter__": true, "__anext__": true, "__reduce__": true, "__fspath__": true, "__index__": true, "__int__": true, "__float__": true, "__reduce_ex__": true, "__getstate__": true, "__setstate__": true, "__getnewargs__": true, "__getnewargs_ex__": true}
 
 func isDunder(name string) bool {
 	return strings.HasPrefix(name, "__") && strings.HasSuffix(name, "__")
@@ -255,6 +255,9 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 	}
 	if m := one("__int__", 0); m != nil {
 		fmt.Fprintf(out, "func %s PyInt() (any, bool) { return self.M___int__(), true }\n", recv)
+	}
+	if m := one("__index__", 0); m != nil {
+		fmt.Fprintf(out, "func %s PyIndex() (any, bool) { return self.M___index__(), true }\n", recv)
 	}
 	if m := one("__float__", 0); m != nil {
 		fmt.Fprintf(out, "func %s PyFloat() (float64, bool) { return self.M___float__(), true }\n", recv)

@@ -479,10 +479,23 @@ func (g *generator) dynMethodCall(n *pyast.Call, m *pyast.Attribute, recv value)
 		return value{}, err
 	}
 	var code string
+	target := g.boxed(recv)
+	temp := false
+	if rc, ok := m.Value.(*pyast.Call); ok {
+		// open(...).write(...): the file is garbage once the call is done, and
+		// CPython closes it then, which flushes what was written.
+		if fn, ok := rc.Func.(*pyast.Name); ok && (fn.ID == "open" || fn.ID == "io_pm_open") && !g.isVariable(fn.ID) {
+			temp = true
+			target = "f_"
+		}
+	}
 	if kw == "" {
-		code = g.rt("DynMethodPair") + "(" + g.boxed(recv) + ", " + strconv.Quote(m.Attr) + ", " + args + ")"
+		code = g.rt("DynMethodPair") + "(" + target + ", " + strconv.Quote(m.Attr) + ", " + args + ")"
 	} else {
-		code = g.rt("DynCallMethod") + "(" + g.boxed(recv) + ", " + strconv.Quote(m.Attr) + ", " + args + ", " + kw + ")"
+		code = g.rt("DynCallMethod") + "(" + target + ", " + strconv.Quote(m.Attr) + ", " + args + ", " + kw + ")"
+	}
+	if temp {
+		code = g.rt("WithTempFile") + "(" + g.boxed(recv) + ", func(f_ any) any {\nreturn " + code + "\n})"
 	}
 	if recv.typ == tStr {
 		// The result of a str method has a known type.

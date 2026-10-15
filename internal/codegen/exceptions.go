@@ -538,6 +538,13 @@ func (g *generator) handlerBody(b *strings.Builder, h *pyast.ExceptHandler, exc 
 		g.handlers = g.handlers[:len(g.handlers)-1]
 	}()
 
+	// sys.exc_info() finds the exception being handled: the handler runs in a
+	// closure that registers it, unless it jumps out of the closure.
+	wrapped := !jumpsOut(h.Body, false) && !g.infer
+	if wrapped {
+		fmt.Fprintf(b, "func() {\n%s(%s)\ndefer %s()\n", g.rt("PushHandled"), exc, g.rt("PopHandled"))
+		defer b.WriteString("}()\n")
+	}
 	if h.Name != "" {
 		if err := checkName(h.Name, h.Line()); err != nil {
 			return err
@@ -553,4 +560,51 @@ func (g *generator) handlerBody(b *strings.Builder, h *pyast.ExceptHandler, exc 
 		return err
 	}
 	return g.stmtList(b, h.Body)
+}
+
+// jumpsOut says whether the statements contain a return, or a break or
+// continue that leaves them: what cannot run inside a closure.
+func jumpsOut(stmts []pyast.Node, inLoop bool) bool {
+	for _, st := range stmts {
+		switch n := st.(type) {
+		case *pyast.Return, *pyast.Yield, *pyast.YieldFrom:
+			return true
+		case *pyast.Break, *pyast.Continue:
+			if !inLoop {
+				return true
+			}
+		case *pyast.If:
+			if jumpsOut(n.Body, inLoop) || jumpsOut(n.Orelse, inLoop) {
+				return true
+			}
+		case *pyast.For:
+			if jumpsOut(n.Body, true) || jumpsOut(n.Orelse, inLoop) {
+				return true
+			}
+		case *pyast.While:
+			if jumpsOut(n.Body, true) || jumpsOut(n.Orelse, inLoop) {
+				return true
+			}
+		case *pyast.With:
+			if jumpsOut(n.Body, inLoop) {
+				return true
+			}
+		case *pyast.Try:
+			if jumpsOut(n.Body, inLoop) || jumpsOut(n.Orelse, inLoop) || jumpsOut(n.Finalbody, inLoop) {
+				return true
+			}
+			for _, h := range n.Handlers {
+				if jumpsOut(h.Body, inLoop) {
+					return true
+				}
+			}
+		case *pyast.Match:
+			for _, c := range n.Cases {
+				if jumpsOut(c.Body, inLoop) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

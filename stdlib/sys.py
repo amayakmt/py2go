@@ -79,3 +79,19 @@ def setswitchinterval(interval):
 
 def getswitchinterval():
     return _native("thread.getswitchinterval")
+
+
+def exc_info():
+    return _native("sys.exc_info")
+
+
+def exception():
+    return _native("sys.exc_info")[1]
+
+
+def getfilesystemencodeerrors():
+    return "surrogateescape"
+
+
+def is_finalizing():
+    return False

@@ -533,6 +533,8 @@ func (g *generator) funcBodyOnce(fn *pyast.FunctionDef, sig *funcSig, header str
 			}
 		case sig.ret.isOptional():
 			fmt.Fprintf(&body, "return %s[%s]()\n", g.rt("NoneOf"), g.goType(sig.ret.optElem()))
+		case sig.ret == tObject && g.specialRet:
+			body.WriteString("return " + g.rt("NoneV") + ", true\n")
 		case sig.ret == tObject:
 			body.WriteString("return " + g.rt("NoneV") + "\n")
 		case sig.ret != tNone:

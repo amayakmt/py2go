@@ -351,6 +351,12 @@ func (g *generator) name(n *pyast.Name) (value, error) {
 		}
 		return value{code: n.ID, typ: t, prec: precAtom, fsig: sig, varName: n.ID}, nil
 	}
+	if c := g.classBodyCur; c != nil && g.classBodySeen[n.ID] {
+		// A class body reads an attribute it assigned before.
+		if m := c.members[n.ID]; m != nil && m.kind == mClassAttr && m.typ != "" {
+			return value{code: classAttrVar(c, n.ID), typ: m.typ, prec: precAtom}, nil
+		}
+	}
 	if v, ok := g.readGlobal(n.ID); ok {
 		v.varName = n.ID
 		return v, nil

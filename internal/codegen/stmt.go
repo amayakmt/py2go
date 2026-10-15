@@ -237,6 +237,9 @@ func (g *generator) annAssign(b *strings.Builder, n *pyast.AnnAssign) error {
 }
 
 func (g *generator) assign(b *strings.Builder, n *pyast.Assign) error {
+	if g.externalAttr[n] {
+		return nil
+	}
 	// T = TypeVar("T") only declares a type variable.
 	if len(n.Targets) == 1 {
 		if name, ok := n.Targets[0].(*pyast.Name); ok {

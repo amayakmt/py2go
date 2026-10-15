@@ -114,6 +114,7 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		}
 	}
 	// Class attributes.
+	g.classBodyCur, g.classBodySeen = c, map[string]bool{}
 	for _, name := range c.order {
 		m := c.members[name]
 		if m.kind != mClassAttr {
@@ -129,9 +130,11 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		}
 		varName := classAttrVar(c, name)
 		g.defaultVars = append(g.defaultVars, defaultVar{varName, m.typ})
+		g.classBodySeen[name] = true
 		fmt.Fprintf(main, "%s = %s\n", varName, v.code)
 		fmt.Fprintf(main, "%s(%s, %s, func() any { return %s })\n", g.rt("RegisterClassAttr"), strconv.Quote(c.pyName()), strconv.Quote(pyName(name)), varName)
 	}
+	g.classBodyCur, g.classBodySeen = nil, nil
 	bases := []string{strconv.Quote(c.pyName())}
 	for _, k := range c.mro[1:] {
 		if !k.builtin && k.name != "object" {

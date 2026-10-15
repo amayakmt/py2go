@@ -124,17 +124,26 @@ func Is(a, b any) bool {
 // UnsupportedOperand is the TypeError of a binary operator no operand
 // implements.
 func UnsupportedOperand(op, left, right string) *PyError {
-	return newError("TypeError", fmt.Sprintf("unsupported operand type(s) for %s: '%s' and '%s'", op, left, right))
+	return newError("TypeError", fmt.Sprintf("unsupported operand type(s) for %s: '%s' and '%s'", op, errTypeName(left), errTypeName(right)))
 }
 
 // UnsupportedOperandUnary is the TypeError of a unary operator.
 func UnsupportedOperandUnary(op, operand string) *PyError {
-	return newError("TypeError", fmt.Sprintf("bad operand type for unary %s: '%s'", op, operand))
+	return newError("TypeError", fmt.Sprintf("bad operand type for unary %s: '%s'", op, errTypeName(operand)))
 }
 
 // NotOrderable is "'<' not supported between instances of 'A' and 'B'".
 func NotOrderable(op string, a, b any) *PyError {
-	return newError("TypeError", fmt.Sprintf("'%s' not supported between instances of '%s' and '%s'", op, TypeName(a), TypeName(b)))
+	return newError("TypeError", fmt.Sprintf("'%s' not supported between instances of '%s' and '%s'", op, errTypeName(TypeName(a)), errTypeName(TypeName(b))))
+}
+
+// errTypeName is a type name as the messages of C types spell it: the types
+// of the datetime and decimal modules carry the module name.
+func errTypeName(name string) string {
+	if c, ok := classRefs[name]; ok && (c.Module == "datetime" || c.Module == "decimal") {
+		return c.Module + "." + name
+	}
+	return name
 }
 
 // NoAttribute is the AttributeError of reading an attribute that is not there.
@@ -208,6 +217,9 @@ func ExcTypeName(e *PyError) string {
 
 // IsExcInstance is isinstance(x, E) for a value held as object.
 func IsExcInstance(x any, class string) bool {
+	if e, ok := Unbox(x).(*PyError); ok {
+		return IsSubclass(e.Type, class)
+	}
 	if e, ok := x.(interface{ PyExc() *PyError }); ok {
 		return IsSubclass(e.PyExc().Type, class)
 	}

@@ -146,6 +146,11 @@ func convOpt[T any](v any) (T, bool) {
 // indexArg reads the index of a subscript.
 func indexArg(key any) (int64, bool) {
 	key = Unbox(key)
+	if x, ok := key.(interface{ PyIndex() (any, bool) }); ok {
+		if v, ok := x.PyIndex(); ok {
+			key = Unbox(v)
+		}
+	}
 	if isBig(key) {
 		panic(indexError("cannot fit 'int' into an index-sized integer"))
 	}
@@ -169,9 +174,48 @@ func DynIter(v any) Iterable[any] {
 		return funcIterable(func() Cursor[any] { c2, _ := x.PyIterAny(); return c2 })
 	case interface{ PyNext() any }:
 		return funcIterable(func() Cursor[any] { return &nextCursor{it: x} })
+	case interface{ PyGetItem(key any) (any, bool) }:
+		// The old sequence protocol: __getitem__ with 0, 1, 2 ... until IndexError.
+		return funcIterable(func() Cursor[any] { return &getItemCursor{obj: x} })
 	}
 	panic(newError("TypeError", "'"+TypeName(v)+"' object is not iterable"))
 }
+
+type getItemCursor struct {
+	obj  interface{ PyGetItem(key any) (any, bool) }
+	i    int64
+	cur  any
+	done bool
+}
+
+func (c *getItemCursor) Next() bool {
+	if c.done {
+		return false
+	}
+	var v any
+	var ended bool
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if e, ok := r.(*PyError); ok && (e.Type == "IndexError" || e.Type == "StopIteration") {
+					ended = true
+					return
+				}
+				panic(r)
+			}
+		}()
+		v, _ = c.obj.PyGetItem(c.i)
+	}()
+	if ended {
+		c.done = true
+		return false
+	}
+	c.i++
+	c.cur = v
+	return true
+}
+
+func (c *getItemCursor) Value() any { return c.cur }
 
 type dynIterable struct {
 	src interface{ IterAny() Cursor[any] }

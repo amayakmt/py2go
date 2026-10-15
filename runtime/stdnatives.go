@@ -2,7 +2,6 @@ package runtime
 
 import (
 	cryptoRand "crypto/rand"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,6 +34,8 @@ func init() {
 		return strList(argv)
 	})
 	RegisterNative("sys.stdout", func(args []any, kw []KW) any { return Stdout })
+	RegisterNative("sys.set_stdout", func(args []any, kw []KW) any { StdoutTarget = args[0]; return args[0] })
+	RegisterNative("sys.set_stderr", func(args []any, kw []KW) any { StderrTarget = args[0]; return args[0] })
 	RegisterNative("sys.stderr", func(args []any, kw []KW) any { return Stderr })
 	RegisterNative("sys.stdin", func(args []any, kw []KW) any { return Stdin })
 	RegisterNative("sys.getrefcount", func(args []any, kw []KW) any { return int64(2) })
@@ -194,7 +195,6 @@ func init() {
 	RegisterNative("time.time_ns", func(args []any, kw []KW) any { return time.Now().UnixNano() })
 	RegisterNative("time.perf_counter", func(args []any, kw []KW) any { return time.Since(startTime).Seconds() })
 	RegisterNative("time.perf_counter_ns", func(args []any, kw []KW) any { return int64(time.Since(startTime)) })
-	RegisterNative("time.process_time", func(args []any, kw []KW) any { return time.Since(startTime).Seconds() })
 	RegisterNative("time.sleep", func(args []any, kw []KW) any {
 		nativeArgs("sleep", args, 1, 1)
 		secs := mathFloat(args[0])
@@ -204,25 +204,6 @@ func init() {
 		sleepFor(time.Duration(secs * float64(time.Second)))
 		return nil
 	})
-	RegisterNative("time.gmtime", func(args []any, kw []KW) any { return timeTuple(args, time.UTC) })
-	RegisterNative("time.localtime", func(args []any, kw []KW) any { return timeTuple(args, time.Local) })
-	RegisterNative("time.mktime", func(args []any, kw []KW) any {
-		t := tupleInts(args[0])
-		return float64(time.Date(int(t[0]), time.Month(t[1]), int(t[2]), int(t[3]), int(t[4]), int(t[5]), 0, time.Local).Unix())
-	})
-	RegisterNative("time.timegm", func(args []any, kw []KW) any {
-		t := tupleInts(args[0])
-		return time.Date(int(t[0]), time.Month(t[1]), int(t[2]), int(t[3]), int(t[4]), int(t[5]), 0, time.UTC).Unix()
-	})
-	RegisterNative("time.strftime", func(args []any, kw []KW) any {
-		t := tupleInts(args[1])
-		loc := time.UTC
-		if t[8] >= 0 {
-			loc = time.Local
-		}
-		return strftime(Str(args[0]), time.Date(int(t[0]), time.Month(t[1]), int(t[2]), int(t[3]), int(t[4]), int(t[5]), 0, loc))
-	})
-
 	// ---- copy ----
 	RegisterNative("copy.copy", func(args []any, kw []KW) any { return shallowCopy(args[0]) })
 	RegisterNative("copy.deepcopy", func(args []any, kw []KW) any {
@@ -239,117 +220,6 @@ func tupleInts(v any) []int64 {
 		out = append(out, 0)
 	}
 	return out
-}
-
-// timeTuple is the nine fields of a struct_time for a time stamp.
-func timeTuple(args []any, loc *time.Location) any {
-	var t time.Time
-	if len(args) == 0 || IsNone(args[0]) {
-		t = time.Now()
-	} else {
-		secs := mathFloat(args[0])
-		t = time.Unix(int64(secs), 0)
-	}
-	t = t.In(loc)
-	wday := (int64(t.Weekday()) + 6) % 7
-	dst := int64(0)
-	if loc != time.UTC && t.IsDST() {
-		dst = 1
-	}
-	if loc == time.UTC {
-		dst = 0
-	}
-	return NewVarTuple[any](int64(t.Year()), int64(t.Month()), int64(t.Day()), int64(t.Hour()), int64(t.Minute()), int64(t.Second()), wday, int64(t.YearDay()), dst)
-}
-
-// strftime is the C library's strftime for the common conversions.
-func strftime(format string, t time.Time) string {
-	var b strings.Builder
-	for i := 0; i < len(format); i++ {
-		c := format[i]
-		if c != '%' || i+1 >= len(format) {
-			b.WriteByte(c)
-			continue
-		}
-		i++
-		switch format[i] {
-		case 'Y':
-			fmt.Fprintf(&b, "%d", t.Year())
-		case 'y':
-			fmt.Fprintf(&b, "%02d", t.Year()%100)
-		case 'm':
-			fmt.Fprintf(&b, "%02d", int(t.Month()))
-		case 'd':
-			fmt.Fprintf(&b, "%02d", t.Day())
-		case 'e':
-			fmt.Fprintf(&b, "%2d", t.Day())
-		case 'H':
-			fmt.Fprintf(&b, "%02d", t.Hour())
-		case 'I':
-			h := t.Hour() % 12
-			if h == 0 {
-				h = 12
-			}
-			fmt.Fprintf(&b, "%02d", h)
-		case 'M':
-			fmt.Fprintf(&b, "%02d", t.Minute())
-		case 'S':
-			fmt.Fprintf(&b, "%02d", t.Second())
-		case 'p':
-			if t.Hour() < 12 {
-				b.WriteString("AM")
-			} else {
-				b.WriteString("PM")
-			}
-		case 'a':
-			b.WriteString(t.Weekday().String()[:3])
-		case 'A':
-			b.WriteString(t.Weekday().String())
-		case 'b', 'h':
-			b.WriteString(t.Month().String()[:3])
-		case 'B':
-			b.WriteString(t.Month().String())
-		case 'j':
-			fmt.Fprintf(&b, "%03d", t.YearDay())
-		case 'w':
-			fmt.Fprintf(&b, "%d", int(t.Weekday()))
-		case 'u':
-			wd := int(t.Weekday())
-			if wd == 0 {
-				wd = 7
-			}
-			fmt.Fprintf(&b, "%d", wd)
-		case 'Z':
-			name, _ := t.Zone()
-			b.WriteString(name)
-		case 'z':
-			b.WriteString(t.Format("-0700"))
-		case 'c':
-			b.WriteString(t.Format("Mon Jan _2 15:04:05 2006"))
-		case 'x':
-			b.WriteString(t.Format("01/02/06"))
-		case 'X':
-			b.WriteString(t.Format("15:04:05"))
-		case 'D':
-			b.WriteString(t.Format("01/02/06"))
-		case 'F':
-			b.WriteString(t.Format("2006-01-02"))
-		case 'T':
-			b.WriteString(t.Format("15:04:05"))
-		case 'R':
-			b.WriteString(t.Format("15:04"))
-		case 'n':
-			b.WriteByte('\n')
-		case 't':
-			b.WriteByte('\t')
-		case '%':
-			b.WriteByte('%')
-		default:
-			b.WriteByte('%')
-			b.WriteByte(format[i])
-		}
-	}
-	return b.String()
 }
 
 // ---- copy ----

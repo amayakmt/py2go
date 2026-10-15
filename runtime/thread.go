@@ -537,6 +537,7 @@ func runExitHooks() {
 		}
 	}
 	runAtExit()
+	FlushAll()
 }
 
 // ThreadLocal is threading.local: its attributes are per thread.

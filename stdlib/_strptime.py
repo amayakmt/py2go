@@ -158,6 +158,7 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
     fraction = 0
     tz = -1
     gmtoff = None
+    tzname = None
     gmtoff_fraction = 0
     iso_year = None
     iso_week = None
@@ -233,6 +234,7 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
                 gmtoff = sign * (hh * 3600 + mm * 60 + ss)
         elif key == "Z":
             tz = 0
+            tzname = v
         elif key == "p":
             ampm = 1 if v.lower() == "pm" else 0
     if ampm is not None and ampm != -1:
@@ -294,9 +296,9 @@ def _strptime(data_string, format="%a %b %d %H:%M:%S %Y"):
         weekday = (_to_ordinal(year, month, day) + 6) % 7
     if leap_year_fix:
         year = 1900
-    return ((year, month, day, hour, minute, second, weekday, julian, tz), fraction, gmtoff_fraction if gmtoff is None else gmtoff)
+    return ((year, month, day, hour, minute, second, weekday, julian, tz, tzname, gmtoff), fraction, gmtoff_fraction)
 
 
 def _strptime_time(data_string, format="%a %b %d %H:%M:%S %Y"):
     tt, fraction, gmtoff = _strptime(data_string, format)
-    return tt
+    return tt[:9]

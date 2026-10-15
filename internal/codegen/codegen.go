@@ -95,13 +95,17 @@ type generator struct {
 	keepObject         bool // exprAs leaves an object value as it is
 	joinsChanged       bool
 	annotatedDecl      bool
-	elseFlags          []string         // per enclosing loop: the flag a break sets, if it has an else
-	gen                *genInfo         // the generator function being compiled
-	genNone            bool             // ... and it returns None
-	threads            bool             // the program starts threads or handles signals: loops yield
-	usesPickle         bool             // the program calls pickle natives: functions and classes are registered by name
-	hoist              *strings.Builder // declarations an expression needs before its statement
-	buildingMethod     bool             // method names are not Go identifiers, so any name will do
+	elseFlags          []string               // per enclosing loop: the flag a break sets, if it has an else
+	gen                *genInfo               // the generator function being compiled
+	genNone            bool                   // ... and it returns None
+	threads            bool                   // the program starts threads or handles signals: loops yield
+	classBodyCur       *classInfo             // the class whose attribute values are being evaluated
+	classBodySeen      map[string]bool        // its class attributes evaluated so far
+	modBody            []pyast.Node           // the statements of the module, for class attributes assigned after the class
+	externalAttr       map[*pyast.Assign]bool // "C.x = v" statements that declare class attribute x
+	usesPickle         bool                   // the program calls pickle natives: functions and classes are registered by name
+	hoist              *strings.Builder       // declarations an expression needs before its statement
+	buildingMethod     bool                   // method names are not Go identifiers, so any name will do
 }
 
 // Generate converts a decoded Python module into formatted Go source.
@@ -125,10 +129,11 @@ func Generate(root pyast.Node) ([]byte, error) {
 		fnGlobals:   map[string]bool{},
 		fnNonlocals: map[string]bool{},
 
-		classes:     map[string]*classInfo{},
-		builtinCls:  map[string]*classInfo{},
-		storedAttrs: map[string]bool{},
-		noneFields:  map[string]bool{},
+		classes:      map[string]*classInfo{},
+		builtinCls:   map[string]*classInfo{},
+		storedAttrs:  map[string]bool{},
+		noneFields:   map[string]bool{},
+		externalAttr: map[*pyast.Assign]bool{},
 
 		typeVars:       map[string]typeVarInfo{},
 		typeAliases:    map[string]*typeAlias{},
