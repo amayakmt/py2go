@@ -28,7 +28,12 @@ exec_prefix = ""
 base_prefix = ""
 base_exec_prefix = ""
 path = []
-modules = {}
+class _Module:
+    def __init__(self, name):
+        self.name = name
+
+
+modules = {'__main__': _Module('__main__')}
 builtin_module_names = ("builtins", "sys")
 float_info = _FloatInfo(1.7976931348623157e308, 1024, 308, 2.2250738585072014e-308, -1021, -307, 15, 53, 2.220446049250313e-16, 2, 1)
 int_info = _IntInfo(30, 4, 4300, 640)
