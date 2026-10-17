@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>blob</key>
+	<data>
+	AAFiaW5hcnk=
+	</data>
+	<key>enabled</key>
+	<true/>
+	<key>name</key>
+	<string>py2go</string>
+	<key>nested</key>
+	<dict>
+		<key>x</key>
+		<array>
+			<integer>1</integer>
+			<integer>2</integer>
+			<dict>
+				<key>y</key>
+				<false/>
+			</dict>
+		</array>
+	</dict>
+	<key>ratio</key>
+	<real>0.5</real>
+	<key>tags</key>
+	<array>
+		<string>a</string>
+		<string>b</string>
+	</array>
+	<key>version</key>
+	<integer>3</integer>
+	<key>when</key>
+	<date>2024-05-06T07:08:09Z</date>
+</dict>
+</plist>
+
+True
+b'\x00\x01binary' 2024-05-06 07:08:09 {'x': [1, 2, {'y': False}]}
+b'bplist00' 194
+True
+['<array>', '\t<string>x</string>', '\t<integer>1</integer>', '</array>']
+InvalidFileException Invalid file
+UID(5) 5 {'u': UID(5)}

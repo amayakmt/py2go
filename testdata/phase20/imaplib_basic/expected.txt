@@ -1,0 +1,14 @@
+"04-Mar-2024 05:06:0
+(2024, 1, 1, 19, 20, 30)
+(b'\\Seen', b'\\Answered')
+b'ENC'
+b'* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] fake ready' ['AUTH=PLAIN', 'IMAP4REV1']
+('OK', [b'logged in'])
+('OK', [b'2'])
+('OK', [b'1 2'])
+OK [(b'1 (RFC822 {20}', b'Subject: hi\r\n\r\nhello'), b')']
+('OK', [b'(\\HasNoChildren) "/" INBOX'])
+error NOOP command error: BAD [b'unknown']
+('BYE', [b''])
+['LOGIN', 'CAPABILITY', 'SELECT', 'SEARCH', 'FETCH', 'LIST', 'NOOP', 'LOGOUT']
+True

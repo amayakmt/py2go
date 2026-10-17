@@ -1,0 +1,11 @@
+3 ['hello 0', 'hello 1', 'hello 2']
+2 ['hello 0', 'hello 2']
+mboxMessage MAILER-DAEMON ['body 0', '>From the start of a line']
+2
+MaildirMessage in maildir new 
+RS new 1
+['work'] 1
+[1, 2] mh two {}
+{'unseen': [1]}
+RO
+S cur

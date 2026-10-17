@@ -1,0 +1,42 @@
+hello world
+hello bob
+6
+(empty)
+unknown: foo bar
+welcome
+(sh) (sh) (sh) (sh) (sh) (sh) greet [name]: say hello
+(sh) 
+Documented commands (type help <topic>):
+========================================
+greet  help
+
+Undocumented commands:
+======================
+add  quit
+
+(sh) 
+hello carol
+None
+['greet'] ['alice']
+('add', '4 5', 'add 4 5')
+True 3 file.txt ['a', 'b'] 2 high ['x', 'y']
+Usage: tool [options] file
+
+Options:
+  --version          show program's version number and exit
+  -h, --help         show this help message and exit
+  -v, --verbose      talk more
+  -n NUM, --num=NUM  how many [default: 1]
+  -o FILE            
+  --tag=TAGS         
+  -c                 
+
+  Extra:
+    rarely used
+
+    --level=LEVEL    
+
+exit 2
+exit 2
+exit 2
+5

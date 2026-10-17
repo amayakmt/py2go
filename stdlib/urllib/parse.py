@@ -879,3 +879,46 @@ def splitattr(url):
 def splitvalue(attr):
     attr, delim, value = attr.partition("=")
     return attr, (value if delim else None)
+
+
+# The private names, which other modules of the library call.
+
+
+def _splittype(url):
+    return splittype(url)
+
+
+def _splithost(url):
+    return splithost(url)
+
+
+def _splituser(host):
+    return splituser(host)
+
+
+def _splitpasswd(user):
+    return splitpasswd(user)
+
+
+def _splitport(host):
+    return splitport(host)
+
+
+def _splitquery(url):
+    return splitquery(url)
+
+
+def _splittag(url):
+    return splittag(url)
+
+
+def _splitattr(url):
+    return splitattr(url)
+
+
+def _splitvalue(attr):
+    return splitvalue(attr)
+
+
+def _splitnport(host, defport=-1):
+    return splitnport(host, defport)

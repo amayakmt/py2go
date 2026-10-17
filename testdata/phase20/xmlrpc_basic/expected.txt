@@ -1,0 +1,42 @@
+<?xml version='1.0'?>
+<methodCall>
+<methodName>echo</methodName>
+<params>
+<param>
+<value><int>1</int></value>
+</param>
+<param>
+<value><string>two</string></value>
+</param>
+<param>
+<value><double>3.5</double></value>
+</param>
+<param>
+<value><boolean>1</boolean></value>
+</param>
+<param>
+<value><array><data>
+<value><int>1</int></value>
+<value><int>2</int></value>
+</data></array></value>
+</param>
+<param>
+<value><struct>
+<member>
+<name>k</name>
+<value><string>v</string></value>
+</member>
+</struct></value>
+</param>
+<param>
+<value><nil/></value></param>
+</params>
+</methodCall>
+
+echo (1, 'two', 3.5, True, [1, 2], {'k': 'v'}, None)
+20240102T03:04:05 b'\x00raw'
+Fault 4 Too many
+5 ab 1024
+['add', 'pow', 'system.listMethods', 'system.methodHelp', 'system.methodSignature', 'system.multicall']
+Fault 1 <class 'Exception'>:method "nosuch" is not supported
+[2, 9]

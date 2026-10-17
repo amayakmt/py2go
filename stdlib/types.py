@@ -51,3 +51,33 @@ class MappingProxyType:
 
     def copy(self):
         return self._mapping.copy()
+
+
+class GenericAlias:
+    """C[int] as a value: its origin and arguments. (Classes of the program
+    are not subscripted at run time; the linker drops the
+    __class_getitem__ = classmethod(GenericAlias) that the library writes.)"""
+
+    def __init__(self, origin, args):
+        self.__origin__ = origin
+        if not isinstance(args, tuple):
+            args = (args,)
+        self.__args__ = args
+
+    def __repr__(self):
+        def name(a):
+            if isinstance(a, type):
+                return a.__qualname__
+            return repr(a)
+        return name(self.__origin__) + "[" + ", ".join(name(a) for a in self.__args__) + "]"
+
+    def __eq__(self, other):
+        if isinstance(other, GenericAlias):
+            return self.__origin__ == other.__origin__ and self.__args__ == other.__args__
+        return NotImplemented
+
+    def __call__(self, *args, **kwargs):
+        return self.__origin__(*args, **kwargs)
+
+
+NoneType = type(None)

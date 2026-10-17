@@ -9,7 +9,7 @@ CLOCK_BOOTTIME = 7
 CLOCK_TAI = 11
 
 
-class struct_time:
+class struct_time(tuple):
     n_sequence_fields = 9
     n_fields = 11
     n_unnamed_fields = 0
@@ -31,6 +31,7 @@ class struct_time:
         self.tm_isdst = items[8]
         self.tm_zone = items[9] if len(items) > 9 else None
         self.tm_gmtoff = items[10] if len(items) > 10 else None
+        self._set(tuple(items[:9]))  # py2go: the tuple value of the tuple subclass
 
     def _t(self):
         return (self.tm_year, self.tm_mon, self.tm_mday, self.tm_hour, self.tm_min, self.tm_sec,
