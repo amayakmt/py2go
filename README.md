@@ -43,11 +43,22 @@ Python 3.13 only. Pinned in .python-version.
 
 - `async`/`await`, threads (with a global interpreter lock), signals and `asyncio` work
   as in CPython; `multiprocessing` does not exist yet
-- Standard library only; a first set of modules (`math`, `itertools`, `functools`,
-  `collections`, `re`, `json`, `random`, `enum`, `os`, `sys`, `asyncio`, `threading`,
-  `queue`, `concurrent.futures`, `signal`, `contextvars`, `decimal`, `fractions`,
-  `statistics`, `struct`, `unicodedata`, ... see `stdlib/manifest.json`) is written in Python in `stdlib/` with Go natives in
-  `runtime/`, and joined into the program like a project module
+- Standard library only: about 135 modules of the standard library are in, in
+  part or in full (`stdlib/manifest.json` has the list), from the core (`math`,
+  `itertools`, `functools`, `collections` and `collections.abc`, `re`, `json`,
+  `enum`, `dataclasses`, `typing`, `abc`, `numbers`) to files and processes
+  (`os`, `pathlib`, `shutil`, `subprocess`, `tempfile`), the network (`socket`,
+  `ssl` over Go's `crypto/tls`, `http`, `urllib`, `email`, `smtplib`,
+  `xmlrpc`, `mailbox`), data formats
+  (`csv`, `pickle`, `zlib`, `gzip`, `zipfile`, `tarfile`, `plistlib`) and XML
+  (`xml.etree`, `xml.dom.minidom`, `xml.sax` over a `pyexpat` written in Go).
+  They are written in Python in `stdlib/` with Go natives in `runtime/`, and
+  joined into the program like a project module
+- Classes work as in Python in the common cases: inheritance from built-in
+  types, nested classes, class decorators, abstract base classes,
+  `__init_subclass__`, `__setattr__` hooks and `__del__`; the differences are
+  in [docs/known-differences.md](docs/known-differences.md)
+- No `eval`/`exec`, no C libraries (`sqlite3`, `ctypes`, `tkinter`)
 - `int` has any size in code without annotations; an annotated `int` is 64 bits and
   raises `OverflowError` on `*`, `**` and `<<` beyond that
 - Type hints are optional. Annotated code compiles to typed Go and an annotation

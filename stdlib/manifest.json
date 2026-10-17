@@ -795,14 +795,14 @@
    "name": "cmath",
    "phase": 14,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "cmd",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1159,14 +1159,14 @@
    "name": "imaplib",
    "phase": 17,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "importlib",
    "phase": 11,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1243,7 +1243,7 @@
    "name": "mailbox",
    "phase": 17,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1334,7 +1334,7 @@
    "name": "numbers",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1355,7 +1355,7 @@
    "name": "optparse",
    "phase": 14,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1411,7 +1411,7 @@
    "name": "plistlib",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1502,7 +1502,7 @@
    "name": "pyexpat",
    "phase": 16,
    "kind": "N",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1684,7 +1684,7 @@
    "name": "ssl",
    "phase": 17,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1845,7 +1845,7 @@
    "name": "tokenize",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1999,14 +1999,14 @@
    "name": "xml",
    "phase": 16,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "xmlrpc",
    "phase": 17,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
