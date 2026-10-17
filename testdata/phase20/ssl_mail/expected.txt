@@ -1,0 +1,8 @@
+250 True
+(220, b'go ahead')
+250 True True
+{}
+b'+OK fake pop3' b'+OK' b'+OK' (2, 320)
+b'+OK bye'
+[('smtp', False, 'ehlo'), ('smtp', False, 'STARTTLS'), ('smtp', True, 'ehlo'), ('smtp', True, 'mail'), ('smtp', True, 'rcpt'), ('smtp', True, 'data'), ('body', 'hello over tls'), ('smtp', True, 'QUIT'), ('pop', 'USER'), ('pop', 'PASS'), ('pop', 'STAT'), ('pop', 'QUIT')]
+FTP_TLS True True True

@@ -164,7 +164,8 @@ except ValueError:
     _have_cram_md5_support = False
 else:
     _have_cram_md5_support = True
-_have_ssl = False
+import ssl
+_have_ssl = True
 
 class SMTP:
     """This class manages a connection to an SMTP or ESMTP server.
@@ -682,6 +683,9 @@ class SMTP:
         if resp == 220:
             if not _have_ssl:
                 raise RuntimeError('No SSL support included in this Python')
+            if context is None:
+                context = ssl._create_stdlib_context()
+            self.sock = context.wrap_socket(self.sock, server_hostname=self._host)
             self.file = _obj(None)
             self.helo_resp = None
             self.ehlo_resp = None
@@ -868,6 +872,40 @@ class SMTP:
         self.close()
         return res
 LMTP_PORT = 2003
+
+class SMTP_SSL(SMTP):
+    """ This is a subclass derived from SMTP that connects over an SSL
+    encrypted socket (to use this class you need a socket module that was
+    compiled with SSL support). If host is not specified, '' (the local
+    host) is used. If port is omitted, the standard SMTP-over-SSL port
+    (465) is used.  local_hostname and source_address have the same meaning
+    as they do in the SMTP class.  context also optional, can contain a
+    SSLContext.
+
+    """
+
+    default_port = SMTP_SSL_PORT
+
+    def __init__(self, host='', port=0, local_hostname=None,
+                 *, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 source_address=None, context=None):
+        if context is None:
+            context = ssl._create_stdlib_context()
+        self.context = context
+        SMTP.__init__(self, host, port, local_hostname, timeout,
+                      source_address)
+
+    def _get_socket(self, host, port, timeout):
+        if self.debuglevel > 0:
+            self._print_debug('connect:', (host, port))
+        new_socket = super()._get_socket(host, port, timeout)
+        new_socket = self.context.wrap_socket(new_socket,
+                                              server_hostname=self._host)
+        return new_socket
+
+
+__all__.append("SMTP_SSL")
+
 
 class LMTP(SMTP):
     """LMTP - Local Mail Transfer Protocol

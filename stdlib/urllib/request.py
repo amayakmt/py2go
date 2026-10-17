@@ -1,7 +1,7 @@
 """An extensible library for opening URLs (reduced hand-written port).
 
-Supports http:, file: and data: URLs, redirects, and basic opener/handler
-plumbing.  No ssl, proxies, ftp or authentication handlers.
+Supports http:, https:, file: and data: URLs, redirects, and basic
+opener/handler plumbing.  No proxies, ftp or authentication handlers.
 """
 import base64
 import http.client
@@ -13,7 +13,7 @@ from urllib.error import URLError, HTTPError, ContentTooShortError
 from urllib.parse import urlparse, urlsplit, urljoin, unquote, quote, urlunparse, unquote_to_bytes, splittype as _splittype, splithost as _splithost
 from urllib.response import addinfourl, addclosehook
 
-__all__ = ['Request', 'OpenerDirector', 'BaseHandler', 'HTTPRedirectHandler', 'HTTPHandler', 'HTTPCookieProcessor', 'FileHandler', 'DataHandler', 'build_opener', 'install_opener', 'urlopen', 'urlretrieve', 'pathname2url', 'url2pathname', 'quote', 'unquote', 'URLError', 'HTTPError', 'getproxies']
+__all__ = ['Request', 'OpenerDirector', 'BaseHandler', 'HTTPRedirectHandler', 'HTTPHandler', 'HTTPSHandler', 'AbstractHTTPHandler', 'HTTPCookieProcessor', 'FileHandler', 'DataHandler', 'build_opener', 'install_opener', 'urlopen', 'urlretrieve', 'pathname2url', 'url2pathname', 'quote', 'unquote', 'URLError', 'HTTPError', 'getproxies']
 
 MAXREDIRECTS = 10
 
@@ -192,18 +192,14 @@ class HTTPRedirectHandler(BaseHandler):
         return self.parent.open(new, timeout=req.timeout)
 
 
-class HTTPHandler(BaseHandler):
+class AbstractHTTPHandler(BaseHandler):
 
-    def http_open(self, req):
-        host = req.host
-        if not host:
-            raise URLError('no host given')
-        h = http.client.HTTPConnection(host, timeout=req.timeout if req.timeout is not None else socket._GLOBAL_DEFAULT_TIMEOUT)
+    def do_open(self, h, req):
         headers = {}
         for k, v in req.header_items():
             headers[k] = v
         if not req.has_header('Host'):
-            headers['Host'] = host
+            headers['Host'] = req.host
         headers['Connection'] = 'close'
         headers = {name.title(): val for name, val in headers.items()}
         try:
@@ -219,6 +215,35 @@ class HTTPHandler(BaseHandler):
         resp.reason = r.reason
         resp.msg = r.reason
         return resp
+
+
+class HTTPHandler(AbstractHTTPHandler):
+
+    def http_open(self, req):
+        host = req.host
+        if not host:
+            raise URLError('no host given')
+        h = http.client.HTTPConnection(host, timeout=req.timeout if req.timeout is not None else socket._GLOBAL_DEFAULT_TIMEOUT)
+        return self.do_open(h, req)
+
+
+class HTTPSHandler(AbstractHTTPHandler):
+
+    def __init__(self, debuglevel=None, context=None, check_hostname=None):
+        if context is None:
+            http_version = http.client.HTTPSConnection._http_vsn
+            context = http.client._create_https_context(http_version)
+        if check_hostname is not None:
+            context.check_hostname = check_hostname
+        self._context = context
+
+    def https_open(self, req):
+        host = req.host
+        if not host:
+            raise URLError('no host given')
+        h = http.client.HTTPSConnection(host, timeout=req.timeout if req.timeout is not None else socket._GLOBAL_DEFAULT_TIMEOUT,
+                                        context=self._context)
+        return self.do_open(h, req)
 
 
 class HTTPCookieProcessor(BaseHandler):
@@ -301,8 +326,8 @@ class OpenerDirector:
                 req.data = data
         req.timeout = timeout
         protocol = req.type
-        if protocol == 'http':
-            response = self._open_http(req)
+        if protocol == 'http' or protocol == 'https':
+            response = self._open_http(req, protocol)
         elif protocol == 'file':
             response = self._open_file(req)
         elif protocol == 'data':
@@ -315,16 +340,18 @@ class OpenerDirector:
         for h in self.handlers:
             if kind == 'http' and isinstance(h, HTTPHandler):
                 return h
+            if kind == 'https' and isinstance(h, HTTPSHandler):
+                return h
             if kind == 'file' and isinstance(h, FileHandler):
                 return h
             if kind == 'data' and isinstance(h, DataHandler):
                 return h
         return None
 
-    def _open_http(self, req):
-        h = self._find('http')
+    def _open_http(self, req, kind='http'):
+        h = self._find(kind)
         if h is None:
-            raise URLError('unknown url type: http')
+            raise URLError('unknown url type: ' + kind)
         for k, v in self.addheaders:
             if not req.has_header(k):
                 req.add_unredirected_header(k, v)
@@ -338,7 +365,10 @@ class OpenerDirector:
                 jar = hh.cookiejar
         if jar is not None:
             jar.add_cookie_header(req)
-        response = h.http_open(req)
+        if kind == 'https':
+            response = h.https_open(req)
+        else:
+            response = h.http_open(req)
         if jar is not None:
             jar.extract_cookies(response, req)
         code = response.code
@@ -371,7 +401,7 @@ class OpenerDirector:
 
 def build_opener(*handlers):
     opener = OpenerDirector()
-    default_handlers = [HTTPHandler(), HTTPRedirectHandler(), FileHandler(), DataHandler()]
+    default_handlers = [HTTPHandler(), HTTPSHandler(), HTTPRedirectHandler(), FileHandler(), DataHandler()]
     for h in default_handlers:
         skip = False
         for check in handlers:
@@ -389,12 +419,16 @@ _opener = None
 
 def urlopen(url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, *, context=None):
     global _opener
-    if _opener is None:
-        _opener = build_opener()
+    if context is not None:
+        opener = build_opener(HTTPSHandler(context=context))
+    else:
+        if _opener is None:
+            _opener = build_opener()
+        opener = _opener
     t = None
     if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
         t = timeout
-    return _opener.open(url, data, t)
+    return opener.open(url, data, t)
 
 
 def install_opener(opener):

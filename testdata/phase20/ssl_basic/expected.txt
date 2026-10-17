@@ -1,0 +1,12 @@
+True True True
+True True True
+True localhost False
+((('countryName', 'JP'),), (('organizationName', 'py2go test'),), (('commonName', 'localhost'),)) (('DNS', 'localhost'), ('IP Address', '127.0.0.1')) 2A2A2A Jan  1 00:00:00 2124 GMT
+True
+b'HELLO'
+b'echo: a line\n'
+SSLCertVerificationError CERTIFICATE_VERIFY_FAILED 18 self-signed certificate True True
+SSLCertVerificationError CERTIFICATE_VERIFY_FAILED 62 Hostname mismatch, certificate is not valid for 'example.com'. True True
+True True
+200 b'secure /a'
+200 b'secure /b'

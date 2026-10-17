@@ -53,7 +53,6 @@ class error_perm(Error):
 
 class error_proto(Error):
     pass
-all_errors = (Error, OSError, EOFError)
 CRLF = '\r\n'
 B_CRLF = b'\r\n'
 
@@ -387,6 +386,9 @@ class FTP:
         with self.transfercmd(cmd, rest) as conn:
             while (data := conn.recv(blocksize)):
                 callback(data)
+            # shutdown ssl layer
+            if _SSLSocket is not None and isinstance(conn, _SSLSocket):
+                conn.unwrap()
         return self.voidresp()
 
     def retrlines(self, cmd, callback=None):
@@ -418,6 +420,9 @@ class FTP:
                 elif line[-1:] == '\n':
                     line = line[:-1]
                 callback(line)
+            # shutdown ssl layer
+            if _SSLSocket is not None and isinstance(conn, _SSLSocket):
+                conn.unwrap()
         return self.voidresp()
 
     def storbinary(self, cmd, fp, blocksize=8192, callback=None, rest=None):
@@ -441,6 +446,9 @@ class FTP:
                 conn.sendall(buf)
                 if callback:
                     callback(buf)
+            # shutdown ssl layer
+            if _SSLSocket is not None and isinstance(conn, _SSLSocket):
+                conn.unwrap()
         return self.voidresp()
 
     def storlines(self, cmd, fp, callback=None):
@@ -470,6 +478,9 @@ class FTP:
                 conn.sendall(buf)
                 if callback:
                     callback(buf)
+            # shutdown ssl layer
+            if _SSLSocket is not None and isinstance(conn, _SSLSocket):
+                conn.unwrap()
         return self.voidresp()
 
     def acct(self, password):
@@ -600,6 +611,124 @@ class FTP:
             self.sock = None
             if sock is not None:
                 sock.close()
+
+import ssl
+_SSLSocket = ssl.SSLSocket
+
+
+class FTP_TLS(FTP):
+    '''A FTP subclass which adds TLS support to FTP as described
+    in RFC-4217.
+
+    Connect as usual to port 21 implicitly securing the FTP control
+    connection before authenticating.
+
+    Securing the data connection requires user to explicitly ask
+    for it by calling prot_p() method.
+
+    Usage example:
+    >>> from ftplib import FTP_TLS
+    >>> ftps = FTP_TLS('ftp.python.org')
+    >>> ftps.login()  # login anonymously previously securing control channel
+    '230 Guest login ok, access restrictions apply.'
+    >>> ftps.prot_p()  # switch to secure data connection
+    '200 Protection level set to P'
+    >>> ftps.retrlines('LIST')  # list directory content securely
+    total 9
+    drwxr-xr-x   8 root     wheel        1024 Jan  3  1994 .
+    drwxr-xr-x   8 root     wheel        1024 Jan  3  1994 ..
+    drwxr-xr-x   2 root     wheel        1024 Jan  3  1994 bin
+    drwxr-xr-x   2 root     wheel        1024 Jan  3  1994 etc
+    d-wxrwxr-x   2 ftp      wheel        1024 Sep  5 13:43 incoming
+    drwxr-xr-x   2 root     wheel        1024 Nov 17  1993 lib
+    drwxr-xr-x   6 1094     wheel        1024 Sep 13 19:07 pub
+    drwxr-xr-x   3 root     wheel        1024 Jan  3  1994 usr
+    -rw-r--r--   1 root     root          312 Aug  1  1994 welcome.msg
+    '226 Transfer complete.'
+    >>> ftps.quit()
+    '221 Goodbye.'
+    >>>
+    '''
+
+    def __init__(self, host='', user='', passwd='', acct='',
+                 *, context=None, timeout=_GLOBAL_DEFAULT_TIMEOUT,
+                 source_address=None, encoding='utf-8'):
+        if context is None:
+            context = ssl._create_stdlib_context()
+        self.context = context
+        self._prot_p = False
+        super().__init__(host, user, passwd, acct,
+                         timeout, source_address, encoding=encoding)
+
+    def login(self, user='', passwd='', acct='', secure=True):
+        if secure and not isinstance(self.sock, ssl.SSLSocket):
+            self.auth()
+        return super().login(user, passwd, acct)
+
+    def auth(self):
+        '''Set up secure control connection by using TLS/SSL.'''
+        if isinstance(self.sock, ssl.SSLSocket):
+            raise ValueError("Already using TLS")
+        if self.context.protocol >= ssl.PROTOCOL_TLS:
+            resp = self.voidcmd('AUTH TLS')
+        else:
+            resp = self.voidcmd('AUTH SSL')
+        self.sock = self.context.wrap_socket(self.sock, server_hostname=self.host)
+        self.file = self.sock.makefile(mode='r', encoding=self.encoding)
+        return resp
+
+    def ccc(self):
+        '''Switch back to a clear-text control connection.'''
+        if not isinstance(self.sock, ssl.SSLSocket):
+            raise ValueError("not using TLS")
+        resp = self.voidcmd('CCC')
+        self.sock = self.sock.unwrap()
+        return resp
+
+    def prot_p(self):
+        '''Set up secure data connection.'''
+        # PROT defines whether or not the data channel is to be protected.
+        # Though RFC-2228 defines four possible protection levels,
+        # RFC-4217 only recommends two, Clear and Private.
+        # Clear (PROT C) means that no security is to be used on the
+        # data-channel, Private (PROT P) means that the data-channel
+        # should be protected by TLS.
+        # PBSZ command MUST still be issued, but must have a parameter of
+        # '0' to indicate that no buffering is taking place and the data
+        # connection should not be encapsulated.
+        self.voidcmd('PBSZ 0')
+        resp = self.voidcmd('PROT P')
+        self._prot_p = True
+        return resp
+
+    def prot_c(self):
+        '''Set up clear text data connection.'''
+        resp = self.voidcmd('PROT C')
+        self._prot_p = False
+        return resp
+
+    # --- Overridden FTP methods
+
+    def ntransfercmd(self, cmd, rest=None):
+        conn, size = super().ntransfercmd(cmd, rest)
+        if self._prot_p:
+            conn = self.context.wrap_socket(conn,
+                                            server_hostname=self.host)
+        return conn, size
+
+    def abort(self):
+        # overridden as we can't pass MSG_OOB flag to sendall()
+        line = b'ABOR' + B_CRLF
+        self.sock.sendall(line)
+        resp = self.getmultiline()
+        if resp[:3] not in {'426', '225', '226'}:
+            raise error_proto(resp)
+        return resp
+
+__all__.append('FTP_TLS')
+all_errors = (Error, OSError, EOFError, ssl.SSLError)
+
+
 def parse150(resp):
     """Parse the '150' response for a RETR request.
     Returns the expected transfer size or None; size is not guaranteed to

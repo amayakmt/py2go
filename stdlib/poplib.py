@@ -6,7 +6,8 @@ import errno
 import re
 import socket
 import sys
-HAVE_SSL = False
+import ssl
+HAVE_SSL = True
 __all__ = ['POP3', 'error_proto']
 
 class error_proto(Exception):
@@ -287,6 +288,27 @@ class POP3:
         """
         return self._shortcmd('UTF8')
 
+    def stls(self, context=None):
+        """Start a TLS session on the active connection as specified in RFC 2595.
+
+                context - a ssl.SSLContext
+        """
+        if not HAVE_SSL:
+            raise error_proto('-ERR TLS support missing')
+        if self._tls_established:
+            raise error_proto('-ERR TLS session already established')
+        caps = self.capa()
+        if not 'STLS' in caps:
+            raise error_proto('-ERR STLS not supported by server')
+        if context is None:
+            context = ssl._create_stdlib_context()
+        resp = self._shortcmd('STLS')
+        self.sock = context.wrap_socket(self.sock,
+                                        server_hostname=self.host)
+        self.file = self.sock.makefile('rb')
+        self._tls_established = True
+        return resp
+
     def capa(self):
         """Return server capabilities (RFC 2449) as a dictionary
         >>> c=poplib.POP3('localhost')
@@ -315,3 +337,38 @@ class POP3:
             raise error_proto('-ERR CAPA not supported by server')
         return caps
 
+
+class POP3_SSL(POP3):
+    """POP3 client class over SSL connection
+
+    Instantiate with: POP3_SSL(hostname, port=995, context=None)
+
+           hostname - the hostname of the pop3 over ssl server
+           port - port number
+           context - a ssl.SSLContext
+
+    See the methods of the parent class POP3 for more documentation.
+    """
+
+    def __init__(self, host, port=POP3_SSL_PORT,
+                 *, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, context=None):
+        if context is None:
+            context = ssl._create_stdlib_context()
+        self.context = context
+        POP3.__init__(self, host, port, timeout)
+
+    def _create_socket(self, timeout):
+        sock = POP3._create_socket(self, timeout)
+        sock = self.context.wrap_socket(sock,
+                                        server_hostname=self.host)
+        return sock
+
+    def stls(self, context=None):
+        """The method unconditionally raises an exception since the
+        STLS command doesn't make any sense on an already established
+        SSL/TLS session.
+        """
+        raise error_proto('-ERR TLS session already established')
+
+
+__all__.append("POP3_SSL")
