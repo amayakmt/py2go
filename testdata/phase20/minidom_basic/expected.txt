@@ -1,0 +1,17 @@
+root 1 False 3
+x first True
+y second True
+[1, 1, 8]
+<root a="1"><item id="x">first</item><item id="y">second<b>bold</b></item><!-- note --><item id="z">third &amp; last</item></root>
+<?xml version="1.0" ?>
+<root a="1">
+  <item id="x">first</item>
+  <item id="y">
+    second
+    <b>bold</b>
+  </item>
+  <!-- note -->
+  <item id="z">third &amp; last</item>
+</root>
+
+<?xml version="1.0" ?><top><!--c--></top>

@@ -1,0 +1,16 @@
+startDocument
+('start', 'doc', [('a', '1')])
+('start', 'p', [])
+('chars', 'hello')
+('end', 'p')
+('start', 'p', [('b', '2')])
+('chars', 'world ')
+('chars', '&')
+('chars', ' more')
+('end', 'p')
+('end', 'doc')
+endDocument
+SAXParseException mismatched tag 1 8
+a &lt; b &amp; c &gt; d <x> & 'say "hi"'
+<?xml version="1.0" encoding="unicode"?>
+<root k="v">text &amp; &lt;stuff&gt;</root>
