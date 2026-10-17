@@ -81,7 +81,9 @@ func bytesRepr(s, wrap string) string {
 
 // bytesOf reads the bytes of a bytes-like object.
 func bytesOf(v any) (string, bool) {
-	switch x := Unbox(v).(type) {
+	switch x := BaseValue(Unbox(v)).(type) {
+	case *MemoryView:
+		return x.bytes(), true
 	case Bytes:
 		return string(x), true
 	case *ByteArray:

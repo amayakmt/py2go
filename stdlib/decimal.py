@@ -3185,3 +3185,7 @@ class Context:
 DefaultContext = Context(prec=28, rounding=ROUND_HALF_EVEN, traps=[DivisionByZero, Overflow, InvalidOperation], flags=[], Emax=999999, Emin=-999999, capitals=1, clamp=0)
 BasicContext = Context(prec=9, rounding=ROUND_HALF_UP, traps=[DivisionByZero, Overflow, InvalidOperation, Clamped, Underflow], flags=[])
 ExtendedContext = Context(prec=9, rounding=ROUND_HALF_EVEN, traps=[], flags=[])
+
+
+import numbers as _numbers
+_numbers.Number.register(Decimal)

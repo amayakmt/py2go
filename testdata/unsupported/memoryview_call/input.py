@@ -1,1 +1,0 @@
-print(memoryview(b"abc"))

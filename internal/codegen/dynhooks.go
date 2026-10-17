@@ -174,6 +174,7 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 	} else {
 		out.WriteString("if self._pyd == nil {\nself._pyd = map[string]any{}\n}\nif _, had := self._pyd[name]; !had {\nself._pyo = append(self._pyo, name)\n}\nself._pyd[name] = v\nreturn true\n}\n")
 	}
+	g.emitSetattrHook(out, c)
 	fmt.Fprintf(out, "func %s PyDelAttr(name string) bool {\nif _, ok := self._pyd[name]; ok {\ndelete(self._pyd, name)\nself._pyo = %s(self._pyo, name)\nreturn true\n}\nreturn false\n}\n", recv, g.rt("DropName"))
 	if m := c.lookup("__getattr__"); m != nil && m.kind == mMethod && len(m.sig.pos) == 1 && !m.special {
 		fmt.Fprintf(out, "func %s PyGetAttrHook(name string) (any, bool) {\nreturn self.M___getattr__(name), true\n}\n", recv)
@@ -266,7 +267,11 @@ func (g *generator) emitDynHooks(out *strings.Builder, c *classInfo) {
 		fmt.Fprintf(out, "func %s PyContains(item any) (bool, bool) {\n%sreturn self.M___contains__(arg), true\n}\n", recv, g.assertParam("item", m.sig.pos[0].typ, "return false, false"))
 	}
 	if m := one("__getitem__", 1); m != nil {
-		fmt.Fprintf(out, "func %s PyGetItem(key any) (any, bool) {\n%sreturn self.M___getitem__(arg), true\n}\n", recv, g.assertParam("key", m.sig.pos[0].typ, "return nil, false"))
+		if m.sig.ret == tNone {
+			fmt.Fprintf(out, "func %s PyGetItem(key any) (any, bool) {\n%sself.M___getitem__(arg)\nreturn nil, true\n}\n", recv, g.assertParam("key", m.sig.pos[0].typ, "return nil, false"))
+		} else {
+			fmt.Fprintf(out, "func %s PyGetItem(key any) (any, bool) {\n%sreturn self.M___getitem__(arg), true\n}\n", recv, g.assertParam("key", m.sig.pos[0].typ, "return nil, false"))
+		}
 	}
 	if m := one("__setitem__", 2); m != nil {
 		fmt.Fprintf(out, "func %s PySetItem(key, v any) bool {\n%s%sself.M___setitem__(arg, arg2)\nreturn true\n}\n", recv,

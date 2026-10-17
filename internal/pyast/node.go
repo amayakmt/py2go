@@ -53,6 +53,16 @@ type ClassDef struct {
 	Decorators    []Node
 	HasTypeParams bool
 	Lineno        int
+
+	// Display is the name Python shows for a class the linker moved and
+	// renamed (a class defined inside a class); empty otherwise.
+	Display string
+
+	// Abstract lists the methods decorated with abc.abstractmethod (the
+	// linker removes the decorator), and ABCMeta is set for a class whose
+	// metaclass= was abc.ABCMeta (the linker drops the keyword).
+	Abstract []string
+	ABCMeta  bool
 }
 
 // Arguments is a function signature. Codegen accepts only plain positional

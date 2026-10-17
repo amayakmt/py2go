@@ -418,7 +418,32 @@ func DynGetAttrDefault(obj any, name string, def any) (r any) {
 }
 
 // DynSetAttr is obj.name = v.
+// dynClassAttrs are the class attributes set by DynSetAttr.
+var dynClassAttrs = map[string]bool{}
+
 func DynSetAttr(obj any, name string, v any) {
+	obj = Unbox(obj)
+	if c, ok := obj.(*ClassRef); ok && !c.Builtin {
+		// cls.x = v on a class held in a variable: a class attribute that
+		// the class body did not declare. One it declared lives in a
+		// variable of the compiled program that this cannot reach.
+		if _, declared := classAttrs[c.Name][name]; declared && !dynClassAttrs[c.Name+"."+name] {
+			panic(newError("NotImplementedError", "assignment to the class attribute '"+name+"' of '"+c.Name+"' through a class held in a variable"))
+		}
+		dynClassAttrs[c.Name+"."+name] = true
+		RegisterClassAttr(c.Name, name, func() any { return v })
+		return
+	}
+	if h, ok := obj.(interface{ PySetAttrHook(string, any) }); ok {
+		h.PySetAttrHook(name, v)
+		return
+	}
+	RawSetAttr(obj, name, v)
+}
+
+// RawSetAttr is object.__setattr__(obj, name, v): the store without the
+// class's own __setattr__.
+func RawSetAttr(obj any, name string, v any) {
 	obj = Unbox(obj)
 	if s, ok := obj.(attrSetter); ok {
 		if s.PySetAttr(name, v) {
@@ -426,6 +451,15 @@ func DynSetAttr(obj any, name string, v any) {
 		}
 	}
 	panic(newError("AttributeError", fmt.Sprintf("'%s' object has no attribute '%s' and no __dict__ for setting new attributes", TypeName(obj), name)))
+}
+
+// RawDelAttr is object.__delattr__(obj, name).
+func RawDelAttr(obj any, name string) {
+	obj = Unbox(obj)
+	if d, ok := obj.(interface{ PyDelAttr(string) bool }); ok && d.PyDelAttr(name) {
+		return
+	}
+	panic(newError("AttributeError", fmt.Sprintf("'%s' object has no attribute '%s'", TypeName(obj), name)))
 }
 
 // DynDelAttr is del obj.name.
@@ -442,6 +476,9 @@ func DynDelAttr(obj any, name string) {
 func excAttr(e *PyError, name string) (any, bool) {
 	if v, ok := e.Attrs[name]; ok {
 		return v, true
+	}
+	if e.Obj != nil && !strings.HasPrefix(name, "__") && DynHasAttr(e.Obj, name) {
+		return DynGetAttr(e.Obj, name), true
 	}
 	switch name {
 	case "code":
@@ -512,6 +549,10 @@ func DynIsInstance(x, cls any) bool {
 
 // IsInstanceName is isinstance(x, C) for a class named C.
 func IsInstanceName(x any, name string, builtin bool) bool {
+	return isInstanceName(x, name, builtin) || isInstanceVirtual(x, name, builtin)
+}
+
+func isInstanceName(x any, name string, builtin bool) bool {
 	x = Unbox(x)
 	if name == "object" && builtin {
 		return true
@@ -519,6 +560,15 @@ func IsInstanceName(x any, name string, builtin bool) bool {
 	if name == "type" && builtin {
 		_, isClass := x.(*ClassRef)
 		return isClass
+	}
+	if base, ok := builtinBaseClass[name]; ok && builtin {
+		if n, isNamed := x.(Named); isNamed {
+			for _, b := range classBases[n.PyClassName()] {
+				if b == base {
+					return true
+				}
+			}
+		}
 	}
 	if m, ok := x.(interface{ PyMRO() []string }); ok && !builtin {
 		for _, n := range m.PyMRO() {
@@ -550,6 +600,64 @@ func IsInstanceName(x any, name string, builtin bool) bool {
 	}
 	return name == "int" && tn == "bool"
 }
+
+// isInstanceVirtual adds the virtual subclasses of ABCs to IsInstanceName.
+func isInstanceVirtual(x any, name string, builtin bool) bool {
+	return !builtin && len(virtualSubclasses) > 0 && IsVirtualInstance(x, name)
+}
+
+// builtinBaseClass names the classes of _basetypes that stand for dict,
+// list and set as base classes: their subclasses are instances of the type.
+var builtinBaseClass = map[string]string{"dict": "_PyDict", "list": "_PyList", "set": "_PySet", "str": "_PyStr", "int": "_PyInt", "float": "_PyFloat", "tuple": "_PyTuple", "bytes": "_PyBytes", "frozenset": "_PyFrozenset"}
+
+// baseValueOf is the value held by an instance of a class that derives from
+// a built-in type (see stdlib/_basetypes.py): what natives that need a str,
+// an int, a float, bytes or a container see in its place.
+func baseValueOf(v any) (any, bool) {
+	n, ok := v.(Named)
+	if !ok {
+		return nil, false
+	}
+	for _, b := range classBases[n.PyClassName()] {
+		if baseClassNames[b] {
+			if g, isGetter := v.(attrGetter); isGetter {
+				if d, found := g.PyGetAttr("_data"); found {
+					return Unbox(d), true
+				}
+			}
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+// immutableBase tells whether a value held by a built-in subclass is one of
+// the hashable kinds (str, int, float, bytes, tuple, frozenset).
+func immutableBase(v any) bool {
+	switch v.(type) {
+	case string, int64, *big.Int, float64, bool, Bytes, *FrozenSet:
+		return true
+	case Seq:
+		return v.(Seq).Kind() == "tuple"
+	}
+	return false
+}
+
+// BaseValue is baseValueOf, or v itself.
+func BaseValue(v any) any {
+	if b, ok := baseValueOf(Unbox(v)); ok {
+		return b
+	}
+	return v
+}
+
+var baseClassNames = func() map[string]bool {
+	m := map[string]bool{}
+	for _, c := range builtinBaseClass {
+		m[c] = true
+	}
+	return m
+}()
 
 // DynType is type(x) as a class object.
 func DynType(x any) *ClassRef {
@@ -594,6 +702,8 @@ func callBuiltinType(name string, args []any, kw []KW) any {
 		return NewBytes(args, kw)
 	case "bytearray":
 		return NewByteArray(args, kw)
+	case "memoryview":
+		return NewMemoryView(args, kw)
 	case "complex":
 		return NewComplex(args, kw)
 	case "frozenset":
@@ -946,7 +1056,13 @@ func DynChr(v any) string {
 }
 
 func dynBase(v any, base int, prefix string) string {
-	n, ok := bigOf(Unbox(v))
+	v = Unbox(v)
+	if x, isIdx := v.(interface{ PyIndex() (any, bool) }); isIdx {
+		if i, ok := x.PyIndex(); ok {
+			v = Unbox(i)
+		}
+	}
+	n, ok := bigOf(BaseValue(v))
 	if !ok {
 		panic(newError("TypeError", "'"+TypeName(v)+"' object cannot be interpreted as an integer"))
 	}
@@ -1186,6 +1302,16 @@ func DynIsSubclass(sub, sup any) bool {
 	}
 	if p.Name == "object" && p.Builtin || c.Name == p.Name || c.Name == "bool" && p.Name == "int" {
 		return true
+	}
+	if !p.Builtin && len(virtualSubclasses) > 0 && IsVirtualSubclass(c, p.Name) {
+		return true
+	}
+	if base, ok := builtinBaseClass[p.Name]; ok && p.Builtin && !c.Builtin {
+		for _, b := range classBases[c.Name] {
+			if b == base {
+				return true
+			}
+		}
 	}
 	return IsSubclass(c.Name, p.Name)
 }

@@ -1,0 +1,9 @@
+red 'red' RED! reddish 3 True True True red! <red>
+1 2 True ['a', 'b'] red-x
+Point(1, 2) 1 2 2 1 (1, 2) True True (1, 2, 3) [1, 2] True
+1 2
+2.5m 5.0 3.5 2.5 2 2 True True 2.5
+6 x 7 18 12 4 6 True 6 0b110 True -6 6
+1.10.2 (1, 10, 2) True True 10 1 1
+Ada Lovelace AL ada lovelace ['Ada', 'Lovelace'] 43 1.5
+True True Name True

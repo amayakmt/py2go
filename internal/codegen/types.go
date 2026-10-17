@@ -311,11 +311,12 @@ var typeTable = map[string]pyType{
 	"range": tRange,
 	// Types without a Go type of their own are objects that the runtime
 	// knows how to operate on.
-	"complex":   tObject,
-	"bytes":     tObject,
-	"bytearray": tObject,
-	"frozenset": tObject,
-	"slice":     tObject,
+	"complex":    tObject,
+	"bytes":      tObject,
+	"bytearray":  tObject,
+	"memoryview": tObject,
+	"frozenset":  tObject,
+	"slice":      tObject,
 }
 
 // annotationType resolves a type annotation. allowNone permits the literal
@@ -327,6 +328,7 @@ func annotationType(n pyast.Node, allowNone bool) (pyType, error) {
 // annotationType resolves an annotation, which can name a class the program
 // defines. A class used before its definition is written as a string.
 func (g *generator) annotationType(n pyast.Node, allowNone bool) (pyType, error) {
+	n = typingFromABC(n)
 	switch n := n.(type) {
 	case *pyast.Name:
 		if t, ok := g.tsubst[n.ID]; ok {
@@ -676,3 +678,23 @@ func isEllipsis(n pyast.Node) bool {
 
 // isScalar reports whether t is int, float, str or bool.
 func (t pyType) isScalar() bool { return t == tInt || t == tFloat || t == tStr || t == tBool }
+
+// abcPrefix is how the linker names the classes of collections.abc. In an
+// annotation they stand for the typing names they share (Iterable[int]).
+const abcPrefix = "collections__abc_pm_"
+
+func typingFromABC(n pyast.Node) pyast.Node {
+	switch x := n.(type) {
+	case *pyast.Name:
+		if rest, ok := strings.CutPrefix(x.ID, abcPrefix); ok {
+			return &pyast.Name{ID: rest, Lineno: x.Lineno}
+		}
+	case *pyast.Subscript:
+		if head, ok := x.Value.(*pyast.Name); ok {
+			if rest, ok := strings.CutPrefix(head.ID, abcPrefix); ok {
+				return &pyast.Subscript{Value: &pyast.Name{ID: rest, Lineno: head.Lineno}, Index: x.Index, Lineno: x.Lineno}
+			}
+		}
+	}
+	return n
+}

@@ -52,6 +52,10 @@ type member struct {
 
 	// value is the initializer of a class attribute.
 	value pyast.Node
+	// wide marks an attribute that classes of one hierarchy give different
+	// types: it is an object everywhere (see unifyAttrTypes).
+	wide bool
+
 	// shadow marks a class attribute that some code assigns through an
 	// instance, which then gets an attribute of its own.
 	shadow bool
@@ -259,8 +263,11 @@ func (g *generator) registerClassNames(mod *pyast.Module) error {
 		if _, dup := g.classes[cd.Name]; dup || g.genericClasses[cd.Name] != nil {
 			return unsupported(fmt.Sprintf("redefinition of class '%s'", cd.Name), cd.Line())
 		}
-		if len(cd.Keywords) > 0 {
-			return unsupported("class keyword '"+cd.Keywords[0].Arg+"=' (metaclasses arrive in phase 9)", cd.Line())
+		for _, kw := range cd.Keywords {
+			// Keywords other than metaclass= go to __init_subclass__.
+			if kw.Arg == "metaclass" || kw.Arg == "" {
+				return unsupported("class keyword '"+kw.Arg+"=' (metaclasses arrive in phase 9)", cd.Line())
+			}
 		}
 		params, err := g.classTypeParams(cd)
 		if err != nil {
@@ -270,7 +277,7 @@ func (g *generator) registerClassNames(mod *pyast.Module) error {
 			g.genericClasses[cd.Name] = &genericClass{name: cd.Name, node: cd, params: params, index: i}
 			continue
 		}
-		c := &classInfo{name: cd.Name, node: cd, line: cd.Line(), index: i, members: map[string]*member{}}
+		c := &classInfo{name: cd.Name, node: cd, line: cd.Line(), index: i, members: map[string]*member{}, display: cd.Display}
 		g.classes[cd.Name] = c
 		g.classOrder = append(g.classOrder, c)
 	}
@@ -488,12 +495,15 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 	if strings.HasPrefix(name, "__") && !strings.HasSuffix(name, "__") {
 		name = "_" + c.name + name // private names are mangled
 	}
+	if name == "__init_subclass__" && kind == mMethod {
+		kind = mClassMethod // implicitly a classmethod, as in CPython
+	}
 	switch name {
-	case "__new__", "__init_subclass__", "__class_getitem__", "__set_name__":
+	case "__new__", "__class_getitem__", "__set_name__":
 		return unsupported("method "+name+" (arrives in phase 9)", fn.Line())
-	case "__getattribute__", "__setattr__", "__delattr__", "__get__", "__set__", "__delete__":
+	case "__getattribute__", "__get__", "__set__", "__delete__":
 		return unsupported("method "+name+" (the attribute hooks and descriptors arrive in phase 9)", fn.Line())
-	case "__del__", "__sizeof__", "__copy__", "__deepcopy__":
+	case "__sizeof__":
 		return unsupported("method "+name, fn.Line())
 	}
 	if prev := c.members[name]; prev != nil && setterOf == "" {
@@ -526,6 +536,15 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 	}
 
 	m := &member{kind: kind, name: name, owner: c, sig: sig, node: fn, line: fn.Line()}
+	if sig.ret == tNone && fn.Returns == nil && c.node != nil {
+		for _, a := range c.node.Abstract {
+			if a == fn.Name {
+				// An abstract method's body is a placeholder; what it
+				// returns is what its implementations return.
+				sig.ret = tObject
+			}
+		}
+	}
 	if kind == mProperty {
 		if len(sig.pos) != 0 || sig.vararg != nil || sig.kwarg != nil || len(sig.kwonly) > 0 {
 			return unsupported("property getter that takes parameters", fn.Line())
@@ -797,11 +816,8 @@ func (g *generator) checkOverrides(c *classInfo) error {
 			}
 			// A property that is read-only cannot stand for an attribute that
 			// can be assigned, and the reverse.
-			if (winner.kind == mProperty && winner.setter == nil) != (m.kind == mProperty && m.setter == nil) &&
-				(winner.kind == mProperty || m.kind == mProperty) {
-				return unsupported(fmt.Sprintf("'%s.%s' and '%s.%s' differ in whether they can be assigned",
-					winner.owner.name, shortName(name), m.owner.name, shortName(name)), winner.line)
-			}
+			// (A read-only property may stand for an assignable attribute:
+			// its Set_ method raises AttributeError.)
 		}
 	}
 	return nil

@@ -136,7 +136,18 @@ var userMRO = map[string][]string{}
 
 // RegisterClass records a user-defined exception class and its method
 // resolution order, so that except clauses and isinstance can walk it.
-func RegisterClass(name string, mro ...string) { userMRO[name] = mro }
+func RegisterClass(name string, mro ...string) {
+	userMRO[name] = mro
+	short := name
+	if i := strings.LastIndex(name, "_pm_"); i >= 0 {
+		short = name[i+len("_pm_"):]
+	}
+	excByShortName[short] = name
+}
+
+// excByShortName maps the name a class object of an exception class carries
+// (Python's name) to the name the exception's Type holds.
+var excByShortName = map[string]string{}
 
 // IsSubclass reports whether class is parent or derives from it.
 func IsSubclass(class, parent string) bool {
@@ -395,6 +406,35 @@ func QualTypeName(t string) string {
 
 // Match is the test of an except clause: the exception is an instance of
 // one of the classes, or of a class derived from one.
+// ExcNamesOf reads the classes of an except clause given as values: names,
+// exception classes held in variables, and tuples of them.
+func ExcNamesOf(vals ...any) []string {
+	var out []string
+	for _, v := range vals {
+		v = Unbox(v)
+		switch x := v.(type) {
+		case string:
+			out = append(out, x)
+		case *ClassRef:
+			if full, ok := excByShortName[x.Name]; ok && !x.Builtin {
+				out = append(out, full)
+			} else {
+				out = append(out, x.Name)
+			}
+		case Seq:
+			if x.Kind() != "tuple" {
+				panic(newError("TypeError", "catching classes that do not inherit from BaseException is not allowed"))
+			}
+			for i := int64(0); i < x.Len(); i++ {
+				out = append(out, ExcNamesOf(x.At(i))...)
+			}
+		default:
+			panic(newError("TypeError", "catching classes that do not inherit from BaseException is not allowed"))
+		}
+	}
+	return out
+}
+
 func Match(e *PyError, classes ...string) bool {
 	for _, c := range classes {
 		if IsSubclass(e.Type, c) {

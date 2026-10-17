@@ -175,6 +175,9 @@ func (g *generator) isinstanceNarrowing(call *pyast.Call) *narrowing {
 		return nil
 	}
 	if k := g.classes[spec.ID]; k != nil {
+		if k.isABC() {
+			return nil // a registered virtual subclass is not a k
+		}
 		switch {
 		case cur == tObject:
 			return &narrowing{name: arg.ID, to: k.typ(), expr: src + ".(" + k.name + ")"}
@@ -193,9 +196,9 @@ func (g *generator) isinstanceNarrowing(call *pyast.Call) *narrowing {
 			}
 			return &narrowing{name: arg.ID, to: tInt, expr: g.rt("AsInt") + "(" + src + ")"}
 		case "str":
-			return &narrowing{name: arg.ID, to: tStr, expr: src + ".(string)"}
+			return &narrowing{name: arg.ID, to: tStr, expr: g.rt("Cast") + "[string](" + src + ")"}
 		case "float":
-			return &narrowing{name: arg.ID, to: tFloat, expr: src + ".(float64)"}
+			return &narrowing{name: arg.ID, to: tFloat, expr: g.rt("Cast") + "[float64](" + src + ")"}
 		case "bool":
 			return &narrowing{name: arg.ID, to: tBool, expr: src + ".(bool)"}
 		}

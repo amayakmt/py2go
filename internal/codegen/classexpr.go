@@ -257,7 +257,9 @@ func (g *generator) classAttrRead(c *classInfo, attr string, exactRef bool, line
 	}
 	m := c.lookup(name)
 	if m == nil {
-		return value{}, unsupported(fmt.Sprintf("attribute '%s' of class '%s'", attr, c.name), line)
+		// Not in the class body: an attribute a decorator or setattr gave
+		// the class, read when the program runs.
+		return g.dynValue(g.rt("DynGetAttr")+"("+g.rt("ClassOf")+"("+strconv.Quote(c.pyName())+"), "+strconv.Quote(attr)+")", tObject), nil
 	}
 	switch m.kind {
 	case mClassAttr:
@@ -415,7 +417,7 @@ func (g *generator) excAttr(recv value, attr string, line int) (value, error) {
 	case "code", "errno", "strerror", "filename", "filename2", "name", "path", "encoding", "object", "start", "end", "reason", "msg", "pos", "lineno", "colno", "doc", "pattern":
 		return g.dynValue(g.rt("ExcAttr")+"("+recv.at(precAtom)+", "+strconv.Quote(attr)+")", tObject), nil
 	}
-	return value{}, unsupported("attribute '."+attr+"' of an exception", line)
+	return g.dynValue(g.rt("ExcAttr")+"("+recv.at(precAtom)+", "+strconv.Quote(attr)+")", tObject), nil
 }
 
 // superInfo describes a super() call.
@@ -509,6 +511,17 @@ func (g *generator) superCall(n *pyast.Call, s superInfo, name string) (value, e
 // superBuiltin is a super() call that reaches object or a built-in
 // exception class.
 func (g *generator) superBuiltin(n *pyast.Call, s superInfo, name string) (value, error) {
+	if (name == "__setattr__" && len(n.Args) == 2 || name == "__delattr__" && len(n.Args) == 1) && !s.static {
+		// object.__setattr__(self, name, value) by super().
+		if name == "__setattr__" {
+			return g.rawStoreExpr(&pyast.Name{ID: s.self, Lineno: n.Line()}, n.Args[0], n.Args[1], false, n.Line())
+		}
+		return g.rawStoreExpr(&pyast.Name{ID: s.self, Lineno: n.Line()}, n.Args[0], nil, true, n.Line())
+	}
+	if name == "__init_subclass__" {
+		// object.__init_subclass__ does nothing.
+		return value{code: "func() " + g.rt("NoneT") + " {\nreturn " + g.rt("NoneV") + "\n}()", typ: tNone, prec: precAtom}, nil
+	}
 	if s.static {
 		return value{}, unsupported("super()."+name+"() in a classmethod", n.Line())
 	}
@@ -630,6 +643,10 @@ func (g *generator) classLevelCall(n *pyast.Call, m *pyast.Attribute, recv value
 	}
 	name := g.mangled(m.Attr)
 	mem := c.lookup(name)
+	if mem == nil && m.Attr == "__init__" && !c.exc {
+		// C.__init__(self) for a class without one: object.__init__.
+		return value{code: "func() " + g.rt("NoneT") + " {\nreturn " + g.rt("NoneV") + "\n}()", typ: tNone, prec: precAtom}, nil
+	}
 	if mem == nil {
 		return value{}, unsupported(fmt.Sprintf("attribute '%s' of class '%s'", m.Attr, c.name), n.Line())
 	}
@@ -663,6 +680,15 @@ func (g *generator) unboundCall(n *pyast.Call, c *classInfo, mem *member) (value
 		return value{}, unsupported(fmt.Sprintf("%s() missing 1 required positional argument: 'self'", mem.sig.qualname), n.Line())
 	}
 	first, ok := n.Args[0].(*pyast.Name)
+	if ok && g.method != nil && g.method.kind == mMethod && first.ID == g.selfName() && !g.method.cls.isSubclassOf(c) {
+		// A mixin calling a class it is mixed with: compiled for a class
+		// that is not one, the call is Python's TypeError.
+		ret := mem.sig.ret
+		if ret == tNone {
+			return value{code: "func() " + g.rt("NoneT") + " {\npanic(" + g.rt("NewError") + "(\"TypeError\", " + strconv.Quote("descriptor '"+mem.name+"' for '"+c.pyName()+"' objects doesn't apply to a '"+g.method.cls.pyName()+"' object") + "))\n}()", typ: tNone, prec: precAtom}, nil
+		}
+		return value{code: "func() " + g.goType(ret) + " {\npanic(" + g.rt("NewError") + "(\"TypeError\", " + strconv.Quote("descriptor '"+mem.name+"' for '"+c.pyName()+"' objects doesn't apply to a '"+g.method.cls.pyName()+"' object") + "))\n}()", typ: ret, prec: precAtom}, nil
+	}
 	if !ok || g.method == nil || g.method.kind != mMethod || first.ID != g.selfName() || !g.method.cls.isSubclassOf(c) {
 		return value{}, unsupported(fmt.Sprintf("call of the unbound method %s.%s on something other than self", c.name, mem.name), n.Line())
 	}
@@ -823,6 +849,9 @@ func (g *generator) registerField(attr string, t pyType, line int) {
 
 // assignAttr is "recv.attr = value".
 func (g *generator) assignAttr(b *strings.Builder, target *pyast.Attribute, valueNode pyast.Node, line int) error {
+	if !g.infer && g.setattrHook(target.Value, "__setattr__") {
+		return g.hookedAssign(b, target, valueNode, line)
+	}
 	store, err := g.resolveStore(b, target)
 	if err != nil {
 		return err
@@ -841,7 +870,7 @@ func (g *generator) assignAttr(b *strings.Builder, target *pyast.Attribute, valu
 	if g.infer && g.bigMode && store.member != nil && store.member.kind == mField && store.typ != tObject {
 		// Code without annotations: an attribute that is given a value of
 		// another type, or a value this analysis cannot type, holds any.
-		if vt, err := g.typedExpr(valueNode); err == nil && vt.typ != store.typ && !g.isSubtype(vt.typ, store.typ) && ((vt.typ == tObject && store.typ == tInt) || (vt.typ.isScalar() && store.typ.isScalar()) || (vt.typ == tNoneType && store.typ.isScalar())) {
+		if vt, err := g.typedExpr(valueNode); err == nil && vt.typ != store.typ && !g.isSubtype(vt.typ, store.typ) && ((vt.typ == tObject && (store.typ == tInt || store.typ.isClass() || store.typ.isList() || store.typ.isDict())) || (vt.typ.isScalar() && store.typ.isScalar()) || (vt.typ == tNoneType && store.typ.isScalar())) {
 			store.member.typ = tObject
 			g.inferGrew = true
 			return nil

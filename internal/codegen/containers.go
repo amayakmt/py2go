@@ -34,13 +34,18 @@ func (g *generator) dictLit(n *pyast.Dict, want pyType) (value, error) {
 			if err != nil {
 				return value{}, err
 			}
+			if !v.typ.isDict() && (v.typ == tObject || v.typ.isClass()) {
+				// A mapping object (a dict subclass, a user mapping): its items.
+				v = g.dynValue(g.rt("DynDict")+"("+g.boxed(v)+")", dictOf(tObject, tObject))
+			}
 			if !v.typ.isDict() {
 				return value{}, unsupported("'**' of "+string(v.typ)+" in a dict display", n.Values[i].Line())
 			}
 			if key == "" {
 				key, val = v.typ.keyType(), v.typ.valType()
 			} else if v.typ != dictOf(key, val) {
-				return value{}, unsupported(fmt.Sprintf("dict display mixes %s and %s", dictOf(key, val), v.typ), n.Values[i].Line())
+				// Dicts of different types: the display is a dict of objects.
+				return g.dynDictDisplay(n)
 			}
 			entries = append(entries, entry{k: v, unpacked: true})
 			spread = true
@@ -226,7 +231,15 @@ func (g *generator) iterableOf(v value) (code string, elem pyType, ok bool) {
 		v = value{code: v.at(precAtom) + ".Unwrap(\"TypeError\", \"'NoneType' object is not iterable\")", typ: v.typ.optElem(), prec: precAtom}
 	}
 	if v.typ.isClass() {
-		return g.userIterable(v)
+		if code, elem, ok := g.userIterable(v); ok {
+			return code, elem, true
+		}
+		if c := g.classOf(v.typ); c != nil && c.lookup("__getitem__") != nil {
+			// No __iter__: iteration calls __getitem__ with 0, 1, ... until
+			// IndexError, which the runtime does.
+			return g.rt("DynIter") + "(" + g.boxed(v) + ")", tObject, true
+		}
+		return "", "", false
 	}
 	if v.typ == tObject {
 		return g.rt("DynIter") + "(" + v.code + ")", tObject, true
@@ -278,4 +291,29 @@ func (g *generator) iterOf(node pyast.Node) (iterSource, error) {
 		return iterSource{}, unsupported(fmt.Sprintf("for loop over %s", v.typ), node.Line())
 	}
 	return iterSource{cursor: code + ".Iter()", typ: elem}, nil
+}
+
+// dynDictDisplay is a dict display whose parts have different types: a dict
+// of objects, filled in order.
+func (g *generator) dynDictDisplay(n *pyast.Dict) (value, error) {
+	var b strings.Builder
+	d := g.tmp("d")
+	fmt.Fprintf(&b, "func() *%s[any, any] {\nvar %s = %s[any, any]()\n", g.rt("Dict"), d, g.rt("NewDict"))
+	for i, kn := range n.Keys {
+		v, err := g.typedExpr(n.Values[i])
+		if err != nil {
+			return value{}, err
+		}
+		if kn == nil {
+			fmt.Fprintf(&b, "%s.Update(%s(%s))\n", d, g.rt("DynDict"), g.boxed(v))
+			continue
+		}
+		k, err := g.typedExpr(kn)
+		if err != nil {
+			return value{}, err
+		}
+		fmt.Fprintf(&b, "%s.Set(%s, %s)\n", d, g.boxed(k), g.boxed(v))
+	}
+	fmt.Fprintf(&b, "return %s\n}()", d)
+	return g.dynValue(b.String(), dictOf(tObject, tObject)), nil
 }

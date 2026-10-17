@@ -1,1 +1,0 @@
-unsupported: class decorator (class decorators other than @dataclass are not supported) at line 5

@@ -1,0 +1,8 @@
+11 104 100 b'hello' b'world' 11 False B 1
+bytearray(b'Hello WORLD') [72, 101, 108] 48656c [72, 101]
+True True b'ac' b'abc'
+TypeError cannot modify read-only memory
+b'xyz'
+ValueError operation forbidden on released memoryview object
+TypeError memoryview: a bytes-like object is required, not 'str'
+b'abcd' bytearray(b'q')

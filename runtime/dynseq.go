@@ -94,6 +94,9 @@ func conv[T any](v any) T {
 	if v == nil {
 		return zero
 	}
+	if b, ok := baseValueOf(v); ok {
+		return conv[T](b)
+	}
 	panic(newError("TypeError", fmt.Sprintf("expected %s, got %s", TypeName(zero), TypeName(v))))
 }
 
@@ -150,6 +153,9 @@ func indexArg(key any) (int64, bool) {
 		if v, ok := x.PyIndex(); ok {
 			key = Unbox(v)
 		}
+	}
+	if b, ok := baseValueOf(key); ok {
+		key = b
 	}
 	if isBig(key) {
 		panic(indexError("cannot fit 'int' into an index-sized integer"))
@@ -735,7 +741,7 @@ func DynJoin(sep string, items any) string {
 	}
 	var parts []string
 	for c := DynIter(items).Iter(); c.Next(); {
-		s, ok := Unbox(c.Value()).(string)
+		s, ok := BaseValue(c.Value()).(string)
 		if !ok {
 			panic(newError("TypeError", fmt.Sprintf("sequence item %d: expected str instance, %s found", len(parts), TypeName(c.Value()))))
 		}

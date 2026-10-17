@@ -142,6 +142,25 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		}
 	}
 	fmt.Fprintf(main, "%s(%s)\n", g.rt("RegisterClassBases"), strings.Join(bases, ", "))
+	// The __init_subclass__ of a base runs for the new class, with the
+	// keywords of the class statement.
+	for _, k := range c.mro[1:] {
+		hook := k.members["__init_subclass__"]
+		if hook == nil || hook.kind != mClassMethod || c.generic != nil {
+			continue
+		}
+		callNode := &pyast.Call{Func: &pyast.Name{ID: "__init_subclass__", Lineno: c.line}, Keywords: c.node.Keywords, HasKeywords: len(c.node.Keywords) > 0, Lineno: c.line}
+		v, err := g.bindCall(callNode, hook.sig, "_pycm_"+c.name+"_"+hook.name+"__"+hook.owner.name, hook.sig.qualname)
+		if err != nil {
+			return err
+		}
+		if hook.sig.ret == tNone {
+			fmt.Fprintf(main, "%s\n", v.code)
+		} else {
+			fmt.Fprintf(main, "_ = %s\n", v.code)
+		}
+		break
+	}
 	var members []string
 	for _, n := range c.orderedNames() {
 		m := c.lookup(n)
@@ -305,6 +324,20 @@ func (g *generator) emitConstructor(out *strings.Builder, c *classInfo) {
 		params = strings.TrimSuffix("_given int, "+params, ", ")
 	}
 	fmt.Fprintf(out, "func %s(%s) %s {\nself := &%s{}\n", c.goNew(), params, c.name, c.goStruct())
+	if m := c.lookup("__del__"); m != nil && m.kind == mMethod && m.sig != nil && len(m.sig.pos) == 0 {
+		call := "o." + methodGoName(m, c) + "()"
+		if m.sig.ret != tNone {
+			call = "_ = " + call
+		}
+		fmt.Fprintf(out, "%s(self, func(o *%s) {\n%s\n})\n", g.rt("TrackDel"), c.goStruct(), call)
+	}
+	if missing := g.abstractMissing(c); len(missing) > 0 {
+		what := "abstract method '" + missing[0] + "'"
+		if len(missing) > 1 {
+			what = "abstract methods '" + strings.Join(missing, "', '") + "'"
+		}
+		fmt.Fprintf(out, "panic(%s(\"TypeError\", %s))\n", g.rt("NewError"), strconv.Quote("Can't instantiate abstract class "+c.pyName()+" without an implementation for "+what))
+	}
 	if c.exc {
 		if c.ctorSig == nil {
 			fmt.Fprintf(out, "self.Init(%s, self, args.Items()...)\n", strconv.Quote(c.name))
@@ -380,6 +413,10 @@ func (g *generator) emitAccessors(out *strings.Builder, c *classInfo, names []st
 			fmt.Fprintf(out, "func %s Get_%s() %s { return self.G_%s__%s() }\n", recv, n, t, n, m.owner.name)
 			if m.setter != nil {
 				fmt.Fprintf(out, "func %s Set_%s(v %s) { self.S_%s__%s(v) }\n", recv, n, t, n, m.owner.name)
+			} else {
+				// Read-only: a store raises, as for any property without a
+				// setter (the method exists for a base whose x is assignable).
+				fmt.Fprintf(out, "func %s Set_%s(v %s) { panic(%s(%q, %q)) }\n", recv, n, t, g.rt("NoSetter"), c.pyName(), pyName(n))
 			}
 		}
 	}

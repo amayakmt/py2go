@@ -1,1 +1,0 @@
-unsupported: except clause of kind Attribute at line 3

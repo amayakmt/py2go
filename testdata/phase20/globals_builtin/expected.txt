@@ -1,0 +1,2 @@
+['ALPHA', 'BETA'] 1 two 3 __main__
+True True

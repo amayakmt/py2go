@@ -181,8 +181,8 @@ func (g *generator) subscript(n *pyast.Subscript) (value, error) {
 	if err != nil {
 		return value{}, err
 	}
-	if idx.typ == tBool {
-		return g.dynSubscript(base, n.Index) // True is the index 1
+	if idx.typ == tBool || idx.typ.isClass() {
+		return g.dynSubscript(base, n.Index) // True is the index 1; an object has __index__
 	}
 	if idx.typ != tInt {
 		return value{}, unsupported(fmt.Sprintf("index of type %s", idx.typ), n.Line())

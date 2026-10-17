@@ -47,6 +47,8 @@ func Load(entry string, load Loader) (*pyast.Module, error) {
 		return nil, err
 	}
 	rewriteTestDecorators(mod)
+	fixClasses(mod)
+	fixBranchDefs(mod)
 	injectTestClasses(mod)
 	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}, enums: map[string]*enumInfo{}}
 	m := &module{name: "__main__", file: abs, ast: mod, entry: true}
@@ -76,6 +78,7 @@ type module struct {
 	allNames  []string // names exported by "from m import *"
 
 	annotationMods map[string]bool // names bound to the typing or dataclasses module
+	deferredImport bool            // imported by a function: inlined after the statement that led to it
 }
 
 // alias is what an imported name stands for in one module.
@@ -91,6 +94,30 @@ type linker struct {
 	enums map[string]*enumInfo
 
 	valueMods []*module // modules used as values, in order of first use
+
+	depth      int       // how many module bodies are being inlined
+	inFuncBody int       // how many function bodies are being rewritten
+	deferred   []*module // modules imported in function bodies, inlined later
+}
+
+// flushDeferred inlines the modules that functions import, which were left
+// for after the current top-level statement of the entry module.
+func (l *linker) flushDeferred(from *module) ([]pyast.Node, error) {
+	var out []pyast.Node
+	for len(l.deferred) > 0 {
+		m := l.deferred[0]
+		l.deferred = l.deferred[1:]
+		if m.started {
+			continue
+		}
+		m.deferredImport = false
+		body, _, err := l.importModule(from, m.name, 0)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, body...)
+	}
+	return out, nil
 }
 
 func (m *module) pkgName() string {
@@ -171,6 +198,8 @@ func (l *linker) find(name string) (*module, error) {
 				}
 				m.ast = ast
 				rewriteTestDecorators(ast)
+				fixClasses(ast)
+				fixBranchDefs(ast)
 			}
 			l.mods[pkgName] = m
 			l.begin(m)
@@ -203,8 +232,12 @@ func (l *linker) inlineBody(m *module) ([]pyast.Node, error) {
 	m.started = true
 	m.defined = map[string]bool{}
 	r := &rewriter{l: l, m: m}
-	// Imports inside functions and classes run before the statement that
-	// holds them.
+	l.depth++
+	defer func() { l.depth-- }()
+	// Imports inside classes and compound statements run before the
+	// statement that holds them; imports inside functions run once the
+	// top-level statement of the program that led to them is done, as they
+	// would when the function is first called.
 	var out []pyast.Node
 	for _, st := range m.ast.Body {
 		hoisted, err := r.hoist(st)
@@ -218,6 +251,13 @@ func (l *linker) inlineBody(m *module) ([]pyast.Node, error) {
 		}
 		out = append(out, res...)
 		collectStmt(st, m.defined)
+		if l.depth == 1 {
+			flushed, err := l.flushDeferred(m)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, flushed...)
+		}
 	}
 	m.finished = true
 	return out, nil
@@ -243,6 +283,16 @@ func (l *linker) importModule(from *module, name string, line int) ([]pyast.Node
 		if pm.started {
 			continue
 		}
+		if l.inFuncBody > 0 {
+			// Inside a function: the module runs after the top-level
+			// statement that led here, not in the function.
+			if !pm.deferredImport {
+				pm.deferredImport = true
+				l.deferred = append(l.deferred, pm)
+			}
+			continue
+		}
+		pm.deferredImport = false
 		body, err := l.inlineBody(pm)
 		if err != nil {
 			return nil, nil, err
@@ -261,6 +311,11 @@ type rewriter struct {
 	enumCls       string
 	enumOf        *enumInfo
 	enumClassBody *enumInfo // the enum whose body is being rewritten
+
+	// baseSwap maps dict, list and set to the classes that stand for them as
+	// bases, inside the body of a class that derives from them, so that
+	// dict.__init__(self, ...) reaches the base.
+	baseSwap map[string]string
 }
 
 type scope struct {
@@ -277,14 +332,19 @@ func (b *block) Line() int { return 0 }
 func (r *rewriter) hoist(st pyast.Node) ([]pyast.Node, error) {
 	var out []pyast.Node
 	var firstErr error
-	var visit func(n pyast.Node, nested bool)
-	visit = func(n pyast.Node, nested bool) {
+	var visit func(n pyast.Node, nested, inFunc bool)
+	visit = func(n pyast.Node, nested, inFunc bool) {
 		walkChildren(n, func(c pyast.Node) {
 			switch x := c.(type) {
-			case *pyast.FunctionDef, *pyast.ClassDef, *pyast.Lambda:
-				visit(c, true)
+			case *pyast.FunctionDef, *pyast.Lambda:
+				visit(c, true, true)
+			case *pyast.ClassDef:
+				visit(c, true, inFunc)
 			case *pyast.Import:
 				if nested {
+					if inFunc && r.deferImports(x) {
+						return
+					}
 					res, err := r.importStmt(x)
 					if err != nil && firstErr == nil {
 						firstErr = err
@@ -293,6 +353,9 @@ func (r *rewriter) hoist(st pyast.Node) ([]pyast.Node, error) {
 				}
 			case *pyast.ImportFrom:
 				if nested {
+					if inFunc && r.deferImportFrom(x) {
+						return
+					}
 					res, _, err := r.importFromStmt(x)
 					if err != nil && firstErr == nil {
 						firstErr = err
@@ -300,7 +363,7 @@ func (r *rewriter) hoist(st pyast.Node) ([]pyast.Node, error) {
 					out = append(out, res...)
 				}
 			default:
-				visit(c, nested)
+				visit(c, nested, inFunc)
 			}
 		})
 	}
@@ -310,8 +373,144 @@ func (r *rewriter) hoist(st pyast.Node) ([]pyast.Node, error) {
 	}
 	// An import that is not a statement of the module itself (in a def, a
 	// class or a compound statement) runs once, before its statement.
-	visit(st, true)
+	_, isFunc := st.(*pyast.FunctionDef)
+	visit(st, true, isFunc)
 	return out, firstErr
+}
+
+// deferImports leaves the modules of an import in a function body for
+// later (see flushDeferred); false when one of them is not a module this
+// linker inlines, which then goes the eager way.
+func (r *rewriter) deferImports(n *pyast.Import) bool {
+	var names []string
+	for _, a := range n.Names {
+		names = append(names, a.Name)
+	}
+	return r.deferModules(names)
+}
+
+func (r *rewriter) deferImportFrom(n *pyast.ImportFrom) bool {
+	name, ok := r.absolute(n)
+	if !ok {
+		return false
+	}
+	names := []string{name}
+	for _, a := range n.Names {
+		// "from pkg import sub" imports the submodule.
+		if sub, err := r.l.find(name + "." + a.Name); err == nil && sub != nil {
+			names = append(names, name+"."+a.Name)
+		}
+	}
+	return r.deferModules(names)
+}
+
+func (r *rewriter) deferModules(names []string) bool {
+	var mods []*module
+	for _, name := range names {
+		if _, gone := r.l.unavailable(name); gone {
+			return false
+		}
+		parts := strings.Split(name, ".")
+		for i := range parts {
+			m, err := r.l.find(strings.Join(parts[:i+1], "."))
+			if err != nil || m == nil {
+				return false
+			}
+			mods = append(mods, m)
+		}
+	}
+	// Inline now, as before, unless the module (or what it imports at its
+	// top level) comes back to a module whose body is being inlined: that
+	// import cycle is only harmless when the import waits for the call.
+	cycle := false
+	for _, m := range mods {
+		if !m.started && r.l.reachesUnfinished(m, map[*module]bool{}) {
+			cycle = true
+		}
+	}
+	if !cycle {
+		return false
+	}
+	for _, m := range mods {
+		if !m.started && !m.deferredImport {
+			m.deferredImport = true
+			r.l.deferred = append(r.l.deferred, m)
+		}
+	}
+	return true
+}
+
+// reachesUnfinished tells whether inlining m would import, at the top level
+// of m or of the modules it imports, a module that has started but not
+// finished.
+func (l *linker) reachesUnfinished(m *module, seen map[*module]bool) bool {
+	if seen[m] {
+		return false
+	}
+	seen[m] = true
+	if m.ast == nil {
+		return false
+	}
+	// The modules m's top level imports, and whether it takes names from
+	// them ("from M import x" needs M finished; "import M" does not).
+	type dep struct {
+		name  string
+		names bool
+	}
+	var deps []dep
+	for _, st := range m.ast.Body {
+		switch x := st.(type) {
+		case *pyast.Import:
+			for _, a := range x.Names {
+				deps = append(deps, dep{a.Name, false})
+			}
+		case *pyast.ImportFrom:
+			mod := x.Module
+			if x.Level > 0 {
+				pkg := m.name
+				if !m.pkg {
+					if i := strings.LastIndex(pkg, "."); i >= 0 {
+						pkg = pkg[:i]
+					} else {
+						pkg = ""
+					}
+				}
+				parts := strings.Split(pkg, ".")
+				up := x.Level - 1
+				if pkg == "" || up > len(parts) {
+					continue
+				}
+				prefix := strings.Join(parts[:len(parts)-up], ".")
+				if mod != "" {
+					mod = prefix + "." + mod
+				} else {
+					mod = prefix
+				}
+			}
+			deps = append(deps, dep{mod, true})
+			for _, a := range x.Names {
+				if sub, err := l.find(mod + "." + a.Name); err == nil && sub != nil {
+					deps = append(deps, dep{mod + "." + a.Name, false})
+				}
+			}
+		}
+	}
+	for _, d := range deps {
+		t, err := l.find(d.name)
+		if err != nil || t == nil {
+			continue
+		}
+		if t.started && !t.finished {
+			if d.names {
+				return true
+			}
+			continue
+		}
+		if !t.started && l.reachesUnfinished(t, seen) {
+			return true
+		}
+	}
+	return false
 }
 
 // importStmt handles "import a.b.c as d" for the modules of the project.
@@ -535,6 +734,23 @@ func raiseClass(class, msg string, line int) pyast.Node {
 // stmt rewrites one statement and returns what replaces it.
 func (r *rewriter) stmt(n pyast.Node) ([]pyast.Node, error) {
 	switch x := n.(type) {
+	case *pyast.Delete:
+		// del of an imported name: the alias goes away, nothing runs.
+		allAliases := len(x.Targets) > 0
+		for _, t := range x.Targets {
+			nm, ok := t.(*pyast.Name)
+			if !ok || r.local(nm.ID) || r.m.bound[nm.ID] {
+				allAliases = false
+				break
+			}
+			if _, ok := r.m.aliases[nm.ID]; !ok {
+				allAliases = false
+				break
+			}
+		}
+		if allAliases {
+			return passIfEmpty(nil, x.Lineno), nil
+		}
 	case *pyast.Import:
 		var rest []pyast.Alias
 		for _, a := range x.Names {
@@ -695,10 +911,18 @@ func (r *rewriter) constantName(id string) pyast.Node {
 
 // node rewrites an expression or a compound statement.
 func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
+	if c, ok := n.(*pyast.Call); ok && len(c.Args) == 0 && !c.HasKeywords {
+		if f, ok := c.Func.(*pyast.Name); ok && f.ID == "globals" && !r.local("globals") && !r.m.bound["globals"] {
+			return r.l.globalsCall(r.m, c.Lineno), nil
+		}
+	}
 	switch x := n.(type) {
 	case nil:
 		return nil, nil
 	case *pyast.Name:
+		if x.ID == "__debug__" && !r.local(x.ID) && !r.m.bound[x.ID] {
+			return &pyast.Constant{PyType: "bool", Value: true, Lineno: x.Lineno}, nil
+		}
 		if r.local(x.ID) {
 			return x, nil
 		}
@@ -714,6 +938,10 @@ func (r *rewriter) node(n pyast.Node) (pyast.Node, error) {
 		x.ID = r.mangle(x.ID)
 		return x, nil
 	case *pyast.Attribute:
+		if nm, ok := x.Value.(*pyast.Name); ok && r.baseSwap[nm.ID] != "" && !r.local(nm.ID) {
+			x.Value = &pyast.Name{ID: r.baseSwap[nm.ID], Lineno: nm.Lineno}
+			return x, nil
+		}
 		if res, ok, err := r.attribute(x); ok || err != nil {
 			if err == nil {
 				res = r.enumUse(res)
@@ -1003,7 +1231,10 @@ func (r *rewriter) function(x *pyast.FunctionDef) (pyast.Node, error) {
 			}
 		}
 	}
-	if err := r.list(&x.Body); err != nil {
+	r.l.inFuncBody++
+	err := r.list(&x.Body)
+	r.l.inFuncBody--
+	if err != nil {
 		return nil, err
 	}
 	// "mod.x = 1" became an assignment to a name of another module.
@@ -1109,13 +1340,35 @@ func (r *rewriter) class(x *pyast.ClassDef) (pyast.Node, error) {
 		}
 		x.Decorators[i] = n
 	}
+	var pre []pyast.Node
+	swap := map[string]string{}
 	for i := range x.Bases {
+		if nm, ok := x.Bases[i].(*pyast.Name); ok && builtinBases[nm.ID] != "" && !r.local(nm.ID) && !r.m.bound[nm.ID] {
+			if _, aliased := r.m.aliases[nm.ID]; !aliased {
+				body, m, err := r.l.importModule(r.m, "_basetypes", x.Lineno)
+				if err != nil {
+					return nil, err
+				}
+				if m != nil {
+					pre = append(pre, body...)
+					swap[nm.ID] = m.prefixOf() + builtinBases[nm.ID]
+					x.Bases[i] = &pyast.Name{ID: swap[nm.ID], Lineno: nm.Lineno}
+					continue
+				}
+			}
+		}
 		n, err := r.node(x.Bases[i])
 		if err != nil {
 			return nil, err
 		}
 		x.Bases[i] = n
 	}
+	savedSwap := r.baseSwap
+	if len(swap) > 0 {
+		r.baseSwap = swap
+		rewriteNew(x, swap)
+	}
+	defer func() { r.baseSwap = savedSwap }()
 	for _, k := range x.Keywords {
 		n, err := r.node(k.Value)
 		if err != nil {
@@ -1143,8 +1396,15 @@ func (r *rewriter) class(x *pyast.ClassDef) (pyast.Node, error) {
 		defer r.push(names, true)
 		return r.enumClass(x, info)
 	}
+	if len(pre) > 0 {
+		return &block{stmts: append(pre, x)}, nil
+	}
 	return x, nil
 }
+
+// builtinBases are the built-in types a class can derive from, and the
+// classes of _basetypes that stand for them.
+var builtinBases = map[string]string{"dict": "_PyDict", "list": "_PyList", "set": "_PySet", "str": "_PyStr", "int": "_PyInt", "float": "_PyFloat", "tuple": "_PyTuple", "bytes": "_PyBytes", "frozenset": "_PyFrozenset"}
 
 // totalOrdering gives, for the comparison a class defines, the bodies of the
 // other three that functools.total_ordering would add.

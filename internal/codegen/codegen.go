@@ -15,6 +15,10 @@ const runtimeImport = "github.com/amayakmt/py2go/runtime"
 type generator struct {
 	usesRuntime bool // set when generated code calls runtime.X, so we import it
 
+	// rawStore is set while compiling object.__setattr__(self, "x", v): the
+	// store skips the class's own __setattr__.
+	rawStore bool
+
 	// Module-level function signatures, collected before any body is
 	// generated so functions can call each other in any order.
 	sigs    map[string]*funcSig

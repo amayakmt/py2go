@@ -272,13 +272,23 @@ func (g *generator) classSetItem(b *strings.Builder, target *pyast.Subscript, ba
 	if m == nil {
 		return unsupported(fmt.Sprintf("'%s' object does not support item assignment", c.name), line)
 	}
-	idx, err := g.exprAs(target.Index, m.sig.pos[0].typ)
-	if err != nil {
-		return err
-	}
-	idx, err = g.coerce(idx, m.sig.pos[0].typ, "key of __setitem__", line)
-	if err != nil {
-		return err
+	var idx value
+	if _, isSlice := target.Index.(*pyast.Slice); isSlice && m.sig.pos[0].typ == tObject {
+		code, err := g.dynIndexCode(target.Index)
+		if err != nil {
+			return err
+		}
+		idx = value{code: code, typ: tObject, prec: precAtom}
+	} else {
+		var err error
+		idx, err = g.exprAs(target.Index, m.sig.pos[0].typ)
+		if err != nil {
+			return err
+		}
+		idx, err = g.coerce(idx, m.sig.pos[0].typ, "key of __setitem__", line)
+		if err != nil {
+			return err
+		}
 	}
 	code := src
 	if valueNode != nil {
@@ -309,13 +319,23 @@ func (g *generator) classDelItem(b *strings.Builder, sub *pyast.Subscript, base 
 	if m == nil {
 		return unsupported(fmt.Sprintf("'%s' object doesn't support item deletion", c.name), line)
 	}
-	idx, err := g.exprAs(sub.Index, m.sig.pos[0].typ)
-	if err != nil {
-		return err
-	}
-	idx, err = g.coerce(idx, m.sig.pos[0].typ, "key of __delitem__", line)
-	if err != nil {
-		return err
+	var idx value
+	if _, isSlice := sub.Index.(*pyast.Slice); isSlice && m.sig.pos[0].typ == tObject {
+		code, err := g.dynIndexCode(sub.Index)
+		if err != nil {
+			return err
+		}
+		idx = value{code: code, typ: tObject, prec: precAtom}
+	} else {
+		var err error
+		idx, err = g.exprAs(sub.Index, m.sig.pos[0].typ)
+		if err != nil {
+			return err
+		}
+		idx, err = g.coerce(idx, m.sig.pos[0].typ, "key of __delitem__", line)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Fprintf(b, "%s.M___delitem__(%s)\n", base.at(precAtom), idx.code)
 	return nil
@@ -414,12 +434,28 @@ func (g *generator) userIterable(v value) (code string, elem pyType, ok bool) {
 
 // ---- isinstance, issubclass, type ----
 
+// builtinBaseClass names the classes of _basetypes that stand for dict,
+// list and set when a class derives from them.
+var builtinBaseClass = map[string]string{"dict": "_PyDict", "list": "_PyList", "set": "_PySet", "str": "_PyStr", "int": "_PyInt", "float": "_PyFloat", "tuple": "_PyTuple", "bytes": "_PyBytes", "frozenset": "_PyFrozenset"}
+
+// isABC tells whether a class derives from abc.ABC (or had metaclass=ABCMeta).
+func (c *classInfo) isABC() bool {
+	for _, k := range c.mro {
+		if k.pyName() == "ABC" && !k.builtin || k.node != nil && k.node.ABCMeta {
+			return true
+		}
+	}
+	return false
+}
+
 // typeSpec is one class named in the second argument of isinstance.
 type typeSpec struct {
 	user    *classInfo // a class of the program
 	exc     string     // a built-in exception class
 	builtin string     // int, str, float, bool, list, ...
 	object  bool
+
+	noVirtual bool // the test without the registered virtual subclasses
 }
 
 func (g *generator) typeSpecs(n pyast.Node) ([]typeSpec, error) {
@@ -454,6 +490,21 @@ func (g *generator) typeSpecs(n pyast.Node) ([]typeSpec, error) {
 // instanceTest is the Go expression for isinstance(x, spec), with x of the
 // given static type, or a constant "true"/"false".
 func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) {
+	if s.user != nil && !s.noVirtual && s.user.isABC() {
+		// An abstract base class: its registered virtual subclasses count.
+		plain, err := g.instanceTest(x, typeSpec{user: s.user, noVirtual: true}, line)
+		if err != nil {
+			return "", err
+		}
+		virtual := g.rt("IsVirtualInstance") + "(" + g.boxed(x) + ", " + strconv.Quote(s.user.pyName()) + ")"
+		if plain == "false" {
+			return virtual, nil
+		}
+		if plain == "true" {
+			return "true", nil
+		}
+		return "(" + plain + " || " + virtual + ")", nil
+	}
 	switch {
 	case s.object:
 		return "true", nil
@@ -489,6 +540,17 @@ func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) 
 		return "false", nil
 	}
 	// A built-in type.
+	if x.typ.isClass() {
+		if base, ok := builtinBaseClass[s.builtin]; ok {
+			if c := g.classOf(x.typ); c != nil {
+				for _, k := range c.mro {
+					if k.pyName() == base {
+						return "true", nil
+					}
+				}
+			}
+		}
+	}
 	switch x.typ {
 	case tObject:
 		switch s.builtin {
@@ -586,8 +648,16 @@ func (g *generator) issubclassCall(n *pyast.Call) (value, error) {
 			return value{code: "true", typ: tBool, prec: precAtom}, nil
 		case s.user != nil && sub.isSubclassOf(s.user):
 			return value{code: "true", typ: tBool, prec: precAtom}, nil
+		case s.user != nil && s.user.isABC():
+			return value{code: g.rt("IsVirtualSubclass") + "(" + g.rt("ClassOf") + "(" + strconv.Quote(sub.pyName()) + "), " + strconv.Quote(s.user.pyName()) + ")", typ: tBool, prec: precAtom}, nil
 		case s.exc != "" && sub.isSubclassOf(g.builtinClass(s.exc)):
 			return value{code: "true", typ: tBool, prec: precAtom}, nil
+		case s.builtin != "" && builtinBaseClass[s.builtin] != "":
+			for _, k := range sub.mro {
+				if k.pyName() == builtinBaseClass[s.builtin] {
+					return value{code: "true", typ: tBool, prec: precAtom}, nil
+				}
+			}
 		}
 	}
 	return value{code: "false", typ: tBool, prec: precAtom}, nil

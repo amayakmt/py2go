@@ -1,0 +1,7 @@
+1 2
+AttributeError frozen: x
+1
+30
+ValueError age must be >= 0
+30
+4 ['value', 'value', 'value', 'value']

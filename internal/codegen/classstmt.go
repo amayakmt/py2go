@@ -152,6 +152,9 @@ func (g *generator) inferClassAttrs(c *classInfo) error {
 				if err != nil && strings.Contains(err.Error(), "undefined name") {
 					// A module variable that is not typed yet: refreshed later.
 					m.typ = tObject
+					if g.storedAttrs[name] {
+						m.shadow = true
+					}
 					continue
 				}
 				if err != nil {
@@ -161,6 +164,11 @@ func (g *generator) inferClassAttrs(c *classInfo) error {
 					return unsupported(fmt.Sprintf("class attribute '%s.%s' of type %s", c.name, name, v.typ), m.line)
 				}
 				m.typ = v.typ
+				if v.typ == tNoneType {
+					// "attr = None" in a class body is a placeholder the
+					// instances or subclasses fill in: an object.
+					m.typ = tObject
+				}
 			}
 			if g.storedAttrs[name] {
 				m.shadow = true
@@ -182,6 +190,9 @@ func (g *generator) inferRounds(classes []*classInfo) {
 			if c.completed || c.generic == nil {
 				g.inferClass(c)
 			}
+		}
+		if g.unifyAttrTypes(classes) {
+			g.inferGrew = true
 		}
 		if !g.inferGrew {
 			break
@@ -285,16 +296,65 @@ func (g *generator) refreshClassAttrs(c *classInfo) {
 			if m.kind == mClassAttr {
 				g.classBodySeen[name] = true
 			}
-			if m.kind != mClassAttr || m.typ != tObject || m.value == nil {
+			if m.kind != mClassAttr || m.typ != tObject || m.value == nil || m.wide {
 				continue
 			}
 			delete(g.classBodySeen, name)
 			v, err := g.exprAs(m.value, "")
-			if err != nil || v.typ == tObject || v.typ == tNone || v.typ == tExc || v.typ.isClassRef() || v.typ == tOptExc {
+			if err != nil || v.typ == tObject || v.typ == tNone || v.typ == tNoneType || v.typ == tExc || v.typ.isClassRef() || v.typ == tOptExc {
 				continue
+			}
+			baseIsObject := false
+			for _, k := range c.mro[1:] {
+				if bm := k.members[name]; bm != nil && (bm.kind == mClassAttr || bm.kind == mField) && bm.typ == tObject {
+					baseIsObject = true
+				}
+			}
+			if baseIsObject {
+				continue // a base holds any value here, so this class does too
 			}
 			m.typ = v.typ
 		}
 		return nil
 	})
+}
+
+// unifyAttrTypes makes an attribute an object in every class of a hierarchy
+// where classes give it different types (Node.childNodes a NodeList,
+// Childless.childNodes an EmptyNodeList): Python lets them differ, the Go
+// interface of the base cannot. It reports whether a type changed.
+func (g *generator) unifyAttrTypes(classes []*classInfo) bool {
+	changed := false
+	for _, c := range classes {
+		if c.generic != nil {
+			continue
+		}
+		for _, name := range c.visibleNames() {
+			var first pyType
+			mixed := false
+			var attrs []*member
+			for _, k := range c.mro {
+				m := k.members[name]
+				if m == nil || (m.kind != mField && m.kind != mClassAttr) || m.typ == "" {
+					continue
+				}
+				attrs = append(attrs, m)
+				if first == "" {
+					first = m.typ
+				} else if m.typ != first {
+					mixed = true
+				}
+			}
+			if mixed {
+				for _, m := range attrs {
+					m.wide = true
+					if m.typ != tObject {
+						m.typ = tObject
+						changed = true
+					}
+				}
+			}
+		}
+	}
+	return changed
 }

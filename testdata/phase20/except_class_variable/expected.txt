@@ -1,0 +1,10 @@
+caught ValueError invalid literal for int() with base 10: 'x'
+-1
+caught KeyError 'k'
+-2
+caught ZeroDivisionError division by zero
+-3
+caught AppError bad
+-4
+tuple variable
+not caught by the wrong class

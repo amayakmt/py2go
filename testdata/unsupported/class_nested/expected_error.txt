@@ -1,1 +1,0 @@
-unsupported: class defined inside a class at line 2

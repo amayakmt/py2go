@@ -44,6 +44,42 @@ func (l *linker) moduleRegistrations() []pyast.Node {
 			names = append(names, n)
 		}
 		sort.Strings(names)
+		// Imported names are globals too: modules as module objects, names
+		// from "from m import x" as what they stand for.
+		var aliased []string
+		for n := range m.aliases {
+			if !m.bound[n] {
+				aliased = append(aliased, n)
+			}
+		}
+		sort.Strings(aliased)
+		for _, n := range aliased {
+			a := m.aliases[n]
+			if a.mod == nil || a.mod.builtins {
+				continue
+			}
+			var val pyast.Node
+			if a.name == "" {
+				if a.mod.entry {
+					continue
+				}
+				val = &pyast.Call{Func: &pyast.Name{ID: "_native"}, Args: []pyast.Node{
+					&pyast.Constant{PyType: "str", Value: "module.object"},
+					&pyast.Constant{PyType: "str", Value: a.mod.name},
+				}}
+			} else {
+				val = &pyast.Name{ID: a.mod.prefixOf() + a.name}
+			}
+			out = append(out, &pyast.Expr{Value: &pyast.Call{
+				Func: &pyast.Name{ID: "_native"},
+				Args: []pyast.Node{
+					&pyast.Constant{PyType: "str", Value: "module.register"},
+					&pyast.Constant{PyType: "str", Value: m.name},
+					&pyast.Constant{PyType: "str", Value: n},
+					&pyast.Lambda{Args: &pyast.Arguments{}, Body: val},
+				},
+			}})
+		}
 		for _, n := range names {
 			out = append(out, &pyast.Expr{Value: &pyast.Call{
 				Func: &pyast.Name{ID: "_native"},
@@ -57,4 +93,26 @@ func (l *linker) moduleRegistrations() []pyast.Node {
 		}
 	}
 	return out
+}
+
+// globalsCall is globals() in module m: a dict made, when it runs, from the
+// top-level names of m (a copy: assigning to it does not create globals).
+func (l *linker) globalsCall(m *module, line int) pyast.Node {
+	known := false
+	for _, v := range l.valueMods {
+		if v == m {
+			known = true
+		}
+	}
+	if !known {
+		l.valueMods = append(l.valueMods, m)
+	}
+	return &pyast.Call{
+		Func: &pyast.Name{ID: "_native", Lineno: line},
+		Args: []pyast.Node{
+			&pyast.Constant{PyType: "str", Value: "module.globals", Lineno: line},
+			&pyast.Constant{PyType: "str", Value: m.name, Lineno: line},
+		},
+		Lineno: line,
+	}
 }

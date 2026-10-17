@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"github.com/amayakmt/py2go/runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -52,7 +53,7 @@ func involvesObject(l, r value) bool { return l.typ == tObject || r.typ == tObje
 // arguments. It reports false when no argument is an object.
 func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, bool, error) {
 	switch name {
-	case "bytes", "bytearray", "complex", "frozenset", "slice", "object":
+	case "bytes", "bytearray", "memoryview", "complex", "frozenset", "slice", "object":
 		if g.isVariable(name) || g.sigs[name] != nil {
 			return value{}, false, nil
 		}
@@ -100,6 +101,11 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 			return g.dynValue(g.rt("DynHasAttr")+"("+a+")", tBool), true, nil
 		}
 		return g.dynValue(g.rt("DynDelAttr")+"("+a+")", tNone), true, nil
+	}
+	if (name == "locals" || name == "vars") && len(n.Args) == 0 && !n.HasKeywords && !g.isVariable(name) && g.sigs[name] == nil {
+		if v, ok := g.localsDict(); ok {
+			return v, true, nil
+		}
 	}
 	switch name {
 	case "len", "int", "float", "abs", "round", "sum", "list", "tuple", "set", "dict", "sorted", "reversed",
@@ -594,7 +600,7 @@ var dynBuiltinValues = map[string]bool{
 
 var dynBuiltinTypes = map[string]bool{
 	"int": true, "float": true, "str": true, "bool": true, "list": true, "tuple": true, "set": true, "dict": true,
-	"bytes": true, "bytearray": true, "complex": true, "frozenset": true, "slice": true, "range": true, "object": true,
+	"bytes": true, "bytearray": true, "memoryview": true, "complex": true, "frozenset": true, "slice": true, "range": true, "object": true,
 }
 
 // boxable reports whether v can be handed to the dynamic operations.
@@ -769,4 +775,36 @@ func init() {
 	for _, n := range strings.Fields(`ArithmeticError AssertionError AttributeError BaseException BaseExceptionGroup BlockingIOError BrokenPipeError BufferError BytesWarning ChildProcessError ConnectionAbortedError ConnectionError ConnectionRefusedError ConnectionResetError DeprecationWarning EOFError Ellipsis EncodingWarning EnvironmentError Exception ExceptionGroup False FileExistsError FileNotFoundError FloatingPointError FutureWarning GeneratorExit IOError ImportError ImportWarning IndentationError IndexError InterruptedError IsADirectoryError KeyError KeyboardInterrupt LookupError MemoryError ModuleNotFoundError NameError None NotADirectoryError NotImplemented NotImplementedError OSError OverflowError PendingDeprecationWarning PermissionError ProcessLookupError PythonFinalizationError RecursionError ReferenceError ResourceWarning RuntimeError RuntimeWarning StopAsyncIteration StopIteration SyntaxError SyntaxWarning SystemError SystemExit TabError TimeoutError True TypeError UnboundLocalError UnicodeDecodeError UnicodeEncodeError UnicodeError UnicodeTranslateError UnicodeWarning UserWarning ValueError Warning ZeroDivisionError __debug__ abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex copyright credits delattr dict dir divmod enumerate eval exec exit filter float format frozenset getattr globals hasattr hash help hex id input int isinstance issubclass iter len license list locals map max memoryview min next object oct open ord pow print property quit range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip`) {
 		pythonBuiltins[n] = true
 	}
+}
+
+// localsDict is locals() in a function: a new dict of the names the function
+// has bound so far, from its parameters on (a copy, as in CPython).
+func (g *generator) localsDict() (value, bool) {
+	root := g.env.functionRoot()
+	if root == nil {
+		return value{}, false
+	}
+	seen := map[string]bool{}
+	var names []string
+	for s := g.env; s != nil; s = s.parent {
+		for n := range s.vars {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
+		if s == root {
+			break
+		}
+	}
+	sort.Strings(names)
+	var pairs []string
+	for _, n := range names {
+		t, _ := g.env.lookup(n)
+		if t == "" || t == tExc || strings.HasPrefix(n, "_py") {
+			continue
+		}
+		pairs = append(pairs, g.rt("KV")+"[string, any]{Key: "+strconv.Quote(pyName(n))+", Val: "+g.boxed(value{code: n, typ: t, prec: precAtom})+"}")
+	}
+	return value{code: g.rt("NewDict") + "[string, any](" + strings.Join(pairs, ", ") + ")", typ: dictOf(tStr, tObject), prec: precAtom}, true
 }

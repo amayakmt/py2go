@@ -64,9 +64,7 @@ func TestPhase9Errors(t *testing.T) {
 	tests := []struct{ name, src, want string }{
 		{"an annotation is a contract", "def f(x: int) -> int:\n    return x\n\n\nf('a')\n", "argument 1 of 'f' expects int, got str"},
 		{"an annotated variable keeps its type", "x: int = 'a'\n", "variable 'x' expects int, got str"},
-		{"a declared attribute cannot be deleted", "class A:\n    def __init__(self):\n        self.x = 1\n\n\ndel A().x\n", "which the class declares"},
 		{"functions have no attributes", "def f():\n    pass\n\n\nf.calls = 1\n", "assignment to attribute 'calls'"},
-		{"del of a name", "x = 1\ndel x\n", "del of a variable"},
 		{"nested containers keep their first types", "g = [[0]]\ng[0].append('x')\n", "expects int, got str"},
 	}
 	for _, tc := range tests {

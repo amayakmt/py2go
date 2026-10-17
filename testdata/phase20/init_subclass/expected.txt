@@ -1,0 +1,3 @@
+['alpha', 'b', 'gamma']
+['alpha', 'beta', 'beta']
+2

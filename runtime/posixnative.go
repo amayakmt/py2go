@@ -42,7 +42,7 @@ func pathArg(args []any, i int) string {
 	if i >= len(args) {
 		panic(newError("TypeError", "missing path argument"))
 	}
-	switch v := Unbox(args[i]).(type) {
+	switch v := BaseValue(Unbox(args[i])).(type) {
 	case string:
 		if strings.IndexByte(v, 0) >= 0 {
 			panic(valueError("embedded null byte"))

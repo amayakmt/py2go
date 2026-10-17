@@ -531,7 +531,7 @@ func DynInt(v any) int64 {
 // DynIntAny is int(x): ints of any size, floats, strings and objects with
 // __int__.
 func DynIntAny(v any) any {
-	v = Unbox(v)
+	v = BaseValue(Unbox(v))
 	switch x := v.(type) {
 	case int64:
 		return x
@@ -576,7 +576,7 @@ func DynIntAny(v any) any {
 
 // DynFloat is float(x).
 func DynFloat(v any) float64 {
-	v = Unbox(v)
+	v = BaseValue(Unbox(v))
 	switch x := v.(type) {
 	case *big.Int:
 		return bigToFloat(x)
@@ -896,6 +896,10 @@ func normKey[K comparable](k K) K {
 }
 
 func dynKey(v any) any {
+	if b, ok := baseValueOf(Unbox(v)); ok && immutableBase(b) {
+		// A str or int subclass is the same key as its value.
+		v = b
+	}
 	switch x := Unbox(v).(type) {
 	case bool:
 		return b2i(x)

@@ -87,6 +87,9 @@ func yieldSlow() {
 	if b&2 != 0 && curThread == mainThreadIdent {
 		runSignalHandlers()
 	}
+	if b&4 != 0 {
+		runDelQueue()
+	}
 	if b&1 != 0 {
 		breaker.And(^int32(1))
 		if gilWaits.Load() > 0 {
@@ -537,6 +540,7 @@ func runExitHooks() {
 		}
 	}
 	runAtExit()
+	runDelAtExit()
 	FlushAll()
 }
 

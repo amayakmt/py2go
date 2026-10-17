@@ -197,7 +197,7 @@ func argInt(args []any, i int, def int64) int64 {
 
 func argStr(args []any, i int, def string) string {
 	if i < len(args) && !IsNone(args[i]) {
-		s, ok := Unbox(args[i]).(string)
+		s, ok := BaseValue(Unbox(args[i])).(string)
 		if !ok {
 			panic(newError("TypeError", "must be str, not "+TypeName(args[i])))
 		}

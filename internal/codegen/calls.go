@@ -82,6 +82,31 @@ type slot struct {
 // Python does, and generates the Go call. Everything that can be checked
 // statically is reported with CPython's TypeError message.
 func (g *generator) bindCall(n *pyast.Call, sig *funcSig, callee, fname string) (value, error) {
+	v, err := g.bindCallStrict(n, sig, callee, fname)
+	if err != nil && callShapeError(err) && !g.infer && g.method != nil {
+		// In a method, arguments that do not fit the parameters are the
+		// TypeError Python raises when the call runs: the method is compiled
+		// for each class, and the call may sit in a branch that never runs for
+		// this one, as a branch on self.nodeType does. Elsewhere they stay
+		// compile-time errors.
+		msg := strings.TrimPrefix(err.Error(), "unsupported: ")
+		if i := strings.LastIndex(msg, " at line "); i >= 0 {
+			msg = msg[:i]
+		}
+		ret := sig.ret
+		code := "func() " + g.goType(ret) + " {\npanic(" + g.rt("NewError") + "(\"TypeError\", " + strconv.Quote(msg) + "))\n}()"
+		if ret == tNone {
+			code = "func() " + g.rt("NoneT") + " {\npanic(" + g.rt("NewError") + "(\"TypeError\", " + strconv.Quote(msg) + "))\n}()"
+		}
+		return value{code: code, typ: ret, prec: precAtom}, nil
+	}
+	if err != nil && callShapeError(err) && g.infer && g.method != nil {
+		return value{code: "nil", typ: sig.ret, prec: precAtom}, nil
+	}
+	return v, err
+}
+
+func (g *generator) bindCallStrict(n *pyast.Call, sig *funcSig, callee, fname string) (value, error) {
 	for _, a := range n.Args {
 		if _, ok := a.(*pyast.Starred); ok {
 			return g.bindDynamic(n, sig, callee, fname)
@@ -453,7 +478,7 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 		if err != nil {
 			return value{}, err
 		}
-		if v.typ == tObject || (v.typ.isDict() && v.typ.keyType() == tObject) {
+		if v.typ == tObject || v.typ.isClass() || (v.typ.isDict() && v.typ.keyType() == tObject) {
 			v = value{code: g.rt("StrDict") + "(" + v.code + ")", typ: dictOf(tStr, tObject), prec: precAtom}
 		}
 		if !v.typ.isDict() || v.typ.keyType() != tStr {

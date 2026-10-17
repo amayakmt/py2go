@@ -15,7 +15,7 @@ func rangeError() *PyError  { return newError("OverflowError", "math range error
 
 // mathFloat reads the argument of a math function as a float.
 func mathFloat(v any) float64 {
-	v = Unbox(v)
+	v = BaseValue(Unbox(v))
 	switch x := v.(type) {
 	case float64:
 		return x

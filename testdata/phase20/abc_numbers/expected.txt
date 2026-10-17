@@ -1,0 +1,15 @@
+square area=9
+TypeError Can't instantiate abstract class Shape without an implementation for abstract methods 'area', 'name'
+TypeError Can't instantiate abstract class Half without an implementation for abstract method 'name'
+went
+TypeError Can't instantiate abstract class Base without an implementation for abstract method 'go'
+True True False
+3 True True True True
+2.5 True False True True
+1j True False False True
+True True True True True
+'x' False False False False
+Fraction(1, 2) True False True True
+Decimal('1.5') True False False False
+True False True
+['integral', 'real', 'other']

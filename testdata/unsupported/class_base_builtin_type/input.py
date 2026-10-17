@@ -1,2 +1,0 @@
-class Stack(list):
-    pass

@@ -494,3 +494,7 @@ class Fraction:
 
     def __bool__(self):
         return self._numerator != 0
+
+
+import numbers as _numbers
+_numbers.Rational.register(Fraction)

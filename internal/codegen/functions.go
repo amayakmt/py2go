@@ -1189,7 +1189,9 @@ func (g *generator) hoistBlockLocals(b *strings.Builder, fn *pyast.FunctionDef, 
 					declared[nm.ID] = true
 				}
 			case *pyast.For:
-				bind(x.Target, depth)
+				// The loop may run in a closure (a generator is walked in
+				// one), so its targets are hoisted like a nested block's.
+				bind(x.Target, depth+1)
 				visitStmts(x.Body, depth+1)
 				visitStmts(x.Orelse, depth+1)
 			case *pyast.While:

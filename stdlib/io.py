@@ -8,6 +8,7 @@ DEFAULT_BUFFER_SIZE = 8192
 
 from builtins import io_pm_UnsupportedOperation as UnsupportedOperation
 from builtins import open as _builtin_open
+from abc import ABCMeta
 
 
 def open(file, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None):
@@ -284,7 +285,7 @@ class BytesIO:
         return False
 
 
-class IOBase:
+class IOBase(metaclass=ABCMeta):
     def __init__(self):
         self._iobase_closed = False
 
@@ -918,3 +919,6 @@ def FileIO(name, mode="r", closefd=True, opener=None):
     m = mode if "b" in mode else mode + "b"
     return _builtin_open(name, m, 0, None, None, None, closefd)
 
+
+_native("abc.register", TextIOBase, StringIO)
+_native("abc.register", BufferedIOBase, BytesIO)

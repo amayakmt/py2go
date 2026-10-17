@@ -511,18 +511,38 @@ func (g *generator) exceptClasses(n pyast.Node) ([]string, error) {
 		nodes = t.Elts
 	}
 	classes := make([]string, 0, len(nodes))
+	dynamic := false
 	for _, node := range nodes {
 		name, ok := node.(*pyast.Name)
-		if !ok {
-			return nil, unsupported("except clause of kind "+targetKind(node), node.Line())
-		}
-		if g.classes[name.ID] != nil && !g.isVariable(name.ID) && !g.classes[name.ID].exc {
+		if ok && g.classes[name.ID] != nil && !g.isVariable(name.ID) && !g.classes[name.ID].exc {
 			return nil, unsupported(fmt.Sprintf("catching classes that do not inherit from BaseException is not allowed ('%s')", name.ID), name.Line())
 		}
-		if !g.isExceptionClass(name.ID) {
+		if ok && g.isExceptionClass(name.ID) {
+			classes = append(classes, strconv.Quote(name.ID))
+			continue
+		}
+		// An exception class (or a tuple of them) held in a variable or
+		// read from an attribute: its names are found when it runs.
+		if ok && g.isUnknownName(name.ID) {
 			return nil, unsupported(fmt.Sprintf("unknown exception class '%s'", name.ID), name.Line())
 		}
-		classes = append(classes, strconv.Quote(name.ID))
+		if !ok {
+			if _, isAttr := node.(*pyast.Attribute); !isAttr {
+				return nil, unsupported("except clause of kind "+targetKind(node), node.Line())
+			}
+		}
+		v, err := g.typedExpr(node)
+		if err != nil {
+			return nil, err
+		}
+		if v.typ.isFunc() {
+			return nil, unsupported("except clause of kind function", node.Line())
+		}
+		classes = append(classes, g.boxed(v))
+		dynamic = true
+	}
+	if dynamic {
+		return []string{g.rt("ExcNamesOf") + "(" + strings.Join(classes, ", ") + ")..."}, nil
 	}
 	return classes, nil
 }

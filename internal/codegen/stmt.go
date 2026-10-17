@@ -27,6 +27,11 @@ func (g *generator) stmt(b *strings.Builder, n pyast.Node) error {
 func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	switch n := n.(type) {
 	case *pyast.Expr:
+		if c, ok := n.Value.(*pyast.Call); ok {
+			if recv, name, val, del, raw := rawSetattrCall(c); raw {
+				return g.rawStoreStmt(b, recv, name, val, del, n.Line())
+			}
+		}
 		return g.exprStmt(b, n)
 	case *pyast.AnnAssign:
 		return g.annAssign(b, n)
@@ -1254,13 +1259,28 @@ func (g *generator) deleteStmt(b *strings.Builder, n *pyast.Delete) error {
 					return unsupported("del of the attribute '"+attr.Attr+"'", n.Line())
 				}
 				if c := g.classOf(recv.typ); c != nil && c.lookup(g.mangled(attr.Attr)) != nil {
-					return unsupported("del of the attribute '"+attr.Attr+"' of class '"+c.name+"', which the class declares", n.Line())
+					m := c.lookup(g.mangled(attr.Attr))
+					if m.kind != mField {
+						return unsupported("del of the attribute '"+attr.Attr+"' of class '"+c.name+"', which the class declares", n.Line())
+					}
+					// del self.x of a declared field: the field is cleared to
+					// its zero value (a later read gives it, where CPython
+					// raises AttributeError).
+					fmt.Fprintf(b, "{\nvar _zero %s\n%s.Set_%s(_zero)\n}\n", g.goType(m.typ), recv.at(precAtom), m.name)
+					continue
 				}
 				fmt.Fprintf(b, "%s(%s, %s)\n", g.rt("DynDelAttr"), g.boxed(recv), strconv.Quote(attr.Attr))
 				continue
 			}
-			if _, isName := target.(*pyast.Name); isName {
-				return unsupported("del of a variable", n.Line())
+			if nm, isName := target.(*pyast.Name); isName {
+				// del x: the variable is cleared to its zero value. A read
+				// after it gives that value, not the NameError of CPython.
+				t, found := g.env.lookup(nm.ID)
+				if !found {
+					return unsupported("del of a variable", n.Line())
+				}
+				fmt.Fprintf(b, "{\nvar _zero %s\n%s = _zero\n}\n", g.goType(t), nm.ID)
+				continue
 			}
 			return unsupported("del of "+targetKind(target), n.Line())
 		}

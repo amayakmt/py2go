@@ -55,7 +55,6 @@ func TestGeneratePhase10Output(t *testing.T) {
 
 func TestPhase10Errors(t *testing.T) {
 	tests := []struct{ name, src, want string }{
-		{"memoryview is not there", "print(memoryview(b'a'))\n", "memoryview"},
 		{"the operand of ~ must be an int", "print(~1.5)\n", "operator ~ on float"},
 	}
 	for _, tc := range tests {
