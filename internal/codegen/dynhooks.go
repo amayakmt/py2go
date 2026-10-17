@@ -85,6 +85,9 @@ func (g *generator) funcInfoWith(name string, sig *funcSig, snapshot bool) strin
 	if sig.gen != nil && (sig.gen.coro || sig.gen.asyncGen) {
 		b.WriteString(", Async: true")
 	}
+	if sig.hasDoc {
+		fmt.Fprintf(&b, ", Doc: %s", strconv.Quote(sig.doc))
+	}
 	b.WriteString("}")
 	return b.String()
 }
@@ -96,7 +99,7 @@ func (g *generator) dynBound(c *classInfo, m *member) string {
 	for _, p := range m.sig.goParams() {
 		args = append(args, p.name)
 	}
-	call := fmt.Sprintf("self.M_%s(%s)", m.name, strings.Join(args, ", "))
+	call := fmt.Sprintf("self.%s(%s)", c.methodCallName(m.name), strings.Join(args, ", "))
 	body := call
 	if m.sig.ret != tNone {
 		body = "return " + call

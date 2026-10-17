@@ -58,6 +58,17 @@ type value struct {
 	// variable a value was read from.
 	fresh   bool
 	varName string
+
+	// deepFresh marks a fresh container whose containers inside are fresh
+	// too (displays of displays and constants), so that all of it can be
+	// copied with objects for items. Otherwise an item may be a container
+	// the program refers to elsewhere, and only the outer one is copied.
+	deepFresh bool
+
+	// built marks a container that a call of dict(), list() or set() just
+	// made: nothing refers to it, but its items may be shared, so it is
+	// converted by a shallow copy.
+	built bool
 }
 
 // at returns the code, parenthesized if it binds looser than min.
@@ -246,6 +257,9 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 		g.callWant = target
 		v, err = g.expr(n)
 		g.callWant = saved
+		if name, ok := callName(n); ok && (name == "dict" || name == "list" || name == "set") && !g.isVariable(name) && g.sigs[name] == nil && g.classes[name] == nil {
+			v.built = true
+		}
 	default:
 		v, err = g.expr(n)
 	}
@@ -264,6 +278,7 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 	switch n.(type) {
 	case *pyast.List, *pyast.Dict, *pyast.Set, *pyast.ListComp, *pyast.SetComp, *pyast.DictComp:
 		v.fresh = true
+		v.deepFresh = g.deepFresh(n)
 	}
 	if target == tObject {
 		v = g.escape(v)
@@ -281,6 +296,55 @@ func (g *generator) exprAs(n pyast.Node, want pyType) (value, error) {
 		v = value{code: "func() " + g.rt("NoneT") + " {\n" + v.code + "\nreturn " + g.rt("NoneV") + "\n}()", typ: tNoneType, prec: precAtom}
 	}
 	return v, nil
+}
+
+// deepFresh reports whether every container inside a display is built by
+// the display itself.
+func (g *generator) deepFresh(n pyast.Node) bool {
+	all := func(nodes []pyast.Node) bool {
+		for _, e := range nodes {
+			if e != nil && !g.deepFresh(e) {
+				return false
+			}
+		}
+		return true
+	}
+	switch x := n.(type) {
+	case *pyast.Constant:
+		return true
+	case *pyast.List:
+		return all(x.Elts)
+	case *pyast.Tuple:
+		return all(x.Elts)
+	case *pyast.Set:
+		return all(x.Elts)
+	case *pyast.Dict:
+		return all(x.Keys) && all(x.Values)
+	case *pyast.ListComp:
+		return g.deepFreshItem(x.Elt)
+	case *pyast.SetComp:
+		return g.deepFreshItem(x.Elt)
+	case *pyast.DictComp:
+		return g.deepFreshItem(x.Key) && g.deepFreshItem(x.Value)
+	case *pyast.BinOp:
+		// [0] * n
+		return x.Op == "Mult" && (g.deepFresh(x.Left) || g.deepFresh(x.Right))
+	}
+	// Any other expression whose type is not a mutable container.
+	if v, err := g.typedExpr(n); err == nil {
+		return !isMutableContainer(v.typ) && !v.typ.isTuple() && v.typ != tObject
+	}
+	return false
+}
+
+// deepFreshItem is deepFresh for the item expression of a comprehension,
+// whose loop variables are not in scope here: only displays and constants.
+func (g *generator) deepFreshItem(n pyast.Node) bool {
+	switch n.(type) {
+	case *pyast.Name, *pyast.Attribute, *pyast.Subscript, *pyast.Call:
+		return false
+	}
+	return g.deepFresh(n)
 }
 
 func (g *generator) constant(n *pyast.Constant) (value, error) {
@@ -561,6 +625,10 @@ func (g *generator) binary(op string, l, r value, line int) (value, error) {
 			return g.dynBinary(op, l, r), nil
 		}
 		return value{}, unsupported(fmt.Sprintf("operator %s on %s and %s", opSymbols[op], l.typ, r.typ), line)
+	}
+	if op == "Mod" && l.typ == tStr && r.typ == tExc {
+		// "%s" % err: the exception is an object like any other.
+		r = value{code: r.code, typ: tObject, prec: r.prec}
 	}
 	if involvesObject(l, r) {
 		return g.dynBinary(op, l, r), nil
@@ -972,6 +1040,10 @@ func (g *generator) contains(n *pyast.Compare, negate bool) (value, error) {
 	}
 	if r.typ.isClass() {
 		return g.classContains(n, r, negate)
+	}
+	if r.typ.isOptional() && (r.typ.optElem().isList() || r.typ.optElem().isDict() || r.typ.optElem().isSet()) {
+		// A container that may be None: Python's TypeError when it is.
+		r = value{code: r.at(precAtom) + ".Unwrap(\"TypeError\", \"argument of type 'NoneType' is not iterable\")", typ: r.typ.optElem(), prec: precAtom}
 	}
 	var want pyType
 	switch {

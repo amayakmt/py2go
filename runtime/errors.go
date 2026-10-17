@@ -138,11 +138,9 @@ var userMRO = map[string][]string{}
 // resolution order, so that except clauses and isinstance can walk it.
 func RegisterClass(name string, mro ...string) {
 	userMRO[name] = mro
-	short := name
-	if i := strings.LastIndex(name, "_pm_"); i >= 0 {
-		short = name[i+len("_pm_"):]
-	}
-	excByShortName[short] = name
+	// The name the class object carries when no other class shares it:
+	// without its module, and without the class it is nested in.
+	excByShortName[BaseTypeName(name)] = name
 }
 
 // excByShortName maps the name a class object of an exception class carries
@@ -344,6 +342,9 @@ func (e *PyError) baseStr() string {
 	if s, ok := e.osErrorStr(); ok {
 		return s
 	}
+	if s, ok := e.syntaxErrorStr(); ok {
+		return s
+	}
 	switch len(e.Args) {
 	case 0:
 		return ""
@@ -354,6 +355,49 @@ func (e *PyError) baseStr() string {
 		return Str(e.Args[0])
 	}
 	return "(" + e.argsRepr() + ")"
+}
+
+// syntaxErrorDetails is the (filename, lineno, offset, text, end_lineno,
+// end_offset) tuple of SyntaxError(msg, details).
+func (e *PyError) syntaxErrorDetails() ([]any, bool) {
+	if !IsSubclass(e.Type, "SyntaxError") || len(e.Args) != 2 {
+		return nil, false
+	}
+	t, ok := Unbox(e.Args[1]).(Seq)
+	if !ok || t.Kind() != "tuple" {
+		return nil, false
+	}
+	items := make([]any, 6)
+	for i := int64(0); i < t.Len() && i < 6; i++ {
+		items[i] = t.At(i)
+	}
+	return items, true
+}
+
+// syntaxErrorStr is SyntaxError's str(): "msg (file.py, line 3)", with the
+// base name of the file.
+func (e *PyError) syntaxErrorStr() (string, bool) {
+	d, ok := e.syntaxErrorDetails()
+	if !ok {
+		return "", false
+	}
+	msg := Str(e.Args[0])
+	file, hasFile := Unbox(d[0]).(string)
+	if hasFile {
+		if i := strings.LastIndexAny(file, "/"); i >= 0 {
+			file = file[i+1:]
+		}
+	}
+	line, hasLine := Unbox(d[1]).(int64)
+	switch {
+	case hasFile && hasLine:
+		return fmt.Sprintf("%s (%s, line %d)", msg, file, line), true
+	case hasFile:
+		return fmt.Sprintf("%s (%s)", msg, file), true
+	case hasLine:
+		return fmt.Sprintf("%s (line %d)", msg, line), true
+	}
+	return msg, true
 }
 
 func (e *PyError) argsRepr() string {
@@ -389,10 +433,16 @@ const modMarker = "_pm_"
 // BaseTypeName is the name of an exception class without its module.
 func BaseTypeName(t string) string {
 	if i := strings.LastIndex(t, modMarker); i >= 0 {
-		return t[i+len(modMarker):]
+		t = t[i+len(modMarker):]
+	}
+	// A class defined inside a class is hoisted as Outer_nested_Inner.
+	if i := strings.LastIndex(t, nestedMarker); i >= 0 {
+		t = t[i+len(nestedMarker):]
 	}
 	return t
 }
+
+const nestedMarker = "_nested_"
 
 // QualTypeName is the name with its module as CPython prints it for an
 // uncaught exception: "pkg.mod.Err".
@@ -416,7 +466,10 @@ func ExcNamesOf(vals ...any) []string {
 		case string:
 			out = append(out, x)
 		case *ClassRef:
-			if full, ok := excByShortName[x.Name]; ok && !x.Builtin {
+			if _, user := userMRO[x.Name]; user && !x.Builtin {
+				// A class registered under its mangled name.
+				out = append(out, x.Name)
+			} else if full, ok := excByShortName[x.Name]; ok && !x.Builtin {
 				out = append(out, full)
 			} else {
 				out = append(out, x.Name)

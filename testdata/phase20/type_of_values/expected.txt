@@ -1,0 +1,3 @@
+<class 'list'> <class 'NoneType'> <class 'dict'> <class 'tuple'> <class 'set'> <class 'bytes'>
+nil list dict
+True True list

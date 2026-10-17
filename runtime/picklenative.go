@@ -68,6 +68,13 @@ func init() {
 		if c, ok := classRefs[name]; ok && !c.Builtin && (moduleOf(c) == module) {
 			return c
 		}
+		// A class whose name other modules' classes share is registered
+		// under its mangled name.
+		for key, c := range classRefs {
+			if !c.Builtin && BaseTypeName(key) == name && moduleOf(c) == module {
+				return c
+			}
+		}
 		if _, known := moduleKnown(module); !known {
 			panic(newError("ModuleNotFoundError", "No module named '"+module+"'"))
 		}

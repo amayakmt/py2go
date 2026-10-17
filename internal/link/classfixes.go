@@ -1,6 +1,7 @@
 package link
 
 import (
+	"reflect"
 	"strconv"
 
 	"github.com/amayakmt/py2go/internal/pyast"
@@ -18,7 +19,95 @@ import (
 //     the class after its statement, and must give the class back.
 func fixClasses(mod *pyast.Module) {
 	moveDefproperty(mod)
+	aliasModuleFuncs(mod)
 	mod.Body = fixClassList(mod.Body)
+}
+
+// aliasModuleFuncs turns "__repr__ = _repr" in a class body, where _repr is
+// a function the module defined before the class, into a method that calls
+// it: "def __repr__(self): return _repr(self)".
+func aliasModuleFuncs(mod *pyast.Module) {
+	funcs := map[string]*pyast.FunctionDef{}
+	for _, st := range mod.Body {
+		switch x := st.(type) {
+		case *pyast.FunctionDef:
+			funcs[x.Name] = x
+		case *pyast.ClassDef:
+			own := map[string]bool{}
+			for i, cst := range x.Body {
+				switch y := cst.(type) {
+				case *pyast.FunctionDef:
+					own[y.Name] = true
+				case *pyast.Assign:
+					if len(y.Targets) != 1 {
+						continue
+					}
+					t, ok1 := y.Targets[0].(*pyast.Name)
+					v, ok2 := y.Value.(*pyast.Name)
+					if !ok1 || !ok2 || own[v.ID] {
+						if ok1 {
+							own[t.ID] = true
+						}
+						continue
+					}
+					if fd := funcs[v.ID]; fd != nil && forwardable(fd) {
+						x.Body[i] = forwardDef(t.ID, fd, y.Lineno)
+					}
+					own[t.ID] = true
+				}
+			}
+		}
+	}
+}
+
+// forwardable reports whether a function has only positional parameters,
+// a first one for self, and constant defaults.
+func forwardable(fd *pyast.FunctionDef) bool {
+	a := fd.Args
+	if a == nil || fd.HasDecorators || fd.IsAsync || len(a.PosOnly) > 0 || len(a.Args) == 0 || a.Vararg != nil || a.Kwarg != nil || len(a.Kwonly) > 0 {
+		return false
+	}
+	for _, d := range a.Defaults {
+		if _, ok := d.(*pyast.Constant); !ok {
+			return false
+		}
+	}
+	return !containsYield(fd.Body)
+}
+
+// containsYield reports whether a function body is a generator's.
+func containsYield(body []pyast.Node) bool {
+	return nameCountsOf(body, func(n pyast.Node) bool {
+		switch n.(type) {
+		case *pyast.Yield, *pyast.YieldFrom:
+			return true
+		}
+		return false
+	}) > 0
+}
+
+// forwardDef is "def name(<fd's parameters>): return fd(<parameters>)".
+func forwardDef(name string, fd *pyast.FunctionDef, line int) pyast.Node {
+	var params []*pyast.Arg
+	var call []pyast.Node
+	for _, p := range fd.Args.Args {
+		params = append(params, &pyast.Arg{Name: p.Name, Lineno: line})
+		call = append(call, &pyast.Name{ID: p.Name, Lineno: line})
+	}
+	defaults := make([]pyast.Node, len(fd.Args.Defaults))
+	for i, d := range fd.Args.Defaults {
+		c := *d.(*pyast.Constant)
+		defaults[i] = &c
+	}
+	return &pyast.FunctionDef{
+		Name:      name,
+		Args:      &pyast.Arguments{Args: params, Defaults: defaults},
+		HasParams: true,
+		Body: []pyast.Node{&pyast.Return{Value: &pyast.Call{
+			Func: &pyast.Name{ID: fd.Name, Lineno: line}, Args: call, Lineno: line,
+		}, Lineno: line}},
+		Lineno: line,
+	}
 }
 
 // moveDefproperty turns the module-level calls defproperty(C, "name", doc=...)
@@ -218,11 +307,22 @@ func fixClass(x *pyast.ClassDef, prefix string) []pyast.Node {
 		flat = append(flat, st)
 	}
 	x.Body = flat
+	siblings := map[string]string{} // nested classes hoisted so far
 	for _, st := range x.Body {
 		switch y := st.(type) {
 		case *pyast.ClassDef:
+			// A nested class may derive from one defined before it in the
+			// same body: "class abort(error)".
+			for i, base := range y.Bases {
+				if bn, ok := base.(*pyast.Name); ok {
+					if h, ok := siblings[bn.ID]; ok {
+						y.Bases[i] = &pyast.Name{ID: h, Lineno: bn.Lineno}
+					}
+				}
+			}
 			inner := y.Name
 			hoisted := prefix + x.Name + "_nested_" + inner
+			siblings[inner] = hoisted
 			display := y.Display
 			if display == "" {
 				display = inner
@@ -295,19 +395,35 @@ func fixClass(x *pyast.ClassDef, prefix string) []pyast.Node {
 }
 
 // fixBranchDefs renames a def that sits inside an if, for, while, try or with
-// (in a module or a function body) to name_defN and assigns it to name right
-// after: the compiler then sees an ordinary variable, which is visible after
-// the block, as Python's def is.
+// (in a module or a function body), and whose name is used outside that
+// statement, to name_defN and assigns it to name right after: the compiler
+// then sees an ordinary variable, which is visible after the block, as
+// Python's def is. A def used only inside its block keeps its signature.
 func fixBranchDefs(mod *pyast.Module) {
 	counter := 0
-	var inBody func(body []pyast.Node, nested bool) []pyast.Node
-	inBody = func(body []pyast.Node, nested bool) []pyast.Node {
+	var inBody func(body []pyast.Node, outside map[string]int) []pyast.Node
+	inBody = func(body []pyast.Node, outside map[string]int) []pyast.Node {
+		var all map[string]int
+		if outside == nil {
+			all = nameCounts(body)
+		}
 		var out []pyast.Node
 		for _, st := range body {
+			// At the top of a scope, outside is what the other statements use.
+			used := outside
+			if outside == nil {
+				used = map[string]int{}
+				inside := nameCounts([]pyast.Node{st})
+				for k, n := range all {
+					if n > inside[k] {
+						used[k] = 1
+					}
+				}
+			}
 			switch x := st.(type) {
 			case *pyast.FunctionDef:
-				x.Body = inBody(x.Body, false)
-				if nested {
+				x.Body = inBody(x.Body, nil)
+				if outside != nil && outside[x.Name] > 0 {
 					counter++
 					orig := x.Name
 					x.Name = orig + "_def" + strconv.Itoa(counter)
@@ -317,31 +433,81 @@ func fixBranchDefs(mod *pyast.Module) {
 			case *pyast.ClassDef:
 				for _, cst := range x.Body {
 					if fd, ok := cst.(*pyast.FunctionDef); ok {
-						fd.Body = inBody(fd.Body, false)
+						fd.Body = inBody(fd.Body, nil)
 					}
 				}
 			case *pyast.If:
-				x.Body = inBody(x.Body, true)
-				x.Orelse = inBody(x.Orelse, true)
+				x.Body = inBody(x.Body, used)
+				x.Orelse = inBody(x.Orelse, used)
 			case *pyast.For:
-				x.Body = inBody(x.Body, true)
-				x.Orelse = inBody(x.Orelse, true)
+				x.Body = inBody(x.Body, used)
+				x.Orelse = inBody(x.Orelse, used)
 			case *pyast.While:
-				x.Body = inBody(x.Body, true)
-				x.Orelse = inBody(x.Orelse, true)
+				x.Body = inBody(x.Body, used)
+				x.Orelse = inBody(x.Orelse, used)
 			case *pyast.Try:
-				x.Body = inBody(x.Body, true)
+				x.Body = inBody(x.Body, used)
 				for _, h := range x.Handlers {
-					h.Body = inBody(h.Body, true)
+					h.Body = inBody(h.Body, used)
 				}
-				x.Orelse = inBody(x.Orelse, true)
-				x.Finalbody = inBody(x.Finalbody, true)
+				x.Orelse = inBody(x.Orelse, used)
+				x.Finalbody = inBody(x.Finalbody, used)
 			case *pyast.With:
-				x.Body = inBody(x.Body, true)
+				x.Body = inBody(x.Body, used)
 			}
 			out = append(out, st)
 		}
 		return out
 	}
-	mod.Body = inBody(mod.Body, false)
+	mod.Body = inBody(mod.Body, nil)
+}
+
+// nameCounts counts the names that the statements read or bind, nested
+// functions and classes included.
+func nameCounts(body []pyast.Node) map[string]int {
+	counts := map[string]int{}
+	nameCountsOf(body, func(n pyast.Node) bool {
+		if nm, ok := n.(*pyast.Name); ok {
+			counts[nm.ID]++
+		}
+		return false
+	})
+	return counts
+}
+
+// nameCountsOf counts the nodes of the statements for which match is true;
+// it sees every node, nested functions and classes included.
+func nameCountsOf(body []pyast.Node, match func(pyast.Node) bool) int {
+	count := 0
+	var visit func(v reflect.Value)
+	visit = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.Interface:
+			if v.IsNil() {
+				return
+			}
+			if n, ok := v.Interface().(pyast.Node); ok && match(n) {
+				count++
+			}
+			visit(v.Elem())
+		case reflect.Pointer:
+			if !v.IsNil() {
+				visit(v.Elem())
+			}
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				if v.Type().Field(i).IsExported() {
+					visit(v.Field(i))
+				}
+			}
+		case reflect.Slice:
+			for i := 0; i < v.Len(); i++ {
+				visit(v.Index(i))
+			}
+		}
+	}
+	for _, st := range body {
+		visit(reflect.ValueOf(&st).Elem())
+	}
+	return count
 }

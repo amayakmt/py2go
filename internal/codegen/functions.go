@@ -927,6 +927,22 @@ func (g *generator) coerce(v value, want pyType, dest string, line int) (value, 
 		// An exception is an object like any other (a *PyError).
 		return value{code: v.code, typ: tObject, prec: v.prec}, nil
 	}
+	if want.isVarTuple() && want.elem() == tObject && (v.typ.isVarTuple() || v.typ.isTuple()) {
+		// A tuple is immutable: one of objects can be made from any tuple.
+		return value{code: g.rt("DynTuple") + "(" + g.boxed(v) + ")", typ: want, prec: precAtom}, nil
+	}
+	if v.built && want.isObjectContainer() {
+		// dict(...), list(...) or set(...) where a container of objects is
+		// wanted: a copy, since nothing else refers to the new one.
+		switch {
+		case want.isDict() && v.typ.isDict():
+			return value{code: g.rt("DynDict") + "(" + v.code + ")", typ: want, prec: precAtom}, nil
+		case want.isList() && v.typ.isList():
+			return value{code: g.rt("DynList") + "(" + v.code + ")", typ: want, prec: precAtom}, nil
+		case want.isSet() && v.typ.isSet():
+			return value{code: g.rt("DynSet") + "(" + v.code + ")", typ: want, prec: precAtom}, nil
+		}
+	}
 	return value{}, mismatch(dest, want, v.typ, line)
 }
 
@@ -1115,16 +1131,36 @@ func hasAnnotations(fn *pyast.FunctionDef) bool {
 // moduleAnnotated reports whether a module has a type hint anywhere.
 func moduleAnnotated(mod *pyast.Module) bool {
 	found := false
-	walk(mod, func(n pyast.Node) {
-		switch n := n.(type) {
-		case *pyast.AnnAssign:
-			found = true
+	for _, st := range mod.Body {
+		// The functions, classes and variables of the library and of the
+		// other modules of the project carry their module in their names
+		// (mod_pm_name): their annotations do not decide the mode of the
+		// program's own code.
+		switch x := st.(type) {
 		case *pyast.FunctionDef:
-			if hasAnnotations(n) {
-				found = true
+			if strings.Contains(x.Name, "_pm_") {
+				continue
+			}
+		case *pyast.ClassDef:
+			if strings.Contains(x.Name, "_pm_") {
+				continue
+			}
+		case *pyast.AnnAssign:
+			if t, ok := x.Target.(*pyast.Name); ok && strings.Contains(t.ID, "_pm_") {
+				continue
 			}
 		}
-	})
+		walk(st, func(n pyast.Node) {
+			switch n := n.(type) {
+			case *pyast.AnnAssign:
+				found = true
+			case *pyast.FunctionDef:
+				if hasAnnotations(n) {
+					found = true
+				}
+			}
+		})
+	}
 	return found
 }
 

@@ -351,6 +351,30 @@ func (g *generator) widenVar(node pyast.Node) bool {
 	return true
 }
 
+// widenAttr is widenVar for self.x in code without annotations: while the
+// classes are inferred, a container attribute given items of another type
+// (or of a type not known) gets objects for items.
+func (g *generator) widenAttr(node pyast.Node) bool {
+	attr, ok := node.(*pyast.Attribute)
+	if !ok || !g.infer || !g.bigMode || g.method == nil || g.method.kind != mMethod {
+		return false
+	}
+	if self, ok := attr.Value.(*pyast.Name); !ok || self.ID != g.selfName() {
+		return false
+	}
+	m := g.method.definer.lookup(g.mangled(attr.Attr))
+	if m == nil || m.kind != mField {
+		return false
+	}
+	w, changed := widen(m.typ)
+	if !changed {
+		return false
+	}
+	m.typ = w
+	g.inferGrew = true
+	return true
+}
+
 // isMutableContainer reports whether t is a list, set or dict.
 func isMutableContainer(t pyType) bool { return t.isList() || t.isSet() || t.isDict() }
 
@@ -387,8 +411,12 @@ func (g *generator) escape(v value) value {
 		return v
 	}
 	switch {
-	case v.fresh:
+	case v.fresh && v.deepFresh:
 		return value{code: g.rt("DynDeep") + "(" + v.code + ")", typ: tObject, prec: precAtom}
+	case v.fresh:
+		// Its items may be containers the program refers to elsewhere:
+		// only the new container is copied.
+		return value{code: g.rt("DynShallow") + "(" + v.code + ")", typ: tObject, prec: precAtom}
 	case v.varName != "" && g.recordJoins:
 		g.widenName(v.varName)
 	}

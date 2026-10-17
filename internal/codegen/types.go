@@ -411,13 +411,13 @@ var typingNames = map[string]string{
 	"Callable": "write the parameters: Callable[[int], int]",
 	"Sequence": "use list[...]; sequences are not a type of their own",
 	"Iterable": "write the item type: Iterable[int]",
-	"Generic":  "needs generic classes, which arrive in phase 8",
-	"TypeVar":  "needs generics, which arrive in phase 8",
+	"Generic":  "write the type parameters in brackets: class C[T]:",
+	"TypeVar":  "write the type parameters in brackets: def f[T](x: T) -> T:",
 	"List":     "write the item type: list[int]",
 	"Dict":     "write the key and value types: dict[str, int]",
 	"Set":      "write the item type: set[int]",
 	"Tuple":    "write the item types: tuple[int, str]",
-	"Type":     "needs classes, which arrive in phase 7",
+	"Type":     "write type[C]",
 }
 
 // containerType resolves list[T], set[T], dict[K, V], tuple[A, B, ...],

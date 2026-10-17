@@ -46,11 +46,14 @@ func Load(entry string, load Loader) (*pyast.Module, error) {
 	if err != nil {
 		return nil, err
 	}
+	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}, enums: map[string]*enumInfo{}, loading: map[string]bool{}}
+	l.loading["__main__"] = true
 	rewriteTestDecorators(mod)
+	dropImportFallbacks(mod, l.moduleExists, l.moduleDefines)
 	fixClasses(mod)
 	fixBranchDefs(mod)
 	injectTestClasses(mod)
-	l := &linker{root: filepath.Dir(abs), load: load, mods: map[string]*module{}, enums: map[string]*enumInfo{}}
+	delete(l.loading, "__main__")
 	m := &module{name: "__main__", file: abs, ast: mod, entry: true}
 	l.mods[m.name] = m
 	l.begin(m)
@@ -94,6 +97,8 @@ type linker struct {
 	enums map[string]*enumInfo
 
 	valueMods []*module // modules used as values, in order of first use
+
+	loading map[string]bool // modules whose pre-passes are running
 
 	depth      int       // how many module bodies are being inlined
 	inFuncBody int       // how many function bodies are being rewritten
@@ -197,9 +202,12 @@ func (l *linker) find(name string) (*module, error) {
 					return nil, err
 				}
 				m.ast = ast
+				l.loading[pkgName] = true
 				rewriteTestDecorators(ast)
+				dropImportFallbacks(ast, l.moduleExists, l.moduleDefines)
 				fixClasses(ast)
 				fixBranchDefs(ast)
+				delete(l.loading, pkgName)
 			}
 			l.mods[pkgName] = m
 			l.begin(m)
@@ -733,6 +741,78 @@ func raiseClass(class, msg string, line int) pyast.Node {
 
 // stmt rewrites one statement and returns what replaces it.
 func (r *rewriter) stmt(n pyast.Node) ([]pyast.Node, error) {
+	// importlib.import_module("m") with a literal name links m, as an
+	// import inside a function does: its body runs before the statement (or,
+	// in a function, after the top-level statement that leads to it).
+	var pre []pyast.Node
+	for _, name := range r.literalImports(n) {
+		if _, gone := r.l.unavailable(name); gone {
+			continue
+		}
+		body, _, err := r.l.importModule(r.m, name, n.Line())
+		if err != nil {
+			return nil, err
+		}
+		pre = append(pre, body...)
+	}
+	if len(pre) > 0 {
+		res, err := r.stmtOf(n)
+		if err != nil {
+			return nil, err
+		}
+		return append(pre, res...), nil
+	}
+	return r.stmtOf(n)
+}
+
+// literalImports are the module names of the calls import_module("name")
+// (of importlib) in a simple statement.
+func (r *rewriter) literalImports(n pyast.Node) []string {
+	switch n.(type) {
+	case *pyast.Expr, *pyast.Assign, *pyast.AnnAssign, *pyast.AugAssign, *pyast.Return:
+	default:
+		return nil
+	}
+	var names []string
+	var visit func(c pyast.Node)
+	visit = func(c pyast.Node) {
+		switch y := c.(type) {
+		case *pyast.Lambda, *pyast.FunctionDef, *pyast.ClassDef:
+			return
+		case *pyast.Call:
+			if r.isImportModule(y.Func) && len(y.Args) >= 1 {
+				if name, ok := strConst(y.Args[0]); ok && name != "" && !strings.HasPrefix(name, ".") {
+					names = append(names, name)
+				}
+			}
+		}
+		walkChildren(c, visit)
+	}
+	walkChildren(n, visit)
+	return names
+}
+
+// isImportModule reports whether an expression is importlib.import_module.
+func (r *rewriter) isImportModule(f pyast.Node) bool {
+	switch x := f.(type) {
+	case *pyast.Attribute:
+		nm, ok := x.Value.(*pyast.Name)
+		if !ok || x.Attr != "import_module" || r.local(nm.ID) {
+			return false
+		}
+		a, ok := r.m.aliases[nm.ID]
+		return ok && a.mod != nil && a.mod.name == "importlib" && a.name == ""
+	case *pyast.Name:
+		if r.local(x.ID) {
+			return false
+		}
+		a, ok := r.m.aliases[x.ID]
+		return ok && a.mod != nil && a.mod.name == "importlib" && a.name == "import_module"
+	}
+	return false
+}
+
+func (r *rewriter) stmtOf(n pyast.Node) ([]pyast.Node, error) {
 	switch x := n.(type) {
 	case *pyast.Delete:
 		// del of an imported name: the alias goes away, nothing runs.

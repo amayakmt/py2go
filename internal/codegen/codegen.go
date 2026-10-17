@@ -55,6 +55,7 @@ type generator struct {
 	// Classes.
 	classes           map[string]*classInfo
 	classOrder        []*classInfo
+	keyCollide        map[string]bool // Python class names that classes of several modules share
 	builtinCls        map[string]*classInfo
 	dataclassImported bool
 	storedAttrs       map[string]bool // attribute names some code assigns

@@ -132,13 +132,13 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 		g.defaultVars = append(g.defaultVars, defaultVar{varName, m.typ})
 		g.classBodySeen[name] = true
 		fmt.Fprintf(main, "%s = %s\n", varName, v.code)
-		fmt.Fprintf(main, "%s(%s, %s, func() any { return %s })\n", g.rt("RegisterClassAttr"), strconv.Quote(c.pyName()), strconv.Quote(pyName(name)), varName)
+		fmt.Fprintf(main, "%s(%s, %s, func() any { return %s })\n", g.rt("RegisterClassAttr"), strconv.Quote(g.classKey(c)), strconv.Quote(pyName(name)), varName)
 	}
 	g.classBodyCur, g.classBodySeen = nil, nil
-	bases := []string{strconv.Quote(c.pyName())}
+	bases := []string{strconv.Quote(g.classKey(c))}
 	for _, k := range c.mro[1:] {
 		if !k.builtin && k.name != "object" {
-			bases = append(bases, strconv.Quote(k.pyName()))
+			bases = append(bases, strconv.Quote(g.classKey(k)))
 		}
 	}
 	fmt.Fprintf(main, "%s(%s)\n", g.rt("RegisterClassBases"), strings.Join(bases, ", "))
@@ -175,17 +175,17 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 			if m == nil || isDunder(n) || m.sig == nil || (m.kind != mClassMethod && m.kind != mStatic) {
 				continue
 			}
-			fmt.Fprintf(main, "%s(%s, %s, func() any {\nself := &%s{}\nreturn %s\n})\n", g.rt("RegisterClassCallable"), strconv.Quote(c.pyName()), strconv.Quote(pyName(n)), c.goStruct(), g.dynBound(c, m))
+			fmt.Fprintf(main, "%s(%s, %s, func() any {\nself := &%s{}\nreturn %s\n})\n", g.rt("RegisterClassCallable"), strconv.Quote(g.classKey(c)), strconv.Quote(pyName(n)), c.goStruct(), g.dynBound(c, m))
 		}
 	}
 	if len(members) > 0 {
-		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClassMembers"), strconv.Quote(c.pyName()), strings.Join(members, ", "))
+		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("RegisterClassMembers"), strconv.Quote(g.classKey(c)), strings.Join(members, ", "))
 	}
 	if g.usesPickle && c.generic == nil {
-		fmt.Fprintf(main, "%s(%s, func() any { return &%s{} })\n", g.rt("RegisterAlloc"), strconv.Quote(c.pyName()), c.goStruct())
+		fmt.Fprintf(main, "%s(%s, func() any { return &%s{} })\n", g.rt("RegisterAlloc"), strconv.Quote(g.classKey(c)), c.goStruct())
 	}
 	if i := strings.LastIndex(c.name, "_pm_"); i >= 0 {
-		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("ClassModule"), strconv.Quote(c.pyName()), strconv.Quote(strings.ReplaceAll(c.name[:i], "__", ".")))
+		fmt.Fprintf(main, "%s(%s, %s)\n", g.rt("ClassModule"), strconv.Quote(g.classKey(c)), strconv.Quote(strings.ReplaceAll(c.name[:i], "__", ".")))
 	}
 	if c.exc {
 		names := []string{strconv.Quote(c.name)}
@@ -211,8 +211,8 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 					}
 					ctor = fmt.Sprintf("func(%s) %s { return %s(%d, %s) }", params, c.name, c.goNew(), len(c.ctorSig.pos), strings.Join(names, ", "))
 				}
-				return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), ctor,
-					g.rt("RegisterCtorInfo"), strconv.Quote(c.pyName()), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)))
+				return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(g.classKey(c)), ctor,
+					g.rt("RegisterCtorInfo"), strconv.Quote(g.classKey(c)), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)))
 			})
 		}
 	} else if c.generic == nil {
@@ -224,8 +224,8 @@ func (g *generator) classDecl(funcs, main *strings.Builder, c *classInfo) error 
 					mro = append(mro, strconv.Quote(k.name))
 				}
 			}
-			return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(c.pyName()), c.goNew(),
-				g.rt("RegisterCtorInfo"), strconv.Quote(c.pyName()), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)),
+			return fmt.Sprintf("%s(%s, %s)\n%s(%s, %s)\n%s(%s, %s)\n", g.rt("RegisterCtor"), strconv.Quote(g.classKey(c)), c.goNew(),
+				g.rt("RegisterCtorInfo"), strconv.Quote(g.classKey(c)), g.funcInfoLit(c.pyName(), g.ctorGoSig(c)),
 				g.rt("RegisterClass"), strconv.Quote(c.name), strings.Join(mro, ", "))
 		})
 	}
@@ -282,6 +282,13 @@ func (g *generator) emitClassTypes(out *strings.Builder, c *classInfo) error {
 				iface = append(iface, fmt.Sprintf("Set_%s(v %s)", n, g.goType(m.typ)))
 			}
 		case m.isCallable() && n != "__init__":
+			if root, ok := c.extendedMember(n); ok {
+				// The hierarchy's signature, and this class's longer one.
+				iface = append(iface, g.ifaceMethod(root))
+				params, _ := g.goSignature(m.sig)
+				iface = append(iface, fmt.Sprintf("M_%s__ext(%s)%s", n, params, g.resultSpelling(m.sig.ret, m.special)))
+				continue
+			}
 			iface = append(iface, g.ifaceMethod(m))
 		}
 	}
@@ -464,6 +471,34 @@ func (g *generator) emitMethods(out *strings.Builder, c *classInfo) error {
 		if ret != "" {
 			body = "return " + body
 		}
+		if root, ok := c.extendedMember(n); ok {
+			// M_n has the hierarchy's parameters and fills in the defaults
+			// of the ones this class's method adds; M_n__ext has them all.
+			fmt.Fprintf(out, "func %s M_%s__ext(%s)%s {\n%s\n}\n", recv, n, params, ret, body)
+			rootParams, _ := g.goSignature(root.sig)
+			given := map[string]bool{}
+			for _, p := range root.sig.goParams() {
+				given[p.name] = true
+			}
+			var args []string
+			for _, p := range sig.goParams() {
+				if given[p.name] {
+					args = append(args, p.name)
+					continue
+				}
+				d, err := g.defaultArg(p)
+				if err != nil {
+					return err
+				}
+				args = append(args, d)
+			}
+			body = target + "(" + strings.Join(args, ", ") + ")"
+			if ret != "" {
+				body = "return " + body
+			}
+			fmt.Fprintf(out, "func %s M_%s(%s)%s {\n%s\n}\n", recv, n, rootParams, ret, body)
+			continue
+		}
 		fmt.Fprintf(out, "func %s M_%s(%s)%s {\n%s\n}\n", recv, n, params, ret, body)
 	}
 	out.WriteString("\n")
@@ -548,7 +583,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 			fmt.Fprintf(out, "func %s Is_%s() {}\n", recv, k.name)
 		}
 	}
-	fmt.Fprintf(out, "func %s PyClassName() string { return %q }\n", recv, c.pyName())
+	fmt.Fprintf(out, "func %s PyClassName() string { return %q }\n", recv, g.classKey(c))
 
 	switch m := c.lookup("__repr__"); {
 	case m != nil:
@@ -556,7 +591,7 @@ func (g *generator) emitHooks(out *strings.Builder, c *classInfo) {
 	case c.exc:
 		fmt.Fprintf(out, "func %s PyRepr() string { return self.E.BaseRepr() }\n", recv)
 	default:
-		fmt.Fprintf(out, "func %s PyRepr() string { return %s(%q, self) }\n", recv, g.rt("DefaultRepr"), c.pyName())
+		fmt.Fprintf(out, "func %s PyRepr() string { return %s(%q, self) }\n", recv, g.rt("DefaultRepr"), g.classKey(c))
 	}
 	switch m := c.lookup("__str__"); {
 	case m != nil:
@@ -644,7 +679,7 @@ func (g *generator) emitSynth(out *strings.Builder, c, x *classInfo, m *member, 
 		}
 		if post := c.lookup("__post_init__"); post != nil && post.kind == mMethod {
 			if len(post.sig.pos) > 0 || post.sig.vararg != nil {
-				return unsupported("__post_init__ with parameters (InitVar arrives in phase 12)", post.line)
+				return unsupported("__post_init__ with parameters (dataclasses.InitVar is not supported)", post.line)
 			}
 			fmt.Fprintf(out, "%s.%s()\n", selfName, methodGoName(post, post.owner))
 		}

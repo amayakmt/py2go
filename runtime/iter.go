@@ -302,3 +302,23 @@ func (g *Gen[Y, S, R]) PyRepr() string {
 }
 
 func addr(p any) string { return fmt.Sprintf("%p", p) }
+
+// IterSentinel is iter(f, sentinel): an iterator that calls f until it
+// returns a value equal to the sentinel.
+func IterSentinel(f, sentinel any) *Iterator[any] {
+	if !DynCallable(f) {
+		panic(newError("TypeError", "iter(v, w): v must be callable"))
+	}
+	done := false
+	return NewIterator(func() (any, bool) {
+		if done {
+			return nil, false
+		}
+		v := DynCall(f)
+		if DynCompare("Eq", v, sentinel) {
+			done = true
+			return nil, false
+		}
+		return v, true
+	})
+}

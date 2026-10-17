@@ -24,6 +24,7 @@ type FuncInfo struct {
 	KwArgs   string // name of **kwargs, if any
 	KwOnly   map[string]bool
 	Async    bool // an "async def"
+	Doc      any  // the docstring, or nil
 }
 
 var funcInfos = map[uintptr]*FuncInfo{}
@@ -358,6 +359,9 @@ func DynGetAttr(obj any, name string) any {
 		case "__module__":
 			return "__main__"
 		case "__doc__":
+			if info := infoOfFunc(obj); info != nil {
+				return info.Doc
+			}
 			return nil
 		}
 		panic(newError("AttributeError", "'function' object has no attribute '"+name+"'"))
@@ -477,8 +481,26 @@ func excAttr(e *PyError, name string) (any, bool) {
 	if v, ok := e.Attrs[name]; ok {
 		return v, true
 	}
-	if e.Obj != nil && !strings.HasPrefix(name, "__") && DynHasAttr(e.Obj, name) {
-		return DynGetAttr(e.Obj, name), true
+	if g, ok := e.Obj.(attrGetter); ok && !strings.HasPrefix(name, "__") {
+		// An attribute of the instance of a user-defined exception class.
+		if v, ok := g.PyGetAttr(name); ok {
+			return v, true
+		}
+	}
+	if IsSubclass(e.Type, "SyntaxError") {
+		fields := map[string]int{"filename": 0, "lineno": 1, "offset": 2, "text": 3, "end_lineno": 4, "end_offset": 5}
+		if name == "msg" {
+			if len(e.Args) > 0 {
+				return e.Args[0], true
+			}
+			return nil, true
+		}
+		if i, ok := fields[name]; ok {
+			if d, ok := e.syntaxErrorDetails(); ok {
+				return d[i], true
+			}
+			return nil, true
+		}
 	}
 	switch name {
 	case "code":
@@ -1212,6 +1234,14 @@ func funcName(v any) (string, bool) {
 		return "", false
 	}
 	return nameOf(funcInfoOf(v)), true
+}
+
+// infoOfFunc is the registered information of a function value.
+func infoOfFunc(v any) *FuncInfo {
+	if c, ok := v.(*Callable); ok {
+		return c.Info
+	}
+	return funcInfoOf(v)
 }
 
 func nameOf(info *FuncInfo) string {

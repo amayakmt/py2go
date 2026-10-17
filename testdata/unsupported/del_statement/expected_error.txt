@@ -1,1 +1,0 @@
-unsupported: del of a variable at line 2

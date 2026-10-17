@@ -130,7 +130,7 @@ func TestClassErrors(t *testing.T) {
 		{"nested class", "class A:\n    class B:\n        pass\n", "class defined inside a class at line 2"},
 		{"base defined later", "class B(A):\n    pass\n\n\nclass A:\n    pass\n", "base class 'A' used before its definition at line 1"},
 		{"unknown base", "class B(Foo):\n    pass\n", "unknown base class 'Foo' at line 1"},
-		{"metaclass", "class B(metaclass=type):\n    pass\n", "metaclasses arrive in phase 9"},
+		{"metaclass", "class B(metaclass=type):\n    pass\n", "metaclasses other than ABCMeta are not supported"},
 		{"method without self", "class A:\n    def f() -> None:\n        pass\n", "method 'f' without a self parameter at line 2"},
 		{"constructor arguments", "class A:\n    pass\n\n\na: A = A(1)\n", "A() takes no arguments at line 5"},
 		{"method arity counts self", "class A:\n    def f(self, x: int) -> int:\n        return x\n\n\nA().f(1, 2)\n", "A.f() takes 2 positional arguments but 3 were given"},

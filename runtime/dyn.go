@@ -335,11 +335,11 @@ func numericBinary(op string, ka numKind, ia int64, fa float64, kb numKind, ib i
 }
 
 // The int64 arithmetic does not overflow silently: Python's ints are
-// unbounded, so a result that does not fit is an OverflowError until phase 10.
+// unbounded, so a result of 64-bit ints that does not fit is an OverflowError.
 func addInt(a, b int64) int64 {
 	c := a + b
 	if (c > a) != (b > 0) {
-		panic(overflowError("int too large for int64 (big integers arrive in phase 10)"))
+		panic(overflowError("int too large for a 64-bit int"))
 	}
 	return c
 }
@@ -347,7 +347,7 @@ func addInt(a, b int64) int64 {
 func subInt(a, b int64) int64 {
 	c := a - b
 	if (c < a) != (b > 0) {
-		panic(overflowError("int too large for int64 (big integers arrive in phase 10)"))
+		panic(overflowError("int too large for a 64-bit int"))
 	}
 	return c
 }
@@ -358,7 +358,7 @@ func mulInt(a, b int64) int64 {
 	}
 	c := a * b
 	if c/b != a || (a == math.MinInt64 && b == -1) || (b == math.MinInt64 && a == -1) {
-		panic(overflowError("int too large for int64 (big integers arrive in phase 10)"))
+		panic(overflowError("int too large for a 64-bit int"))
 	}
 	return c
 }

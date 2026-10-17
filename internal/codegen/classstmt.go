@@ -129,8 +129,73 @@ func (g *generator) inferClasses() error {
 		}
 	}
 	g.inferRounds(g.classOrder)
+	g.adoptOverrideReturns()
 	g.phase = 2
 	return nil
+}
+
+// adoptOverrideReturns gives a method whose body only raises (a base class's
+// "raise NotImplementedError") the return type of the method that overrides
+// it, as a generator: its own result is never produced, and Go needs one
+// signature for the name.
+func (g *generator) adoptOverrideReturns() {
+	for _, c := range g.classOrder {
+		for _, name := range c.visibleNames() {
+			var winner *member
+			for _, k := range c.mro {
+				m := k.members[name]
+				if m == nil || m.kind != mMethod || m.sig == nil {
+					continue
+				}
+				if winner == nil {
+					winner = m
+					continue
+				}
+				if m.sig.ret == winner.sig.ret || m.sig.gen != nil || !raisesOnly(m.node) {
+					continue
+				}
+				if m.sig.ret != tObject && m.sig.ret != tNone {
+					continue
+				}
+				if !sameParams(m.sig, winner.sig) {
+					continue
+				}
+				m.sig.ret = winner.sig.ret
+			}
+		}
+	}
+}
+
+// raisesOnly reports whether a function's body is a raise, after a docstring.
+func raisesOnly(fn *pyast.FunctionDef) bool {
+	if fn == nil || len(fn.Body) == 0 {
+		return false
+	}
+	body := fn.Body
+	if e, ok := body[0].(*pyast.Expr); ok {
+		if c, ok := e.Value.(*pyast.Constant); ok && c.PyType == "str" {
+			body = body[1:]
+		}
+	}
+	if len(body) != 1 {
+		return false
+	}
+	_, ok := body[0].(*pyast.Raise)
+	return ok
+}
+
+// sameParams reports whether two signatures take the same Go parameters.
+func sameParams(a, b *funcSig) bool {
+	pa, pb := a.goParams(), b.goParams()
+	if len(pa) != len(pb) {
+		return false
+	}
+	for i := range pa {
+		if pa[i].typ != pb[i].typ {
+			return false
+		}
+	}
+	return true
 }
 
 // inferClassAttrs types the class attributes that have no annotation, and

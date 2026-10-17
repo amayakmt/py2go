@@ -44,7 +44,7 @@ type typeAlias struct {
 
 func typeVarFromParam(tp *pyast.TypeParam) (typeVarInfo, error) {
 	if tp.Kind != "TypeVar" {
-		return typeVarInfo{}, unsupported(tp.Kind+" '"+tp.Name+"' (arrives in phase 9)", 0)
+		return typeVarInfo{}, unsupported(tp.Kind+" '"+tp.Name+"' (only TypeVar type parameters are supported)", 0)
 	}
 	tv := typeVarInfo{name: tp.Name, def: tp.Default}
 	if tup, ok := tp.Bound.(*pyast.Tuple); ok {
@@ -126,7 +126,7 @@ func (g *generator) functionTypeParams(fn *pyast.FunctionDef) ([]typeVarInfo, er
 		for _, tp := range fn.TypeParams {
 			tv, err := typeVarFromParam(tp)
 			if err != nil {
-				return nil, unsupported(tp.Kind+" '"+tp.Name+"' (arrives in phase 9)", fn.Line())
+				return nil, unsupported(tp.Kind+" '"+tp.Name+"' (only TypeVar type parameters are supported)", fn.Line())
 			}
 			out = append(out, tv)
 		}
@@ -154,7 +154,7 @@ func (g *generator) classTypeParams(cd *pyast.ClassDef) ([]typeVarInfo, error) {
 		for _, tp := range cd.TypeParams {
 			tv, err := typeVarFromParam(tp)
 			if err != nil {
-				return nil, unsupported(tp.Kind+" '"+tp.Name+"' (arrives in phase 9)", cd.Line())
+				return nil, unsupported(tp.Kind+" '"+tp.Name+"' (only TypeVar type parameters are supported)", cd.Line())
 			}
 			out = append(out, tv)
 		}

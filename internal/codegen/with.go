@@ -36,6 +36,11 @@ func (g *generator) withStmt(b *strings.Builder, n *pyast.With) error {
 	if enter == nil || enter.kind != mMethod || len(enter.sig.pos) != 0 {
 		return unsupported(fmt.Sprintf("'%s' object does not support the context manager protocol (no __enter__)", c.name), n.Line())
 	}
+	if exit != nil && exit.kind == mMethod && len(exit.sig.pos) < 3 && exit.sig.vararg != nil && g.boxable(mgr) {
+		// def __exit__(self, *args): called as Python calls it, with three
+		// arguments, when the program runs.
+		return g.dynWith(b, n, item, body, mgr)
+	}
 	if exit == nil || exit.kind != mMethod || len(exit.sig.pos) != 3 {
 		return unsupported(fmt.Sprintf("'%s' object does not support the context manager protocol (__exit__ needs three parameters)", c.name), n.Line())
 	}

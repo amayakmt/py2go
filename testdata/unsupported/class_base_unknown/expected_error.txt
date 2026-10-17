@@ -1,1 +1,1 @@
-unsupported: enumerations arrive in phase 12 with the enum module at line 1
+unsupported: unknown base class 'Enum' (import it from enum) at line 1

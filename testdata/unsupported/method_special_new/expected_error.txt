@@ -1,1 +1,1 @@
-unsupported: method __new__ (arrives in phase 9) at line 3
+unsupported: method __new__ (only subclasses of int, str, float, tuple, bytes and frozenset may define it) at line 3

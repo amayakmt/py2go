@@ -1,1 +1,0 @@
-unsupported: del of the attribute 'x' of class 'C', which the class declares at line 7

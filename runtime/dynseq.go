@@ -1176,6 +1176,18 @@ func (s *Set[T]) deepCopy(seen map[any]any) any {
 	return out
 }
 
+// DynShallow copies a freshly built list, set or dict (a display) so that
+// its items are objects, keeping the items themselves.
+func DynShallow(v any) any {
+	switch TypeName(Unbox(v)) {
+	case "dict":
+		return DynDict(v)
+	case "set":
+		return DynSet(v)
+	}
+	return DynList(v)
+}
+
 // DynDeepAs is DynDeep with the result type spelled out.
 func DynDeepAs[T any](v any) T { return conv[T](DynDeep(v)) }
 

@@ -86,7 +86,7 @@ func (g *generator) stmtInner(b *strings.Builder, n pyast.Node) error {
 	case *pyast.ImportFrom:
 		return g.importFrom(n)
 	case *pyast.Import:
-		return unsupported(fmt.Sprintf("import of module '%s' (the standard library arrives in phase 12)", n.Names[0].Name), n.Line())
+		return unsupported(fmt.Sprintf("import of module '%s' (the module is not in py2go's library yet)", n.Names[0].Name), n.Line())
 	case *pyast.Unsupported:
 		return unsupported(n.Type, n.Line())
 	default:
@@ -354,9 +354,12 @@ func (g *generator) assignItem(b *strings.Builder, target *pyast.Subscript, valu
 	if err != nil {
 		return err
 	}
+	if v.typ == tObject && elem != tObject && g.widenAttr(target.Value) {
+		return nil
+	}
 	v, err = g.coerce(v, elem, "item", line)
 	if err != nil {
-		if g.widenVar(target.Value) {
+		if g.widenVar(target.Value) || g.widenAttr(target.Value) {
 			return nil
 		}
 		return err
@@ -374,6 +377,10 @@ func (g *generator) itemTarget(target *pyast.Subscript) (base, idx value, err er
 	if _, isSlice := target.Index.(*pyast.Slice); isSlice {
 		err = unsupported("slice assignment", target.Line())
 		return
+	}
+	if base.typ.isOptional() && (base.typ.optElem().isList() || base.typ.optElem().isDict()) {
+		// A container that may be None: Python's TypeError when it is.
+		base = value{code: base.at(precAtom) + ".Unwrap(\"TypeError\", \"'NoneType' object does not support item assignment\")", typ: base.typ.optElem(), prec: precAtom}
 	}
 	switch {
 	case base.typ.isList():
@@ -434,7 +441,7 @@ func unpackTypes(n int, t pyType, line int) ([]pyType, error) {
 		return types, nil
 	}
 	// Any other iterable is unpacked through a list of its items.
-	if elem, ok := t.iterElem(); ok && !t.isIter() {
+	if elem, ok := t.iterElem(); ok {
 		types := make([]pyType, n)
 		for i := range types {
 			types[i] = elem
@@ -546,6 +553,12 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 		return nil
 
 	case *pyast.Tuple:
+		if t.isOptional() {
+			// A value that may be None: Python's TypeError when it is.
+			tmp := g.tmp("u")
+			g.temp(b, tmp, t.optElem(), src+".Unwrap(\"TypeError\", \"cannot unpack non-iterable NoneType object\")")
+			return g.assignTarget(b, target, tmp, t.optElem(), line)
+		}
 		if star := starIndex(tg.Elts); star >= 0 {
 			return g.starUnpack(b, tg, star, src, t, line)
 		}
@@ -554,8 +567,9 @@ func (g *generator) assignTarget(b *strings.Builder, target pyast.Node, src stri
 			g.temp(b, tmp, listOf(tObject), g.rt("DynList")+"("+g.boxed(value{code: src, typ: t, prec: precAtom})+")")
 			return g.assignTarget(b, target, tmp, listOf(tObject), line)
 		}
-		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isVarTuple() && !t.isIter() {
-			// A str, dict, set or range unpacks through a list of its items.
+		if _, iterable := t.iterElem(); iterable && !t.isList() && !t.isVarTuple() {
+			// A str, dict, set, range or iterator unpacks through a list of
+			// its items.
 			list, err := g.asList(value{code: src, typ: t, prec: precAtom}, "unpacking", line)
 			if err != nil {
 				return err
@@ -1200,6 +1214,11 @@ func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
 	if err != nil {
 		return err
 	}
+	if v, ok := g.displayAsLoopVar(n, src.typ); ok {
+		// for x in (a, b): the items of a display are built with the type
+		// the loop variable already has, as list[object] for [] items.
+		src = v
+	}
 
 	// Bind the loop variables in the enclosing block before the loop,
 	// because Python keeps them alive afterwards.
@@ -1243,6 +1262,48 @@ func (g *generator) forEach(b *strings.Builder, n *pyast.For) error {
 	}
 	b.WriteString("}\n")
 	return nil
+}
+
+// displayAsLoopVar is the source of "for x in <tuple or list display>" whose
+// items have another type than the declared variable x but convert to it.
+func (g *generator) displayAsLoopVar(n *pyast.For, item pyType) (iterSource, bool) {
+	name, ok := n.Target.(*pyast.Name)
+	if !ok {
+		return iterSource{}, false
+	}
+	var elts []pyast.Node
+	switch it := n.Iter.(type) {
+	case *pyast.Tuple:
+		elts = it.Elts
+	case *pyast.List:
+		elts = it.Elts
+	default:
+		return iterSource{}, false
+	}
+	existing, declared, _ := g.lookupBinding(name.ID)
+	if !declared {
+		// Not declared yet: the type it will be declared with, which the
+		// other assignments to it may have widened.
+		if g.annotatedDecl || g.compRoot != nil {
+			return iterSource{}, false
+		}
+		existing = g.declType(name.ID, item)
+	}
+	if existing == "" || existing == item || !isMutableContainer(existing) {
+		// Only containers whose item types were widened (list[str] items
+		// for a list[object] variable): other displays keep their types.
+		return iterSource{}, false
+	}
+	for _, e := range elts {
+		if _, star := e.(*pyast.Starred); star {
+			return iterSource{}, false
+		}
+	}
+	v, err := g.exprAs(&pyast.List{Elts: elts, Lineno: n.Line()}, listOf(existing))
+	if err != nil || v.typ != listOf(existing) {
+		return iterSource{}, false
+	}
+	return iterSource{cursor: v.at(precAtom) + ".Iter()", typ: existing}, true
 }
 
 // deleteStmt is "del xs[i]", "del xs[a:b]" and "del d[k]".
@@ -1376,7 +1437,7 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 	if n.Module == "dataclasses" && n.Level == 0 {
 		for _, a := range n.Names {
 			if a.Name != "dataclass" && a.Name != "field" {
-				return unsupported(fmt.Sprintf("'%s' from dataclasses (the module arrives in phase 12)", a.Name), n.Line())
+				return unsupported(fmt.Sprintf("'%s' from dataclasses (only dataclass and field can be imported by name)", a.Name), n.Line())
 			}
 			if a.AsName != "" {
 				return unsupported("import ... as in the dataclasses module", n.Line())
@@ -1385,7 +1446,7 @@ func (g *generator) importFrom(n *pyast.ImportFrom) error {
 		return nil
 	}
 	if n.Level > 0 || !typingModules[n.Module] {
-		return unsupported(fmt.Sprintf("import from module '%s' (the standard library arrives in phase 12)", n.Module), n.Line())
+		return unsupported(fmt.Sprintf("import from module '%s' (the module is not in py2go's library yet)", n.Module), n.Line())
 	}
 	if n.Module == "__future__" {
 		return nil

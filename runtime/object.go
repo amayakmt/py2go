@@ -41,7 +41,7 @@ func TypeName(v any) string {
 	case nil, NoneT:
 		return "NoneType"
 	case Named:
-		return v.PyClassName()
+		return BaseTypeName(v.PyClassName())
 	case bool:
 		return "bool"
 	case int64, int, *big.Int:
@@ -189,7 +189,7 @@ func UnhashableType(class string) *PyError {
 // DefaultRepr is the repr of an object without __repr__:
 // <__main__.C object at 0x...>. The address cannot match CPython's.
 func DefaultRepr(class string, self any) string {
-	return fmt.Sprintf("<__main__.%s object at %p>", class, self)
+	return fmt.Sprintf("<%s.%s object at %p>", ClassOf(class).module(), BaseTypeName(class), self)
 }
 
 // IdentityHash is the default hash of an instance.
@@ -295,7 +295,7 @@ func (c *ClassRef) PyRepr() string {
 	if c.Builtin {
 		return "<class '" + c.Name + "'>"
 	}
-	return "<class '" + c.module() + "." + c.Name + "'>"
+	return "<class '" + c.module() + "." + BaseTypeName(c.Name) + "'>"
 }
 
 // ClassOfValue is type(x) for an instance.

@@ -499,6 +499,9 @@ func (g *generator) bindDynamic(n *pyast.Call, sig *funcSig, callee, fname strin
 	// mapping or its default.
 	var missing, missingKw string
 	var args []string
+	if sig.leadArg != "" {
+		args = append(args, sig.leadArg)
+	}
 	need := func(p param, from string, t pyType, line int) error {
 		if t != p.typ && !g.isSubtype(t, p.typ) {
 			return unsupported(fmt.Sprintf("%s unpacked into parameter '%s' of type %s", from, p.name, p.typ), line)

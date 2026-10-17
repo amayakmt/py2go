@@ -117,6 +117,34 @@ func (c *classInfo) pyName() string {
 	return pyName(c.name)
 }
 
+// classKey is the name the runtime registers a class under: its Python
+// name, or, when classes of several modules share that name, its mangled
+// name (mod_pm_Name), which the runtime displays without the module.
+func (g *generator) classKey(c *classInfo) string {
+	if c.generic != nil || c.builtin {
+		return c.pyName()
+	}
+	if g.keyCollide == nil || g.phase < 2 {
+		seen := map[string]string{}
+		collide := map[string]bool{}
+		for _, k := range g.classOrder {
+			if k.builtin || k.generic != nil {
+				continue
+			}
+			n := k.pyName()
+			if other, ok := seen[n]; ok && other != k.name {
+				collide[n] = true
+			}
+			seen[n] = k.name
+		}
+		g.keyCollide = collide
+	}
+	if g.keyCollide[c.pyName()] {
+		return c.name
+	}
+	return c.pyName()
+}
+
 func (c *classInfo) goStruct() string { return "_pyc_" + c.name }
 func (c *classInfo) goNew() string    { return "_pyNew_" + c.name }
 func (c *classInfo) typ() pyType      { return pyType(c.name) }
@@ -266,7 +294,7 @@ func (g *generator) registerClassNames(mod *pyast.Module) error {
 		for _, kw := range cd.Keywords {
 			// Keywords other than metaclass= go to __init_subclass__.
 			if kw.Arg == "metaclass" || kw.Arg == "" {
-				return unsupported("class keyword '"+kw.Arg+"=' (metaclasses arrive in phase 9)", cd.Line())
+				return unsupported("class keyword '"+kw.Arg+"=' (metaclasses other than ABCMeta are not supported)", cd.Line())
 			}
 		}
 		params, err := g.classTypeParams(cd)
@@ -374,11 +402,11 @@ func (g *generator) classBases(c *classInfo) error {
 			why := "unknown base class '" + name.ID + "'"
 			switch name.ID {
 			case "Enum", "IntEnum", "Flag", "IntFlag", "StrEnum":
-				why = "enumerations arrive in phase 12 with the enum module"
+				why = "unknown base class '" + name.ID + "' (import it from enum)"
 			case "ABC", "Protocol", "Generic", "NamedTuple", "TypedDict":
-				why = "base class '" + name.ID + "' arrives with the typing and abc modules in phase 12"
+				why = "unknown base class '" + name.ID + "' (import it from typing or abc)"
 			case "dict", "list", "set", "str", "int", "float", "tuple", "bool":
-				why = "deriving from built-in type '" + name.ID + "' arrives in phase 9"
+				why = "deriving from built-in type '" + name.ID + "' (the linker gives such a class a base from _basetypes)"
 			}
 			return unsupported(why, b.Line())
 		}
@@ -499,10 +527,14 @@ func (g *generator) classMethod(c *classInfo, fn *pyast.FunctionDef) error {
 		kind = mClassMethod // implicitly a classmethod, as in CPython
 	}
 	switch name {
-	case "__new__", "__class_getitem__", "__set_name__":
-		return unsupported("method "+name+" (arrives in phase 9)", fn.Line())
+	case "__new__":
+		return unsupported("method __new__ (only subclasses of int, str, float, tuple, bytes and frozenset may define it)", fn.Line())
+	case "__class_getitem__":
+		return unsupported("method __class_getitem__ (classes are not subscripted when the program runs)", fn.Line())
+	case "__set_name__":
+		return unsupported("method __set_name__ (descriptors are not supported)", fn.Line())
 	case "__getattribute__", "__get__", "__set__", "__delete__":
-		return unsupported("method "+name+" (the attribute hooks and descriptors arrive in phase 9)", fn.Line())
+		return unsupported("method "+name+" (descriptors and __getattribute__ are not supported)", fn.Line())
 	case "__sizeof__":
 		return unsupported("method "+name, fn.Line())
 	}
@@ -810,7 +842,7 @@ func (g *generator) checkOverrides(c *classInfo) error {
 			if (winner.kind == mClassMethod || winner.kind == mStatic) && (m.kind == mClassMethod || m.kind == mStatic) {
 				continue // called on the class, so each class resolves its own
 			}
-			if winner.shape(g) != m.shape(g) {
+			if winner.shape(g) != m.shape(g) && !(winner.kind == mMethod && m.kind == mMethod && extendsSig(winner.sig, m.sig)) {
 				return unsupported(fmt.Sprintf("'%s.%s' overrides '%s.%s' with a different signature or type (%s vs %s)",
 					winner.owner.name, shortName(name), m.owner.name, shortName(name), winner.shape(g), m.shape(g)), winner.line)
 			}
@@ -824,6 +856,88 @@ func (g *generator) checkOverrides(c *classInfo) error {
 }
 
 func shortName(n string) string { return n }
+
+// extendsSig reports whether an override w keeps the parameters of r (the
+// same names and types, *args and **kwargs included) and adds only
+// parameters that have defaults, with the same result, as FTP_TLS.login adds
+// secure=True to FTP.login. The class then has both Go methods: M_name with
+// the base's parameters, which fills in the defaults, and M_name__ext with
+// all of them.
+func extendsSig(w, r *funcSig) bool {
+	if w == nil || r == nil || w.ret != r.ret || len(w.pos) < len(r.pos) || w.nPosOnly != r.nPosOnly && len(r.pos) > 0 {
+		return false
+	}
+	if (w.vararg == nil) != (r.vararg == nil) || (w.kwarg == nil) != (r.kwarg == nil) {
+		return false
+	}
+	if w.vararg != nil && w.vararg.typ != r.vararg.typ || w.kwarg != nil && w.kwarg.typ != r.kwarg.typ {
+		return false
+	}
+	for i, p := range r.pos {
+		if w.pos[i].name != p.name || w.pos[i].typ != p.typ {
+			return false
+		}
+	}
+	for _, p := range w.pos[len(r.pos):] {
+		if !p.hasDefault {
+			return false
+		}
+	}
+	extra := len(w.pos) - len(r.pos)
+	kw := map[string]param{}
+	for _, p := range w.kwonly {
+		kw[p.name] = p
+	}
+	for _, p := range r.kwonly {
+		q, ok := kw[p.name]
+		if !ok || q.typ != p.typ {
+			return false
+		}
+		delete(kw, p.name)
+	}
+	for _, p := range kw {
+		if !p.hasDefault {
+			return false
+		}
+		extra++
+	}
+	return extra > 0
+}
+
+// rootMember is the member of the class furthest up the MRO that defines
+// the name: the signature the Go interface of the hierarchy has.
+func (c *classInfo) rootMember(name string) *member {
+	var root *member
+	for _, k := range c.mro {
+		if m := k.members[name]; m != nil {
+			root = m
+		}
+	}
+	return root
+}
+
+// extendedMember reports whether the method c resolves name to extends the
+// one at the root of the hierarchy (see extendsSig), and gives that root.
+func (c *classInfo) extendedMember(name string) (*member, bool) {
+	m := c.lookup(name)
+	if m == nil || m.kind != mMethod || m.sig == nil {
+		return nil, false
+	}
+	root := c.rootMember(name)
+	if root == nil || root == m || root.kind != mMethod || root.sig == nil {
+		return nil, false
+	}
+	return root, extendsSig(m.sig, root.sig)
+}
+
+// methodCallName is the Go method a call of name on a value of class c
+// uses: M_name, or M_name__ext when c's method extends the hierarchy's.
+func (c *classInfo) methodCallName(name string) string {
+	if _, ok := c.extendedMember(name); ok {
+		return "M_" + name + "__ext"
+	}
+	return "M_" + name
+}
 
 // externalClassAttrs: "C.x = v" at the top of the module declares a class
 // attribute x whose value is computed where the class statement stands,

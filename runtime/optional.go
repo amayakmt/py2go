@@ -14,6 +14,17 @@ func Some[T any](v T) Opt[T] { return Opt[T]{v: v, some: true} }
 // NoneOf is None where an Optional[T] is expected.
 func NoneOf[T any]() Opt[T] { return Opt[T]{} }
 
+// SomeAny is an object as an Optional[object]: None when the object is None.
+func SomeAny(v any) Opt[any] {
+	if v == nil {
+		return Opt[any]{}
+	}
+	if _, none := v.(NoneT); none {
+		return Opt[any]{}
+	}
+	return Opt[any]{v: v, some: true}
+}
+
 func (o Opt[T]) IsSome() bool { return o.some }
 
 // Get is the value, for code that has checked the Opt is not None.

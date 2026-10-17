@@ -27,6 +27,26 @@ func init() {
 		moduleObjs[name] = m
 		return m
 	})
+	// module.declare(name): the program has the module (it registers the
+	// modules it links when it uses importlib).
+	RegisterNative("module.declare", func(args []any, kw []KW) any {
+		declaredModules[Unbox(args[0]).(string)] = true
+		return nil
+	})
+	// module.import(name): importlib.import_module of a module the program
+	// links.
+	RegisterNative("module.import", func(args []any, kw []KW) any {
+		name := Str(args[0])
+		if !declaredModules[name] {
+			e := newError("ModuleNotFoundError", "No module named '"+name+"'")
+			e.Attrs = map[string]any{"name": name, "path": nil}
+			panic(e)
+		}
+		return NativeCall([]any{"module.object", name}, nil)
+	})
+	RegisterNative("module.linked", func(args []any, kw []KW) any {
+		return declaredModules[Str(args[0])]
+	})
 	RegisterNative("module.register", func(args []any, kw []KW) any {
 		mod, name := Unbox(args[0]).(string), Unbox(args[1]).(string)
 		get := args[2]
@@ -39,6 +59,9 @@ func init() {
 		return nil
 	})
 }
+
+// declaredModules are the modules importlib.import_module finds.
+var declaredModules = map[string]bool{}
 
 func (m *ModuleObj) PyRepr() string      { return "<module '" + m.Name + "'>" }
 func (m *ModuleObj) PyClassName() string { return "module" }

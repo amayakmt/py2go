@@ -96,6 +96,7 @@ func (g *generator) dynBuiltin(name string, n *pyast.Call, force bool) (value, b
 			}
 			return g.dynValue(g.rt("DynGetAttr")+"("+a+")", tObject), true, nil
 		case "setattr":
+			g.widenForSetattr(n, args)
 			return g.dynValue(g.rt("DynSetAttr")+"("+a+")", tNone), true, nil
 		case "hasattr":
 			return g.dynValue(g.rt("DynHasAttr")+"("+a+")", tBool), true, nil
@@ -807,4 +808,29 @@ func (g *generator) localsDict() (value, bool) {
 		pairs = append(pairs, g.rt("KV")+"[string, any]{Key: "+strconv.Quote(pyName(n))+", Val: "+g.boxed(value{code: n, typ: t, prec: precAtom})+"}")
 	}
 	return value{code: g.rt("NewDict") + "[string, any](" + strings.Join(pairs, ", ") + ")", typ: dictOf(tStr, tObject), prec: precAtom}, true
+}
+
+// widenForSetattr: in code without annotations, setattr(self, name, v) with
+// a name computed when the program runs may store v in any attribute of the
+// class, so while the classes are inferred their fields become objects when
+// v is None or of a type not known.
+func (g *generator) widenForSetattr(n *pyast.Call, args []value) {
+	if !g.infer || !g.bigMode || g.method == nil || g.method.kind != mMethod {
+		return
+	}
+	if self, ok := n.Args[0].(*pyast.Name); !ok || self.ID != g.selfName() {
+		return
+	}
+	if _, constant := n.Args[1].(*pyast.Constant); constant {
+		return
+	}
+	if args[2].typ != tNoneType && args[2].typ != tObject {
+		return
+	}
+	for _, m := range g.method.definer.members {
+		if m.kind == mField && m.typ != "" && m.typ != tObject {
+			m.typ = tObject
+			g.inferGrew = true
+		}
+	}
 }

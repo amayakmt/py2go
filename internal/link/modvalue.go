@@ -14,15 +14,7 @@ func (l *linker) moduleValue(m *module, line int) (pyast.Node, error) {
 	if m.entry || m.builtins {
 		return nil, fmt.Errorf("unsupported: module '%s' used as a value at line %d", m.name, line)
 	}
-	known := false
-	for _, v := range l.valueMods {
-		if v == m {
-			known = true
-		}
-	}
-	if !known {
-		l.valueMods = append(l.valueMods, m)
-	}
+	l.addValueMod(m)
 	return &pyast.Call{
 		Func: &pyast.Name{ID: "_native", Lineno: line},
 		Args: []pyast.Node{
@@ -33,11 +25,44 @@ func (l *linker) moduleValue(m *module, line int) (pyast.Node, error) {
 	}, nil
 }
 
+// addValueMod records that the program uses a module as a value.
+func (l *linker) addValueMod(m *module) {
+	for _, v := range l.valueMods {
+		if v == m {
+			return
+		}
+	}
+	l.valueMods = append(l.valueMods, m)
+}
+
 // moduleRegistrations are the statements, at the start of the program, that
 // tell the runtime how to read each top-level name of the modules used as
 // values. They read the names when asked, not now.
 func (l *linker) moduleRegistrations() []pyast.Node {
 	var out []pyast.Node
+	if _, ok := l.mods["importlib"]; ok {
+		// importlib.import_module(name) can name any module the program
+		// links: all of them are values.
+		var names []string
+		for n, m := range l.mods {
+			// Modules only looked at (by the pre-pass of import fallbacks)
+			// are not in the program.
+			if !m.entry && !m.builtins && m.started {
+				names = append(names, n)
+			}
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			m := l.mods[n]
+			if !m.namespace {
+				l.addValueMod(m)
+			}
+			out = append(out, &pyast.Expr{Value: &pyast.Call{
+				Func: &pyast.Name{ID: "_native"},
+				Args: []pyast.Node{&pyast.Constant{PyType: "str", Value: "module.declare"}, &pyast.Constant{PyType: "str", Value: n}},
+			}})
+		}
+	}
 	for _, m := range l.valueMods {
 		names := make([]string, 0, len(m.bound))
 		for n := range m.bound {
@@ -98,15 +123,7 @@ func (l *linker) moduleRegistrations() []pyast.Node {
 // globalsCall is globals() in module m: a dict made, when it runs, from the
 // top-level names of m (a copy: assigning to it does not create globals).
 func (l *linker) globalsCall(m *module, line int) pyast.Node {
-	known := false
-	for _, v := range l.valueMods {
-		if v == m {
-			known = true
-		}
-	}
-	if !known {
-		l.valueMods = append(l.valueMods, m)
-	}
+	l.addValueMod(m)
 	return &pyast.Call{
 		Func: &pyast.Name{ID: "_native", Lineno: line},
 		Args: []pyast.Node{

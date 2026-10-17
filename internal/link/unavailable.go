@@ -4,15 +4,17 @@ import "strings"
 
 // unavailable lists the modules that cannot be imported, with the name
 // CPython reports when its build lacks them. The Windows-only modules are
-// missing everywhere else, as in CPython; the graphical, terminal and foreign
-// function modules need C libraries (Tcl/Tk, ncurses, libffi), which a
-// program compiled to Go without cgo does not have.
+// missing everywhere else, as in CPython; the graphical, terminal, line
+// editing and foreign function modules need C libraries (Tcl/Tk, ncurses,
+// GNU readline, libffi), which a program compiled to Go without cgo does not
+// have.
 var unavailable = map[string]string{
 	"msvcrt": "msvcrt", "winreg": "winreg", "winsound": "winsound", "_winapi": "_winapi",
 	"_overlapped": "_overlapped", "_wmi": "_wmi", "nt": "nt", "msilib": "msilib", "_winreg": "_winreg",
 	"tkinter": "_tkinter", "_tkinter": "_tkinter", "turtle": "_tkinter", "turtledemo": "_tkinter", "idlelib": "_tkinter",
 	"curses": "_curses", "_curses": "_curses", "_curses_panel": "_curses",
 	"ctypes": "_ctypes", "_ctypes": "_ctypes",
+	"readline": "readline",
 }
 
 // unavailableModule tells whether importing the dotted name fails, and the

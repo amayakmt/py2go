@@ -1,1 +1,0 @@
-unsupported: type() of list[int] at line 2

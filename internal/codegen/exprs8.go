@@ -399,6 +399,18 @@ func (g *generator) nextCall(n *pyast.Call) (value, error) {
 
 // iterCall is iter(x).
 func (g *generator) iterCall(n *pyast.Call) (value, error) {
+	if !n.HasKeywords && len(n.Args) == 2 {
+		// iter(f, sentinel): f is called until it returns the sentinel.
+		f, err := g.typedExpr(n.Args[0])
+		if err != nil {
+			return value{}, err
+		}
+		sentinel, err := g.typedExpr(n.Args[1])
+		if err != nil {
+			return value{}, err
+		}
+		return value{code: g.rt("IterSentinel") + "(" + g.boxed(f) + ", " + g.boxed(sentinel) + ")", typ: tObject, prec: precAtom}, nil
+	}
 	if n.HasKeywords || len(n.Args) != 1 {
 		return value{}, unsupported(fmt.Sprintf("iter() with %d arguments", len(n.Args)), n.Line())
 	}

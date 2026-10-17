@@ -1,1 +1,1 @@
-unsupported: import of module 'imaplib' (the standard library arrives in phase 12) at line 2
+unsupported: import of module 'pdb' (the module is not in py2go's library yet) at line 2

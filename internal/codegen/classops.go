@@ -496,7 +496,7 @@ func (g *generator) instanceTest(x value, s typeSpec, line int) (string, error) 
 		if err != nil {
 			return "", err
 		}
-		virtual := g.rt("IsVirtualInstance") + "(" + g.boxed(x) + ", " + strconv.Quote(s.user.pyName()) + ")"
+		virtual := g.rt("IsVirtualInstance") + "(" + g.boxed(x) + ", " + strconv.Quote(g.classKey(s.user)) + ")"
 		if plain == "false" {
 			return virtual, nil
 		}
@@ -649,7 +649,7 @@ func (g *generator) issubclassCall(n *pyast.Call) (value, error) {
 		case s.user != nil && sub.isSubclassOf(s.user):
 			return value{code: "true", typ: tBool, prec: precAtom}, nil
 		case s.user != nil && s.user.isABC():
-			return value{code: g.rt("IsVirtualSubclass") + "(" + g.rt("ClassOf") + "(" + strconv.Quote(sub.pyName()) + "), " + strconv.Quote(s.user.pyName()) + ")", typ: tBool, prec: precAtom}, nil
+			return value{code: g.rt("IsVirtualSubclass") + "(" + g.rt("ClassOf") + "(" + strconv.Quote(g.classKey(sub)) + "), " + strconv.Quote(g.classKey(s.user)) + ")", typ: tBool, prec: precAtom}, nil
 		case s.exc != "" && sub.isSubclassOf(g.builtinClass(s.exc)):
 			return value{code: "true", typ: tBool, prec: precAtom}, nil
 		case s.builtin != "" && builtinBaseClass[s.builtin] != "":
@@ -674,7 +674,9 @@ func (g *generator) typeCall(n *pyast.Call) (value, error) {
 		return value{}, err
 	}
 	c := g.classOf(x.typ)
-	if c == nil && (x.typ == tObject || x.typ == tInt || x.typ == tFloat || x.typ == tStr || x.typ == tBool) {
+	if c == nil && x.typ != tExc && g.isSubtype(x.typ, tObject) {
+		// None, a container or a scalar: its class is looked up when the
+		// program runs.
 		return value{code: g.rt("DynType") + "(" + g.boxed(x) + ")", typ: tObject, prec: precAtom}, nil
 	}
 	if c == nil && x.typ == tExc {
@@ -717,7 +719,7 @@ func (g *generator) typeOperand(n pyast.Node) (code string, ok bool, err error) 
 			if x.dynamicRef {
 				return x.at(precAtom) + ".PyClassName()", true, nil
 			}
-			return strconv.Quote(x.classRef.pyName()), true, nil
+			return strconv.Quote(g.classKey(x.classRef)), true, nil
 		}
 	case *pyast.Attribute:
 		if n.Attr == "__class__" {
@@ -734,7 +736,7 @@ func (g *generator) typeOperand(n pyast.Node) (code string, ok bool, err error) 
 			return "", false, nil
 		}
 		if c := g.classes[n.ID]; c != nil {
-			return strconv.Quote(c.pyName()), true, nil
+			return strconv.Quote(g.classKey(c)), true, nil
 		}
 		switch n.ID {
 		case "int", "str", "float", "bool":

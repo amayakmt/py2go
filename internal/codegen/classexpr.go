@@ -52,6 +52,10 @@ func (g *generator) relabel(v value, want pyType) value {
 			return value{code: none, typ: want, prec: precAtom}
 		}
 		inner := g.relabel(v, want.optElem())
+		if inner.typ == tObject {
+			// An object may be None when the program runs.
+			return value{code: g.rt("SomeAny") + "(" + inner.typed().code + ")", typ: want, prec: precAtom}
+		}
 		return value{code: g.rt("Some") + "[" + goElem + "](" + inner.typed().code + ")", typ: want, prec: precAtom}
 	}
 	if want == tObject && v.fsig != nil && v.typ.isFunc() && v.fsig.plain() && !v.fsig.hasDefaults() && v.fsig.name != "" {
@@ -231,7 +235,7 @@ func (g *generator) boundMethod(recv value, c *classInfo, m *member, line int) (
 	case mStatic:
 		code = "_pys_" + m.owner.name + "_" + m.name
 	default:
-		code = recv.at(precAtom) + ".M_" + m.name
+		code = recv.at(precAtom) + "." + c.methodCallName(m.name)
 	}
 	sig := m.sig
 	t := sig.goFuncType()
@@ -253,13 +257,13 @@ func (g *generator) classAttrRead(c *classInfo, attr string, exactRef bool, line
 		}
 		return value{}, unsupported(fmt.Sprintf("__doc__ of '%s', which has no docstring (it would be None)", c.name), line)
 	case "__module__":
-		return value{code: `"__main__"`, typ: tStr, prec: precAtom}, nil
+		return value{code: strconv.Quote(classModule(c)), typ: tStr, prec: precAtom}, nil
 	}
 	m := c.lookup(name)
 	if m == nil {
 		// Not in the class body: an attribute a decorator or setattr gave
 		// the class, read when the program runs.
-		return g.dynValue(g.rt("DynGetAttr")+"("+g.rt("ClassOf")+"("+strconv.Quote(c.pyName())+"), "+strconv.Quote(attr)+")", tObject), nil
+		return g.dynValue(g.rt("DynGetAttr")+"("+g.rt("ClassOf")+"("+strconv.Quote(g.classKey(c))+"), "+strconv.Quote(attr)+")", tObject), nil
 	}
 	switch m.kind {
 	case mClassAttr:
@@ -324,7 +328,7 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 				return value{}, true, err
 			}
 			if arg.typ.isClass() {
-				return value{code: arg.at(precAtom) + ".PyClassName()", typ: tStr, prec: precAtom}, true, nil
+				return value{code: g.rt("BaseTypeName") + "(" + arg.at(precAtom) + ".PyClassName())", typ: tStr, prec: precAtom}, true, nil
 			}
 			if arg.typ == tObject || arg.typ.isGen() {
 				return value{code: g.rt("TypeName") + "(" + g.boxed(arg) + ")", typ: tStr, prec: precAtom}, true, nil
@@ -353,7 +357,7 @@ func (g *generator) classAttribute(n *pyast.Attribute) (v value, ok bool, err er
 		c := recv.classRef
 		if recv.dynamicRef {
 			if n.Attr == "__name__" {
-				return value{code: recv.at(precAtom) + ".PyClassName()", typ: tStr, prec: precAtom}, true, nil
+				return value{code: g.rt("BaseTypeName") + "(" + recv.at(precAtom) + ".PyClassName())", typ: tStr, prec: precAtom}, true, nil
 			}
 			return value{}, true, unsupported(fmt.Sprintf("attribute '%s' of the class of a value that is not exactly known", n.Attr), n.Line())
 		}
@@ -613,7 +617,7 @@ func (g *generator) instanceCall(n *pyast.Call, m *pyast.Attribute, recv value) 
 		if mem.special {
 			return value{}, unsupported(fmt.Sprintf("explicit call of operator method %s.%s (use the operator)", c.name, m.Attr), n.Line())
 		}
-		callee := recv.at(precAtom) + ".M_" + mem.name
+		callee := recv.at(precAtom) + "." + c.methodCallName(mem.name)
 		if mem.kind == mStatic {
 			callee = "_pys_" + mem.owner.name + "_" + mem.name
 		}
@@ -646,6 +650,15 @@ func (g *generator) classLevelCall(n *pyast.Call, m *pyast.Attribute, recv value
 	if mem == nil && m.Attr == "__init__" && !c.exc {
 		// C.__init__(self) for a class without one: object.__init__.
 		return value{code: "func() " + g.rt("NoneT") + " {\nreturn " + g.rt("NoneV") + "\n}()", typ: tNone, prec: precAtom}, nil
+	}
+	if mem == nil && m.Attr == "__init__" && c.exc && g.method != nil && g.method.kind == mMethod && len(n.Args) >= 1 && !n.HasKeywords {
+		// E.__init__(self, ...) for an exception class without one: the
+		// built-in exception's __init__.
+		if first, ok := n.Args[0].(*pyast.Name); ok && first.ID == g.selfName() {
+			rest := *n
+			rest.Args = n.Args[1:]
+			return g.superBuiltin(&rest, superInfo{cls: g.method.cls, definer: g.method.definer, self: g.selfName()}, m.Attr)
+		}
 	}
 	if mem == nil {
 		return value{}, unsupported(fmt.Sprintf("attribute '%s' of class '%s'", m.Attr, c.name), n.Line())
@@ -867,9 +880,11 @@ func (g *generator) assignAttr(b *strings.Builder, target *pyast.Attribute, valu
 		g.registerField(target.Attr, v.typ, line)
 		return nil
 	}
-	if g.infer && g.bigMode && store.member != nil && store.member.kind == mField && store.typ != tObject {
-		// Code without annotations: an attribute that is given a value of
-		// another type, or a value this analysis cannot type, holds any.
+	if g.infer && g.bigMode && g.method != nil && store.member != nil && store.member.kind == mField && store.typ != tObject {
+		// Code without annotations: an attribute that a method gives a value
+		// of another type, or a value this analysis cannot type, holds any.
+		// Elsewhere (a function filling an object) the value is converted
+		// to the field's type.
 		if vt, err := g.typedExpr(valueNode); err == nil && vt.typ != store.typ && !g.isSubtype(vt.typ, store.typ) && ((vt.typ == tObject && (store.typ == tInt || store.typ.isClass() || store.typ.isList() || store.typ.isDict())) || (vt.typ.isScalar() && store.typ.isScalar()) || (vt.typ == tNoneType && store.typ.isScalar())) {
 			store.member.typ = tObject
 			g.inferGrew = true
@@ -1035,7 +1050,7 @@ func (g *generator) classObject(v value) value {
 			g.markValue("class:" + name)
 		}
 	}
-	code := g.rt("ClassOf") + "(" + strconv.Quote(v.classRef.pyName()) + ")"
+	code := g.rt("ClassOf") + "(" + strconv.Quote(g.classKey(v.classRef)) + ")"
 	if v.dynamicRef {
 		code = g.rt("ClassOf") + "(" + v.at(precAtom) + ".PyClassName())"
 	}
@@ -1044,4 +1059,12 @@ func (g *generator) classObject(v value) value {
 		v.typ = tObject
 	}
 	return v
+}
+
+// classModule is the module a class was defined in, from its mangled name.
+func classModule(c *classInfo) string {
+	if i := strings.LastIndex(c.name, "_pm_"); i >= 0 {
+		return strings.ReplaceAll(c.name[:i], "__", ".")
+	}
+	return "__main__"
 }
