@@ -5,7 +5,7 @@ much, so that the next piece of work can be chosen from numbers.
 
 | # | criterion | state |
 |---|---|---|
-| 1 | every module of `sys.stdlib_module_names` is `done` or `platform` | **not met.** 292 modules: 0 done, 122 partial, 14 platform, 156 todo. Of the 156, 83 are private C accelerators (`_bisect`, `_json`, ...) whose public module exists and works, 73 are public modules. |
+| 1 | every module of `sys.stdlib_module_names` is `done` or `platform` | **not met.** 292 modules: 0 done, 125 partial, 14 platform, 153 todo. Of the 153, 83 are private C accelerators (`_bisect`, `_json`, ...) whose public module exists and works, 70 are public modules. |
 | 2 | `py2go check Lib/` accepts every file | **not met.** The 153 top-level files of `Lib/`, each checked alone: 15 accepted, 138 rejected. `Lib/test` is not attempted. |
 | 3 | conformance harness over `Lib/test/test_*.py` | **not built.** `stdlib/expected_failures.json` exists with no entries. The tests that exist are the 1 000 differential programs under `testdata/` (recorded from CPython 3.13) and the unit tests. |
 | 4 | the language conformance suites pass | **not run** (they need `unittest` over the module-level machinery of `Lib/test`). |

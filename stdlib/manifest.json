@@ -1215,14 +1215,14 @@
    "name": "linecache",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
    "name": "locale",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {
@@ -1964,7 +1964,7 @@
    "name": "weakref",
    "phase": 12,
    "kind": "L",
-   "status": "todo",
+   "status": "partial",
    "expected_failures": []
   },
   {

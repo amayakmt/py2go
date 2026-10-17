@@ -1,0 +1,12 @@
+True a False
+True True
+False ['done'] None
+1 True a ['k']
+5 1
+1 True
+0
+'line one\n' 'last\n' ''
+3
+''
+C (None, None) .
+3.5 7 3 items -1
